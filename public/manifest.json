@@ -1,0 +1,21 @@
+{
+  "short_name": "SmartMoney",
+  "name": "Smart Money - Finanzas Personales",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1055/1055646.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1055/1055646.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#136dec",
+  "background_color": "#f6f7f8",
+  "orientation": "portrait"
+}
