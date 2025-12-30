@@ -145,11 +145,11 @@ const Dashboard: React.FC<Props> = ({
                       <div><p className="text-sm font-bold text-slate-800 dark:text-white">Gastos Fijos</p><p className="text-[10px] text-slate-400">Alquiler y Servicios</p></div>
                     </button>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenSavingsBuckets(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">folder_special</span></div>
+                      <div className="size-8 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">savings</span></div>
                       <div><p className="text-sm font-bold text-slate-800 dark:text-white">Apartados</p><p className="text-[10px] text-slate-400">Metas de ahorro</p></div>
                     </button>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenBudget(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">speed</span></div>
+                      <div className="size-8 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">tune</span></div>
                       <div><p className="text-sm font-bold text-slate-800 dark:text-white">Límites</p><p className="text-[10px] text-slate-400">Control mensual</p></div>
                     </button>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenDebts(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
@@ -246,7 +246,7 @@ const Dashboard: React.FC<Props> = ({
               label="Gastos Mes" 
               amount={formatMoney(totalMonthlyOutflow)} 
               color="indigo" 
-              icon="receipt_long" 
+              icon="calendar_today" 
               onClick={onOpenBudget}
               helperText="Ver Límites"
               isBlurred={privacyMode}
@@ -257,7 +257,7 @@ const Dashboard: React.FC<Props> = ({
               label="Mis Viajes" 
               amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Ver'} 
               color="pink" 
-              icon="flight" 
+              icon="flight_takeoff" 
               onClick={onOpenEvents}
               helperText="Gestionar Eventos"
             />
@@ -278,7 +278,7 @@ const Dashboard: React.FC<Props> = ({
               label="Apartados" 
               amount={formatMoney(metrics.totalReserved)} 
               color="purple" 
-              icon="folder_special" 
+              icon="savings" 
               onClick={onOpenSavingsBuckets}
               helperText="Ver Proyectos"
               isBlurred={privacyMode}
@@ -289,7 +289,7 @@ const Dashboard: React.FC<Props> = ({
               label="Nuevo" 
               amount="+" 
               color="emerald" 
-              icon="add" 
+              icon="add_circle" 
               highlight 
               onClick={onAddTransaction}
               helperText="Registrar Movimiento"
