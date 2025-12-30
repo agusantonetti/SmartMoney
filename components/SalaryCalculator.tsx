@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
 
@@ -28,24 +27,27 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
     const now = new Date();
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     
-    // Sumamos todos los 'expense' del mes actual
-    // Nota: Idealmente deberíamos excluir los que ya están en "Fixed Expenses" si el usuario los registró manualmente,
-    // pero para este cálculo "Real a fin de mes", asumimos que lo que está en transacciones es lo que realmente salió.
     return transactions
       .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
       .reduce((acc, t) => acc + t.amount, 0);
   }, [transactions]);
 
   const currentSalary = parseFloat(salaryInput) || 0;
+  const totalOutflow = fixedExpensesTotal + variableExpensesTotal;
 
-  // RESULTADO 1: DISPONIBLE TEÓRICO (Sueldo - Fijos)
+  // CÁLCULO DE COSTO DE VIDA (Porcentaje del sueldo)
+  const costOfLivingPercentage = currentSalary > 0 ? (totalOutflow / currentSalary) * 100 : 0;
+  
+  // CÁLCULO DE HORAS DE TRABAJO (Si existe hourlyWage)
+  const hoursWorkedForExpenses = profile.hourlyWage && profile.hourlyWage > 0 
+    ? totalOutflow / profile.hourlyWage 
+    : 0;
+
+  // Escenarios
   const theoreticalNet = currentSalary - fixedExpensesTotal;
   const theoreticalSavingsRate = currentSalary > 0 ? (theoreticalNet / currentSalary) * 100 : 0;
-
-  // RESULTADO 2: AHORRO REAL (Sueldo - Gastos Totales del Mes)
-  // Aquí comparamos contra lo que realmente se ha gastado (variable + pagos fijos si se registraron)
-  // Para una proyección más precisa, a veces se suma (Fixed - PaidFixed) + Variable, pero usaremos el total de transacciones como "Realidad actual".
-  const actualSavings = currentSalary - variableExpensesTotal;
+  
+  const actualSavings = currentSalary - totalOutflow;
   const actualSavingsRate = currentSalary > 0 ? (actualSavings / currentSalary) * 100 : 0;
 
   const formatMoney = (amount: number) => {
@@ -57,7 +59,6 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
   };
 
   const handleUpdateSalary = () => {
-      // Guardar el sueldo ingresado en el perfil para futuro uso
       onUpdateProfile({
           ...profile,
           monthlySalary: currentSalary
@@ -73,8 +74,8 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div>
-            <h2 className="text-lg font-bold">Calculadora de Ahorro</h2>
-            <p className="text-xs text-slate-500">Proyección vs. Realidad</p>
+            <h2 className="text-lg font-bold">Costo de Vida</h2>
+            <p className="text-xs text-slate-500">¿Cuánto cuesta tu estilo de vida?</p>
         </div>
       </div>
 
@@ -83,7 +84,7 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
         {/* INPUT: SUELDO MENSUAL */}
         <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm">
             <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                1. Tu Sueldo Mensual Total
+                1. Sueldo Promedio Mensual
             </label>
             <div className="flex gap-4 items-center">
                 <div className="relative flex-1">
@@ -105,86 +106,89 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                     <span className="material-symbols-outlined">save</span>
                 </button>
             </div>
-            <p className="text-[10px] text-slate-400 mt-2">
-                Suma de todos tus ingresos fijos y variables esperados para el mes.
-            </p>
         </div>
 
-        {/* SECTION: GASTOS FIJOS (TEÓRICO) */}
+        {/* METRIC: LIFE HOURS COST */}
+        {profile.hourlyWage && profile.hourlyWage > 0 && (
+            <div className="bg-indigo-600 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                <div className="relative z-10">
+                    <h3 className="text-indigo-200 text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm">timelapse</span>
+                        Impacto en Tiempo
+                    </h3>
+                    <p className="text-sm text-indigo-100 mb-4 opacity-80">
+                        Basado en tu valor hora de <strong>{formatMoney(profile.hourlyWage)}</strong>.
+                    </p>
+                    <div className="flex items-end gap-2">
+                        <h2 className="text-5xl font-black">{Math.ceil(hoursWorkedForExpenses)}</h2>
+                        <span className="text-lg font-bold mb-2">Horas</span>
+                    </div>
+                    <p className="text-xs font-medium mt-2 bg-black/20 inline-block px-3 py-1 rounded-lg">
+                        De trabajo necesarias para pagar tus gastos de este mes.
+                    </p>
+                </div>
+            </div>
+        )}
+
+        {/* SECTION: COST OF LIVING ANALYSIS */}
         <div className="space-y-4">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span className="material-symbols-outlined text-indigo-500">lock</span>
-                Escenario 1: Solo Gastos Fijos
+                <span className="material-symbols-outlined text-orange-500">pie_chart</span>
+                Distribución de tus Ingresos
             </h3>
-            
-            <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
-                <div className="flex justify-between items-center mb-4 relative z-10">
+
+            <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">
+                <div className="flex justify-between items-end mb-6">
                     <div>
-                        <p className="text-xs text-slate-500 font-medium">Sueldo - (Alquiler + Servicios + Suscripciones)</p>
-                        <h2 className="text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-1">{formatMoney(theoreticalNet)}</h2>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">
-                            Disponible Teórico
-                        </p>
+                        <p className="text-3xl font-black text-slate-900 dark:text-white">{costOfLivingPercentage.toFixed(1)}%</p>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wide">De tu sueldo ya gastado</p>
                     </div>
                     <div className="text-right">
-                        <p className="text-sm font-bold text-red-500">- {formatMoney(fixedExpensesTotal)}</p>
-                        <p className="text-[10px] text-slate-400">Gastos Fijos</p>
+                        <p className="text-lg font-bold text-red-500">- {formatMoney(totalOutflow)}</p>
+                        <p className="text-[10px] text-slate-400">Total Gastos (Fijos + Var)</p>
                     </div>
                 </div>
 
-                {/* Progress Bar */}
-                <div className="relative z-10">
-                    <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1">
-                        <span>Fijos: {((fixedExpensesTotal/currentSalary)*100).toFixed(0)}%</span>
-                        <span>Libre: {theoreticalSavingsRate.toFixed(0)}%</span>
+                {/* Breakdown Bar */}
+                <div className="w-full h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden flex mb-2">
+                    <div className="bg-indigo-500 h-full" style={{ width: `${Math.min(100, (fixedExpensesTotal / currentSalary) * 100)}%` }}></div>
+                    <div className="bg-orange-400 h-full" style={{ width: `${Math.min(100, (variableExpensesTotal / currentSalary) * 100)}%` }}></div>
+                </div>
+                
+                <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-1">
+                        <div className="size-2 rounded-full bg-indigo-500"></div>
+                        Fijos ({((fixedExpensesTotal/currentSalary)*100).toFixed(0)}%)
                     </div>
-                    <div className="w-full h-3 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden flex">
-                        <div className="bg-red-400 h-full" style={{ width: `${Math.min(100, (fixedExpensesTotal / currentSalary) * 100)}%` }}></div>
-                        <div className="bg-emerald-400 h-full flex-1"></div>
+                    <div className="flex items-center gap-1">
+                        <div className="size-2 rounded-full bg-orange-400"></div>
+                        Variables ({((variableExpensesTotal/currentSalary)*100).toFixed(0)}%)
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <div className="size-2 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+                        Libre ({actualSavingsRate.toFixed(0)}%)
                     </div>
                 </div>
             </div>
         </div>
 
-        {/* SECTION: REALIDAD ACTUAL (GASTOS REALES) */}
-        <div className="space-y-4">
-            <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span className="material-symbols-outlined text-orange-500">receipt_long</span>
-                Escenario 2: Realidad a Fin de Mes
-            </h3>
+        {/* SECTION: SCENARIOS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Scenario 1 */}
+            <div className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Teórico (Solo Fijos)</p>
+                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(theoreticalNet)}</p>
+                <p className="text-xs text-slate-500 mt-1">Si no gastaras nada extra.</p>
+            </div>
 
-            <div className={`rounded-2xl p-6 shadow-lg text-white relative overflow-hidden ${actualSavings >= 0 ? 'bg-gradient-to-br from-slate-800 to-slate-900 dark:from-emerald-900 dark:to-slate-900' : 'bg-gradient-to-br from-red-800 to-red-900'}`}>
-                {/* Background Decor */}
-                <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                
-                <div className="relative z-10">
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                            <p className="text-white/60 text-xs font-bold uppercase tracking-wider mb-1">Capacidad de Ahorro Real</p>
-                            <h2 className="text-4xl font-black tracking-tight">{formatMoney(actualSavings)}</h2>
-                        </div>
-                        <div className="bg-white/10 px-3 py-1 rounded-lg backdrop-blur-sm">
-                            <span className="text-xs font-bold">{actualSavingsRate.toFixed(1)}% del Sueldo</span>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 bg-black/20 p-4 rounded-xl backdrop-blur-sm">
-                        <div>
-                            <p className="text-[10px] text-white/60 uppercase">Gastado este mes</p>
-                            <p className="text-lg font-bold text-red-300">{formatMoney(variableExpensesTotal)}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-white/60 uppercase">Estado</p>
-                            <p className={`text-lg font-bold ${actualSavings >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
-                                {actualSavings >= 0 ? 'Superávit' : 'Déficit'}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <p className="text-[10px] text-white/40 mt-4 text-center">
-                        Calculado restando todas las transacciones registradas este mes a tu sueldo base.
-                    </p>
-                </div>
+            {/* Scenario 2 */}
+            <div className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+                <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Realidad Actual</p>
+                <p className={`text-xl font-bold ${actualSavings >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-red-500'}`}>
+                    {formatMoney(actualSavings)}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">Lo que te queda hoy.</p>
             </div>
         </div>
 
@@ -192,9 +196,9 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
         <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl flex items-start gap-3 border border-blue-100 dark:border-blue-800/50">
             <span className="material-symbols-outlined text-blue-500 mt-0.5">lightbulb</span>
             <div className="text-sm text-blue-800 dark:text-blue-300">
-                <p className="font-bold mb-1">¿Cómo mejorar esto?</p>
+                <p className="font-bold mb-1">Costo de Vida</p>
                 <p className="opacity-80 leading-relaxed">
-                    La diferencia entre el <strong>Escenario 1</strong> y el <strong>2</strong> son tus "Gastos Hormiga" y variables. Si tu Ahorro Real es mucho menor que tu Disponible Teórico, revisa tus gastos diarios en la sección de Actividad.
+                    Si tu costo de vida supera el <strong>70%</strong>, considera revisar tus gastos fijos o aumentar tus ingresos para tener mayor margen de maniobra ante imprevistos.
                 </p>
             </div>
         </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile } from '../types';
 
@@ -163,7 +162,7 @@ const Dashboard: React.FC<Props> = ({
                     
                     <button onClick={() => { setIsBudgetMenuOpen(false); if(onOpenSalaryCalculator) onOpenSalaryCalculator(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
                       <div className="size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">calculate</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Calculadora</p><p className="text-[10px] text-slate-400">Proyección Ahorro</p></div>
+                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Costo de Vida</p><p className="text-[10px] text-slate-400">Análisis Real</p></div>
                     </button>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenFuture(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
                       <div className="size-8 rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">crystal_ball</span></div>
@@ -313,11 +312,11 @@ const Dashboard: React.FC<Props> = ({
              </h3>
              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <ToolCard 
-                    label="Calculadora" 
+                    label="Costo de Vida" 
                     icon="calculate" 
                     onClick={onOpenSalaryCalculator} 
                     color="emerald" 
-                    desc="Proyección Ahorro" 
+                    desc="Análisis Real" 
                 />
                 <ToolCard 
                     label="Simulador" 
