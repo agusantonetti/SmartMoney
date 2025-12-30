@@ -15,6 +15,13 @@ export default defineConfig(({ mode }) => {
     define: {
       // Define process.env.API_KEY para que esté disponible en el código cliente
       'process.env.API_KEY': JSON.stringify(env.API_KEY || process.env.API_KEY)
+    },
+    build: {
+      rollupOptions: {
+        // Marca @google/genai como externa para no empaquetarla
+        // El navegador la resolverá usando el importmap en index.html
+        external: ['@google/genai']
+      }
     }
   };
 });
