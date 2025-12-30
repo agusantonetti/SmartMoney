@@ -1,24 +1,52 @@
 
 import React, { useState } from 'react';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 
 interface Props {
-  onLogin: (email: string) => void;
+  onLogin: () => void; // No need to pass email back, App listens to Auth state
 }
 
 const LandingPage: React.FC<Props> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if(email && password) {
-          setIsLoading(true);
-          // Simular pequeño delay para sensación de proceso
-          setTimeout(() => {
-              onLogin(email);
-              setIsLoading(false);
-          }, 800);
+      if(!email || !password) return;
+
+      setIsLoading(true);
+      setErrorMsg('');
+
+      try {
+          // 1. Intentar iniciar sesión
+          await signInWithEmailAndPassword(auth, email, password);
+          // Si tiene éxito, el listener en App.tsx manejará el cambio de vista
+      } catch (error: any) {
+          // 2. Si el usuario no existe o credenciales inválidas, intentamos registrar
+          // Nota: En una app real, distinguirías mejor los errores, pero para UX fluida aquí:
+          if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+             try {
+                 // Intentamos crear la cuenta
+                 await createUserWithEmailAndPassword(auth, email, password);
+             } catch (createError: any) {
+                 if (createError.code === 'auth/email-already-in-use') {
+                     setErrorMsg("Contraseña incorrecta para este correo.");
+                 } else if (createError.code === 'auth/weak-password') {
+                     setErrorMsg("La contraseña debe tener al menos 6 caracteres.");
+                 } else {
+                     setErrorMsg("Error al crear cuenta: " + createError.message);
+                 }
+             }
+          } else if (error.code === 'auth/wrong-password') {
+               setErrorMsg("Contraseña incorrecta.");
+          } else {
+              setErrorMsg("Error: " + error.message);
+          }
+      } finally {
+          setIsLoading(false);
       }
   };
 
@@ -61,31 +89,21 @@ const LandingPage: React.FC<Props> = ({ onLogin }) => {
                 Comienza tu viaje hacia la libertad financiera
               </h1>
               <p className="text-slate-500 dark:text-slate-400 text-lg font-normal leading-relaxed">
-                Crea tu cuenta para gestionar tu patrimonio inteligentemente. Únete a más de 2 millones de usuarios que están tomando el control de su futuro.
+                Crea tu cuenta para gestionar tu patrimonio inteligentemente. Sincroniza tus datos en la nube y accede desde cualquier dispositivo.
               </p>
             </div>
-            <div className="py-8">
-              <div className="flex gap-4 items-center mb-6">
-                <div className="flex -space-x-3 overflow-hidden">
-                  <img alt="Retrato de mujer" className="inline-block h-10 w-10 rounded-full ring-2 ring-white dark:ring-slate-900 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDki2jrf9k9JBi163dvJw7rLI-2jM6JCpBJVbATGUYTfmUJ1mx4xMilFkYoBMRXxvoLEodON35DcsHWJDvn1lESgqtRvGwsB3eakTAGIpmC0YwihR3lHJmb7OMjyVvu8g9TFqrxZS9dyB4Yf-fQHZH10hAD-I61S0oaorNwuewRHEWxKG4twslrqxUb_iTPTfyEK_JFtKwSsfKcKg7IwxmEbp6ryrZwBpeL8hZpV8h7ppyRkRsLSmGpa-kNrJyVlB4B3JSB5I4gFTz3" />
-                  <img alt="Retrato de hombre" className="inline-block h-10 w-10 rounded-full ring-2 ring-white dark:ring-slate-900 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDV2sttAGhZuPLXhzRsRHQNg5NzsPDd71U9BY3PhAjrz2NGZl7H37PGqE4SDz_V-5vG5c5RqF1MA5gBeL1env3jTphLXVVIq1ePUfZjGN8f64oOMVlPVNIDUh0pDtoXXNDyhLECQx3ohrjqyC4vw0M7i2gGFr9zoRwbqX-n--dsHsQpWNGdGI6ScXZS1PS3TTqN30aj9KvX1dk2vopY6br-BaOciI_k71nEol_fcGx_2m03bu8kVqE7OGwp7IYm7RRITmsnAi9mezcU" />
-                  <img alt="Retrato de hombre" className="inline-block h-10 w-10 rounded-full ring-2 ring-white dark:ring-slate-900 object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYJ8hJ4SAty50dbu0Ucn_zp7HWE2rsfy6C07bvW12dDiN_0OQUoeeA7PZVP8IeT-1CVY7kyufDdvYjdu7JQ9EubkMD8tIk1WKwipb5XEU2dMuJ92TRxN_CIezY5i2AWFL2g7gNNGdtC8MoogZofXYSBMGCn38pMVqTdksH2-_7HnPrhrZ0Wqv5ajFrL-epuDvCBm8DpKsdbNvvd83IsMZY2JFbDlm2KKxNKwIGDL3L5DyrlUoVjo1Tbr3NujWzntGruI3XW1mkdUhV" />
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full ring-2 ring-white dark:ring-slate-900 bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-500 dark:text-slate-400">+2M</div>
-                </div>
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Confianza de gente como tú</span>
-              </div>
-            </div>
+            
             {/* Abstract illustrative graphic */}
             <div className="relative w-full h-64 lg:h-80 rounded-2xl overflow-hidden shadow-sm">
               <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-blue-200/20 dark:to-blue-900/20"></div>
               <img alt="Gráfico abstracto" className="w-full h-full object-cover mix-blend-overlay opacity-60" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC_9VTIxjiK06nWfPblKDggcfHfDH_hEgFk5---9ndcVSQTZGX_--0t-_OHFmR1njHFOiY4HWqqMbAx9lejHn81U7Q9p2RihrehNv2AUHsYkwaq9iJNgTqe85jwhs5O5hD-OzePQ4-49PfZHrUZc2bxp2wBuEDCztte0SNUSEKNzxwuHm0aXtEgorWJZdVd5hma2I4On909pFzdCc7NRtkqUcRMq-bKQkdQyOAvzGjhfX11ovxr19_XltgURjE_z0lovxg79xlHagGw" />
               <div className="absolute bottom-6 left-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm p-4 rounded-xl shadow-lg max-w-[200px]">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="material-symbols-outlined text-green-500">trending_up</span>
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Patrimonio Neto</span>
+                  <span className="material-symbols-outlined text-green-500">cloud_sync</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Cloud Sync</span>
                 </div>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white">+$12,450</p>
-                <p className="text-xs text-green-600 font-medium">+15% este mes</p>
+                <p className="text-sm font-bold text-slate-900 dark:text-white">Datos Seguros</p>
+                <p className="text-xs text-slate-500 font-medium">Accesible 24/7</p>
               </div>
             </div>
           </div>
@@ -108,6 +126,13 @@ const LandingPage: React.FC<Props> = ({ onLogin }) => {
             {/* Form Content */}
             <div className="p-8">
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">Ingresa o Regístrate</h3>
+              
+              {errorMsg && (
+                <div className="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
+                    {errorMsg}
+                </div>
+              )}
+
               <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
                 <label className="flex flex-col gap-2 group">
                   <span className="text-slate-700 dark:text-slate-300 text-sm font-semibold ml-1">Correo Electrónico</span>
@@ -137,7 +162,7 @@ const LandingPage: React.FC<Props> = ({ onLogin }) => {
                 </label>
                 
                 <p className="text-xs text-slate-500 dark:text-slate-400 px-1">
-                  Si no tienes cuenta, se creará una nueva automáticamente con estos datos.
+                  Si no tienes cuenta, intentaremos registrarte automáticamente.
                 </p>
 
                 <button 
@@ -157,7 +182,7 @@ const LandingPage: React.FC<Props> = ({ onLogin }) => {
 
                 <div className="flex items-center justify-center gap-2 mt-2 text-slate-400 dark:text-slate-500">
                   <span className="material-symbols-outlined text-[16px]">lock</span>
-                  <span className="text-xs font-medium">Datos guardados localmente</span>
+                  <span className="text-xs font-medium">Datos encriptados por Google</span>
                 </div>
               </form>
             </div>

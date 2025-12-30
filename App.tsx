@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ViewState, Transaction, FinancialMetrics, FinancialProfile, QuickAction } from './types';
 import Dashboard from './components/Dashboard';
@@ -16,6 +15,11 @@ import EventManager from './components/EventManager';
 import FutureSimulator from './components/FutureSimulator'; 
 import LandingPage from './components/LandingPage';
 import BudgetAdjust from './components/BudgetAdjust';
+
+// FIREBASE IMPORTS
+import { auth, db } from './firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // Default Actions definition for init
 const DEFAULT_ACTIONS: QuickAction[] = [
@@ -43,17 +47,10 @@ const DEFAULT_PROFILE: FinancialProfile = {
 
 const App: React.FC = () => {
   // SESSION STATE
-  const [userSession, setUserSession] = useState<string | null>(() => {
-      // Intentar recuperar la última sesión activa
-      if (typeof window !== 'undefined') {
-          return localStorage.getItem('smartMoney_active_user');
-      }
-      return null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  const [currentView, setCurrentView] = useState<ViewState>(() => {
-      return userSession ? ViewState.DASHBOARD : ViewState.LANDING;
-  });
+  const [currentView, setCurrentView] = useState<ViewState>(ViewState.LANDING);
 
   // DATA STATE
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -82,79 +79,135 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setDarkMode(!darkMode);
 
-  // 1. CARGA DE DATOS AL CAMBIAR DE SESIÓN
+  // 1. AUTH LISTENER
   useEffect(() => {
-    if (userSession) {
-        loadUserData(userSession);
-        setCurrentView(ViewState.DASHBOARD);
-    } else {
-        setTransactions([]);
-        setFinancialProfile(DEFAULT_PROFILE);
-        setCurrentView(ViewState.LANDING);
-    }
-  }, [userSession]);
-
-  const loadUserData = (email: string) => {
-      try {
-          const dataKey = `sm_${email}_data`;
-          const profileKey = `sm_${email}_profile`;
-
-          const savedData = localStorage.getItem(dataKey);
-          const savedProfile = localStorage.getItem(profileKey);
-
-          if (savedData) {
-              setTransactions(JSON.parse(savedData));
-          } else {
-              setTransactions([]);
-          }
-
-          if (savedProfile) {
-              const parsed = JSON.parse(savedProfile);
-              // Merge para asegurar integridad
-              const mergedProfile = { ...DEFAULT_PROFILE, ...parsed };
-              
-              // Reparar quickActions perdidos en versiones anteriores
-              if (!mergedProfile.quickActions || mergedProfile.quickActions.length === 0) {
-                  mergedProfile.quickActions = DEFAULT_ACTIONS;
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+          setCurrentUser(user);
+          if (user) {
+              // Si hay usuario, vamos al Dashboard (si estábamos en Landing)
+              // Pero permitimos navegar a otras vistas si ya estábamos logueados
+              if (currentView === ViewState.LANDING) {
+                  setCurrentView(ViewState.DASHBOARD);
               }
-              
-              setFinancialProfile(mergedProfile);
+              triggerToast(`Conectado como ${user.email}`, 'success');
           } else {
-              // Usuario nuevo
-              setFinancialProfile({ ...DEFAULT_PROFILE, name: email.split('@')[0] });
+              // Si no hay usuario, volvemos a Landing y limpiamos datos
+              setCurrentView(ViewState.LANDING);
+              setTransactions([]);
+              setFinancialProfile(DEFAULT_PROFILE);
           }
+          setAuthLoading(false);
+      });
+      return () => unsubscribe();
+  }, []); // Run once on mount
+
+  // 2. FIRESTORE REALTIME LISTENER
+  useEffect(() => {
+      if (!currentUser) return;
+
+      const userDocRef = doc(db, 'users', currentUser.uid);
+
+      const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+              const data = docSnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
+              // Actualizar estado local con datos de la nube
+              if (data.transactions) setTransactions(data.transactions);
+              if (data.profile) {
+                  // Merge para asegurar integridad de nuevos campos
+                  setFinancialProfile({ ...DEFAULT_PROFILE, ...data.profile });
+              }
+          } else {
+              // Usuario nuevo en Firestore: Crear documento inicial
+              const initialProfile = { 
+                  ...DEFAULT_PROFILE, 
+                  name: currentUser.email?.split('@')[0] || 'Viajero' 
+              };
+              setDoc(userDocRef, {
+                  profile: initialProfile,
+                  transactions: []
+              }).catch(err => console.error("Error creando perfil inicial:", err));
+              
+              setFinancialProfile(initialProfile);
+          }
+      }, (error) => {
+          console.error("Error escuchando cambios:", error);
+          triggerToast("Error de sincronización", 'error');
+      });
+
+      return () => unsubscribeSnapshot();
+  }, [currentUser]);
+
+  // --- DATA HELPERS ---
+  
+  // Función central para guardar en Firestore
+  // Recibe los NUEVOS estados que queremos guardar
+  const saveToFirestore = async (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
+      if (!currentUser) return;
+      
+      // Actualización optimista del estado local
+      setFinancialProfile(newProfile);
+      setTransactions(newTransactions);
+
+      try {
+          const userDocRef = doc(db, 'users', currentUser.uid);
+          await setDoc(userDocRef, {
+              profile: newProfile,
+              transactions: newTransactions
+          }, { merge: true });
       } catch (e) {
-          console.error("Error loading user data", e);
-          triggerToast("Error al cargar datos", "error");
+          console.error("Error guardando en nube:", e);
+          triggerToast("Error al guardar en la nube", 'error');
       }
   };
 
-  // 2. GUARDADO AUTOMÁTICO (Solo si hay sesión activa)
-  useEffect(() => {
-      if (userSession) {
-          const dataKey = `sm_${userSession}_data`;
-          const profileKey = `sm_${userSession}_profile`;
-          
-          localStorage.setItem(dataKey, JSON.stringify(transactions));
-          localStorage.setItem(profileKey, JSON.stringify(financialProfile));
-      }
-  }, [transactions, financialProfile, userSession]);
+  const handleAddTransaction = (tx: Transaction) => {
+    const newTransactions = [tx, ...transactions];
+    saveToFirestore(financialProfile, newTransactions);
+    
+    triggerToast("Transacción guardada", 'success');
+    
+    if (tempEventContext) {
+        setCurrentView(ViewState.EVENTS);
+        setTempEventContext(null);
+    } else {
+        setCurrentView(ViewState.SUCCESS);
+    }
+  };
 
-  // --- AUTH HANDLERS ---
+  const handleUpdateProfile = (newProfile: FinancialProfile) => {
+    saveToFirestore(newProfile, transactions);
+  };
+  
+  const handleUpdateTransactions = (newTransactions: Transaction[]) => {
+    saveToFirestore(financialProfile, newTransactions);
+  };
 
-  const handleLogin = (email: string) => {
-      // Normalizamos el email para usarlo como ID
-      const userId = email.trim().toLowerCase();
-      localStorage.setItem('smartMoney_active_user', userId);
-      setUserSession(userId);
-      triggerToast(`Bienvenido, ${userId.split('@')[0]}`, 'success');
+  const handleImportData = (data: { profile: FinancialProfile, transactions: Transaction[] }) => {
+    if (data.profile && data.transactions) {
+       saveToFirestore(data.profile, data.transactions);
+       triggerToast("Datos restaurados y sincronizados", 'success');
+       setCurrentView(ViewState.DASHBOARD);
+    } else {
+       triggerToast("Archivo de respaldo inválido", 'error');
+    }
+  };
+
+  const handleAddEventTransaction = (eventId: string, eventName: string) => {
+      setTempEventContext({ id: eventId, name: eventName });
+      setCurrentView(ViewState.TRANSACTION);
+  };
+
+  const handleLoginSuccess = () => {
+      // Auth listener handles the redirection and data loading
   };
 
   const handleLogout = () => {
-      localStorage.removeItem('smartMoney_active_user');
-      setUserSession(null);
-      setCurrentView(ViewState.LANDING); // Forzar la vista de landing
-      triggerToast("Sesión cerrada", 'success');
+      // Firebase signOut handled in ProfileSetup, Auth listener will clean up
+  };
+
+  const triggerToast = (message: string, type: 'success' | 'error') => {
+    setShowToast({ message, type });
+    setTimeout(() => setShowToast(null), 3000);
   };
 
   // --- APP LOGIC ---
@@ -214,51 +267,19 @@ const App: React.FC = () => {
     };
   }, [transactions, financialProfile]);
 
-  const handleAddTransaction = (tx: Transaction) => {
-    setTransactions(prev => [tx, ...prev]);
-    triggerToast("Transacción guardada", 'success');
-    
-    if (tempEventContext) {
-        setCurrentView(ViewState.EVENTS);
-        setTempEventContext(null);
-    } else {
-        setCurrentView(ViewState.SUCCESS);
-    }
-  };
-
-  const handleUpdateProfile = (profile: FinancialProfile) => {
-    setFinancialProfile(profile);
-  };
-  
-  const handleUpdateTransactions = (newTransactions: Transaction[]) => {
-    setTransactions(newTransactions);
-  };
-
-  const handleImportData = (data: { profile: FinancialProfile, transactions: Transaction[] }) => {
-    if (data.profile && data.transactions) {
-       setFinancialProfile(data.profile);
-       setTransactions(data.transactions);
-       triggerToast("Datos restaurados correctamente", 'success');
-       setCurrentView(ViewState.DASHBOARD);
-    } else {
-       triggerToast("Archivo de respaldo inválido", 'error');
-    }
-  };
-
-  const handleAddEventTransaction = (eventId: string, eventName: string) => {
-      setTempEventContext({ id: eventId, name: eventName });
-      setCurrentView(ViewState.TRANSACTION);
-  };
-
-  const triggerToast = (message: string, type: 'success' | 'error') => {
-    setShowToast({ message, type });
-    setTimeout(() => setShowToast(null), 3000);
-  };
 
   const renderView = () => {
+    if (authLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark text-slate-500">
+                <span className="material-symbols-outlined animate-spin text-4xl">refresh</span>
+            </div>
+        );
+    }
+
     switch (currentView) {
       case ViewState.LANDING:
-        return <LandingPage onLogin={handleLogin} />;
+        return <LandingPage onLogin={handleLoginSuccess} />;
       case ViewState.DASHBOARD:
         return (
           <Dashboard 
@@ -354,7 +375,7 @@ const App: React.FC = () => {
             onSave={(p) => {
                handleUpdateProfile(p);
                setCurrentView(ViewState.DASHBOARD);
-               triggerToast("Perfil guardado", 'success');
+               triggerToast("Perfil actualizado", 'success');
             }}
             onImportData={handleImportData}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
@@ -440,7 +461,8 @@ const App: React.FC = () => {
                          currentView !== ViewState.EVENTS &&
                          currentView !== ViewState.FUTURE_SIMULATOR &&
                          currentView !== ViewState.LANDING &&
-                         currentView !== ViewState.BUDGET_ADJUST;
+                         currentView !== ViewState.BUDGET_ADJUST &&
+                         !authLoading;
 
   return (
     <div className="relative min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">

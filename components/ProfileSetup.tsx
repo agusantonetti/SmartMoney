@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { FinancialProfile, Transaction } from '../types';
+import { auth } from '../firebase';
+import { signOut } from 'firebase/auth';
 
 interface Props {
   currentProfile: FinancialProfile;
@@ -8,7 +10,7 @@ interface Props {
   onSave: (profile: FinancialProfile) => void;
   onImportData?: (data: { profile: FinancialProfile, transactions: Transaction[] }) => void;
   onBack: () => void;
-  onLogout?: () => void; // Nuevo prop
+  onLogout?: () => void; // Deprecated prop but kept for type compat, logic moved here
 }
 
 const AVATARS = [
@@ -19,7 +21,7 @@ const AVATARS = [
   "https://lh3.googleusercontent.com/aida-public/AB6AXuBeUujswHjYxqkon_wsCOH_banFMa5MVSMgs3QYUqTa8Ph1IiyA6Cg_LPRaKUOjZ7GiuDrEys1c0xnBGhMUWysP2MmqBbuFEEYRBBF8FRupKEwd2xgRMjDDSTBQvf7BnarMUAB3i41Xw86bvZpVuXGrmX4FZ-xFn_SQJWwrs1ZQGTCf7U4AD88XS7kelLR3aTTuUuRpJTqpMaTulDuMeIg6JvZR3NcHLMqHH26v85GdOzKKnov43L9SU5QCGflXKSgPjfi0b06-xgGw"  // Mujer 2
 ];
 
-const ProfileSetup: React.FC<Props> = ({ currentProfile, allTransactions, onSave, onImportData, onBack, onLogout }) => {
+const ProfileSetup: React.FC<Props> = ({ currentProfile, allTransactions, onSave, onImportData, onBack }) => {
   const [balance, setBalance] = useState(currentProfile.initialBalance.toString());
   const [name, setName] = useState(currentProfile.name || '');
   const [selectedAvatar, setSelectedAvatar] = useState(currentProfile.avatar || AVATARS[0]);
@@ -54,6 +56,10 @@ const ProfileSetup: React.FC<Props> = ({ currentProfile, allTransactions, onSave
       avatar: selectedAvatar,
       hourlyWage: parseFloat(hourlyWage) || 0
     });
+  };
+
+  const handleLogoutAction = () => {
+      signOut(auth).catch(err => console.error(err));
   };
 
   // --- EXPORT LOGIC ---
@@ -118,11 +124,9 @@ const ProfileSetup: React.FC<Props> = ({ currentProfile, allTransactions, onSave
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <h2 className="text-lg font-bold">Editar Perfil</h2>
-        {onLogout ? (
-            <button onClick={onLogout} className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg">
-                Salir
-            </button>
-        ) : <div className="w-10"></div>}
+        <button onClick={handleLogoutAction} className="text-xs font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-lg">
+            Cerrar Sesión
+        </button>
       </div>
 
       <div className="w-full max-w-lg space-y-8 animate-[fadeIn_0.3s_ease-out]">

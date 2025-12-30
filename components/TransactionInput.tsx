@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, FinancialProfile, QuickAction } from '../types';
+import { GoogleGenAI } from "@google/genai";
 
 interface Props {
   onConfirm: (transaction: Transaction) => void;
@@ -25,7 +26,10 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   const [inputValue, setInputValue] = useState("");
   const [analyzed, setAnalyzed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [scanMode, setScanMode] = useState(false); // Mode to handle image upload
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Quick Action Management State - Inicializamos directamente del perfil
   const [quickActions, setQuickActions] = useState<QuickAction[]>(profile?.quickActions || []);
@@ -56,9 +60,189 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
     else setCustomRate(selectedCurrency.rate.toString());
   }, [selectedCurrency]);
 
+  // --- VIDEO FRAME EXTRACTION HELPER ---
+  const extractFramesFromVideo = async (videoFile: File, numFrames: number = 5): Promise<string[]> => {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        const frames: string[] = [];
+        
+        // Optimize URL handling
+        const url = URL.createObjectURL(videoFile);
+        video.src = url;
+        video.muted = true;
+        video.playsInline = true;
+        video.crossOrigin = "anonymous";
+
+        // Wait for metadata to know duration
+        video.onloadedmetadata = async () => {
+            const duration = video.duration;
+            const interval = duration / (numFrames + 1); // Distribute frames
+            
+            try {
+                for (let i = 1; i <= numFrames; i++) {
+                    const time = interval * i;
+                    video.currentTime = time;
+                    
+                    // Wait for seek to complete
+                    await new Promise<void>((r) => {
+                        const seekHandler = () => {
+                            video.removeEventListener('seeked', seekHandler);
+                            r();
+                        };
+                        video.addEventListener('seeked', seekHandler);
+                    });
+
+                    // Set canvas dimensions based on video (limit max size for performance)
+                    const MAX_WIDTH = 800;
+                    const scale = Math.min(1, MAX_WIDTH / video.videoWidth);
+                    canvas.width = video.videoWidth * scale;
+                    canvas.height = video.videoHeight * scale;
+
+                    if (context) {
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        // Extract base64 without prefix for Gemini
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                        frames.push(dataUrl.split(',')[1]); 
+                    }
+                }
+                URL.revokeObjectURL(url);
+                resolve(frames);
+            } catch (err) {
+                URL.revokeObjectURL(url);
+                reject(err);
+            }
+        };
+
+        video.onerror = (e) => {
+             URL.revokeObjectURL(url);
+             reject(e);
+        };
+    });
+  };
+
+  // --- AI SCANNING LOGIC (GEMINI) ---
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setScanMode(true);
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        let parts: any[] = [];
+        let prompt = "";
+
+        // CHECK IF VIDEO
+        if (file.type.startsWith('video/')) {
+            setLoadingMessage("Procesando video...");
+            const frames = await extractFramesFromVideo(file);
+            
+            prompt = `
+                Analiza esta secuencia de fotogramas de una grabación de pantalla de una app financiera o de servicios (Uber, Didi, Banco, MercadoPago, etc.).
+                Busca la transacción principal o el resumen del viaje/compra que se muestra.
+                Ignora saldos generales, busca el monto específico de la operación mostrada.
+                
+                Extrae la siguiente información en formato JSON puro:
+                - description: Nombre del comercio, servicio o persona (ej: "Uber Trip", "Supermercado Dia").
+                - amount: El monto total de la transacción (número).
+                - category: Categoría sugerida.
+                - type: "expense" o "income".
+                - currency: Moneda detectada (ARS por defecto).
+                
+                Devuelve SOLO el JSON.
+            `;
+
+            // Add all frames to parts
+            parts = [
+                { text: prompt },
+                ...frames.map(frameData => ({
+                    inlineData: { mimeType: 'image/jpeg', data: frameData }
+                }))
+            ];
+
+        } else {
+            // IS IMAGE
+            setLoadingMessage("Analizando imagen...");
+            const base64Data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => {
+                    const result = reader.result as string;
+                    const base64Content = result.split(',')[1];
+                    resolve(base64Content);
+                };
+                reader.onerror = error => reject(error);
+            });
+
+            prompt = `
+                Analiza esta imagen (recibo, captura de pantalla).
+                Extrae en JSON puro:
+                - description: Nombre.
+                - amount: Monto (número).
+                - category: Categoría.
+                - type: "expense" | "income".
+                - currency: Moneda (ARS default).
+                Devuelve SOLO el JSON.
+            `;
+
+            parts = [
+                { text: prompt },
+                { inlineData: { mimeType: file.type, data: base64Data } }
+            ];
+        }
+
+        // 2. Call Gemini API
+        // Using gemini-3-flash-preview as it is powerful for multimodal analysis
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview', 
+            contents: [{ role: 'user', parts: parts }]
+        });
+
+        const textResponse = response.text;
+        
+        // Clean markdown
+        const jsonStr = textResponse?.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        if (jsonStr) {
+            const data = JSON.parse(jsonStr);
+            setParsedData({
+                description: data.description || "Movimiento Detectado",
+                amount: parseFloat(data.amount) || 0,
+                category: data.category || "Otros",
+                type: data.type || "expense"
+            });
+            
+            if (data.currency && data.currency !== 'ARS') {
+                const foundCurr = CURRENCIES.find(c => c.code === data.currency);
+                if (foundCurr) setSelectedCurrency(foundCurr);
+            }
+            
+            setAnalyzed(true);
+        }
+
+    } catch (error) {
+        console.error("Error scanning:", error);
+        alert("No se pudo analizar el archivo. Intenta ingresar los datos manualmente.");
+    } finally {
+        setLoading(false);
+        setLoadingMessage("");
+    }
+  };
+
+  const triggerFileInput = () => {
+      fileInputRef.current?.click();
+  };
+
+  // --- TEXT ANALYSIS LOGIC ---
+
   const runAnalysis = (text: string) => {
     if (!text) return;
     setLoading(true);
+    setLoadingMessage("Procesando...");
     
     setTimeout(() => {
       const parts = text.split(' ');
@@ -83,17 +267,18 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
       
       const lowerDesc = description.toLowerCase();
       
-      if (lowerDesc.includes('sueldo') || lowerDesc.includes('nomina') || lowerDesc.includes('venta')) {
+      if (lowerDesc.includes('sueldo') || lowerDesc.includes('nomina') || lowerDesc.includes('venta') || lowerDesc.includes('recibiste')) {
          category = "Ingreso";
          type = 'income';
       }
       else if (lowerDesc.includes('uber') || lowerDesc.includes('taxi') || lowerDesc.includes('didi') || lowerDesc.includes('cabify') || lowerDesc.includes('tren') || lowerDesc.includes('nafta')) category = "Transporte";
-      else if (lowerDesc.includes('cena') || lowerDesc.includes('almuerzo') || lowerDesc.includes('cafe')) category = "Comida";
+      else if (lowerDesc.includes('cena') || lowerDesc.includes('almuerzo') || lowerDesc.includes('cafe') || lowerDesc.includes('mcdonalds') || lowerDesc.includes('pedidosya')) category = "Comida";
       else if (lowerDesc.includes('hotel') || lowerDesc.includes('airbnb')) category = "Hospedaje";
-      else if (lowerDesc.includes('regalo') || lowerDesc.includes('souvenir') || lowerDesc.includes('super')) category = "Compras";
+      else if (lowerDesc.includes('regalo') || lowerDesc.includes('souvenir') || lowerDesc.includes('super') || lowerDesc.includes('carrefour') || lowerDesc.includes('coto')) category = "Compras";
 
       setParsedData({ description, amount: rawAmount, category, type });
       setLoading(false);
+      setLoadingMessage("");
       setAnalyzed(true);
     }, 600);
   };
@@ -104,7 +289,6 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
 
   const handleQuickActionClick = (action: QuickAction) => {
       if (isEditingActions) {
-          // Eliminación directa sin confirmación para mejor UX (como borrar apps en iOS)
           const updated = quickActions.filter(a => a.id !== action.id);
           setQuickActions(updated);
           if (profile && onUpdateProfile) {
@@ -114,12 +298,10 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
       }
 
       if (action.amount && action.amount > 0) {
-          // Si tiene monto fijo, analizamos directamente
           const text = `${action.label} ${action.amount}`;
           setInputValue(text);
           runAnalysis(text);
       } else {
-          // Si no tiene monto, prellenamos texto y enfocamos para que el usuario ponga el monto
           setInputValue(`${action.label} `);
           if (inputRef.current) {
               inputRef.current.focus();
@@ -142,7 +324,6 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
           onUpdateProfile({ ...profile, quickActions: updated });
       }
       
-      // Reset & Close
       setNewActionLabel('');
       setNewActionAmount('');
       setNewActionIcon('category');
@@ -248,12 +429,37 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
             Nuevo Movimiento {selectedCurrency.code !== 'ARS' && <span className="text-primary">{selectedCurrency.code}</span>}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-lg md:text-xl font-normal max-w-2xl mx-auto">
-            {selectedCurrency.code === 'ARS' 
-               ? 'Ej: "Cena 15000" o "Uber 4500"'
-               : `Ingresa el monto en ${selectedCurrency.code}, lo convertiremos a ARS.`
-            }
+            {loading ? (loadingMessage || 'Analizando con IA...') : 'Escribe, escanea un ticket/video o pega un movimiento.'}
           </p>
         </div>
+
+        {/* AI Scanner Button */}
+        {!analyzed && (
+            <div className="mb-8 w-full max-w-2xl flex justify-center">
+                <input 
+                    type="file" 
+                    accept="image/*,video/*" 
+                    ref={fileInputRef} 
+                    className="hidden"
+                    onChange={handleFileUpload} 
+                />
+                <button 
+                    onClick={triggerFileInput}
+                    disabled={loading}
+                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-2xl p-4 shadow-xl flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                    {loading && scanMode ? (
+                        <span className="material-symbols-outlined animate-spin text-2xl">autorenew</span>
+                    ) : (
+                        <span className="material-symbols-outlined text-2xl">document_scanner</span>
+                    )}
+                    <div className="text-left">
+                        <span className="block font-bold">Escanear Ticket / Video</span>
+                        <span className="text-xs opacity-80">Importar desde Uber, Didi, Prex, MercadoPago</span>
+                    </div>
+                </button>
+            </div>
+        )}
 
         {/* Input Section */}
         <div className="w-full max-w-2xl relative group/input mb-6">
@@ -264,7 +470,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
               ref={inputRef}
               autoFocus 
               type="text" 
-              placeholder={selectedCurrency.code === 'ARS' ? "Ej: Super 25000" : "Ej: Taxi 20"} 
+              placeholder={selectedCurrency.code === 'ARS' ? "O escribe: Super 25000" : "O escribe: Taxi 20"} 
               className="flex-1 bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-400 text-xl px-2 py-4 focus:ring-0 rounded-full font-medium" 
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
@@ -277,12 +483,12 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                 disabled={loading || !inputValue}
                 className="h-12 px-6 rounded-full bg-primary hover:bg-blue-600 text-white font-medium shadow-md shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95 hidden sm:flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {loading ? (
+                {loading && !scanMode ? (
                   <span className="material-symbols-outlined animate-spin text-sm">refresh</span>
                 ) : (
                   <>
-                    <span>Analizar</span>
-                    <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                    <span>Procesar</span>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
                   </>
                 )}
               </button>
@@ -432,7 +638,12 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Descripción</span>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[150px]">{parsedData.description}</span>
+                  <input 
+                    type="text" 
+                    value={parsedData.description}
+                    onChange={(e) => setParsedData({...parsedData, description: e.target.value})}
+                    className="text-sm font-semibold text-slate-900 dark:text-slate-100 bg-transparent outline-none max-w-[150px]"
+                  />
                 </div>
               </div>
 
@@ -458,7 +669,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
               </div>
             </div>
             
-            <div className="w-full flex justify-center mt-8 mb-4">
+            <div className="w-full flex flex-col items-center gap-4 mt-8 mb-4">
               <button 
                 onClick={handleConfirm}
                 className="group relative flex items-center justify-center gap-3 bg-primary hover:bg-blue-600 text-white rounded-full h-16 px-10 text-lg font-bold shadow-xl shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-blue-500/40"
@@ -466,6 +677,13 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                 <span className="material-symbols-outlined text-3xl group-hover:scale-110 transition-transform">check_circle</span>
                 <span>Confirmar Transacción</span>
                 <div className="absolute inset-0 rounded-full ring-2 ring-white/20 group-hover:ring-white/40 transition-all"></div>
+              </button>
+              
+              <button 
+                onClick={() => { setAnalyzed(false); setScanMode(false); setInputValue(''); }}
+                className="text-slate-400 text-sm hover:text-slate-600 dark:hover:text-slate-200 underline"
+              >
+                Cancelar y volver a intentar
               </button>
             </div>
           </div>
