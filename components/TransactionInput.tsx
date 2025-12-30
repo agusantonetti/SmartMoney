@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, FinancialProfile, QuickAction } from '../types';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 interface Props {
   onConfirm: (transaction: Transaction) => void;
@@ -146,14 +146,12 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                 Busca la transacción principal o el resumen del viaje/compra que se muestra.
                 Ignora saldos generales, busca el monto específico de la operación mostrada.
                 
-                Extrae la siguiente información en formato JSON puro:
-                - description: Nombre del comercio, servicio o persona (ej: "Uber Trip", "Supermercado Dia").
-                - amount: El monto total de la transacción (número).
+                Extrae la siguiente información:
+                - description: Nombre del comercio, servicio o persona.
+                - amount: El monto total de la transacción.
                 - category: Categoría sugerida.
                 - type: "expense" o "income".
                 - currency: Moneda detectada (ARS por defecto).
-                
-                Devuelve SOLO el JSON.
             `;
 
             // Add all frames to parts
@@ -180,13 +178,12 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
 
             prompt = `
                 Analiza esta imagen (recibo, captura de pantalla).
-                Extrae en JSON puro:
+                Extrae:
                 - description: Nombre.
-                - amount: Monto (número).
+                - amount: Monto.
                 - category: Categoría.
                 - type: "expense" | "income".
                 - currency: Moneda (ARS default).
-                Devuelve SOLO el JSON.
             `;
 
             parts = [
@@ -199,13 +196,25 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         // Using gemini-3-flash-preview as it is powerful for multimodal analysis
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
-            contents: [{ role: 'user', parts: parts }]
+            contents: [{ role: 'user', parts: parts }],
+            config: {
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        description: { type: Type.STRING },
+                        amount: { type: Type.NUMBER },
+                        category: { type: Type.STRING },
+                        type: { type: Type.STRING },
+                        currency: { type: Type.STRING }
+                    },
+                    required: ["description", "amount", "category", "type"]
+                }
+            }
         });
 
         const textResponse = response.text;
-        
-        // Clean markdown
-        const jsonStr = textResponse?.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonStr = textResponse?.trim();
         
         if (jsonStr) {
             const data = JSON.parse(jsonStr);
