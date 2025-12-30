@@ -120,7 +120,7 @@ const Dashboard: React.FC<Props> = ({
               </span>
             </button>
 
-            {/* Menú Desplegable: Mi Presupuesto */}
+            {/* Menú Desplegable: Mi Presupuesto (SOLO DESKTOP) */}
             <div className="relative hidden sm:block" ref={menuRef}>
               <button 
                 onClick={() => setIsBudgetMenuOpen(!isBudgetMenuOpen)}
@@ -306,7 +306,44 @@ const Dashboard: React.FC<Props> = ({
             />
           </div>
 
-          {/* 3. MÉTRICAS SECUNDARIAS (HEALTH SCORE + RUNWAY) */}
+          {/* 3. SECCIÓN HERRAMIENTAS VISIBLES (Nuevo para Móvil) */}
+          <div className="flex flex-col gap-3">
+             <h3 className="font-bold text-slate-900 dark:text-white px-1 flex items-center gap-2 text-sm uppercase tracking-wider opacity-80">
+                Herramientas
+             </h3>
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <ToolCard 
+                    label="Calculadora" 
+                    icon="calculate" 
+                    onClick={onOpenSalaryCalculator} 
+                    color="emerald" 
+                    desc="Proyección Ahorro" 
+                />
+                <ToolCard 
+                    label="Simulador" 
+                    icon="crystal_ball" 
+                    onClick={onOpenFuture} 
+                    color="cyan" 
+                    desc="Futuro a 30 días" 
+                />
+                <ToolCard 
+                    label="Deudas" 
+                    icon="gavel" 
+                    onClick={onOpenDebts} 
+                    color="red" 
+                    desc="Gestión Pagos" 
+                />
+                <ToolCard 
+                    label="Analíticas" 
+                    icon="bar_chart" 
+                    onClick={onOpenAnalytics} 
+                    color="orange" 
+                    desc="Gráficos" 
+                />
+             </div>
+          </div>
+
+          {/* 4. MÉTRICAS SECUNDARIAS (HEALTH SCORE + RUNWAY) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              {/* Health Score Card */}
              <div className="md:col-span-2 bg-surface-light dark:bg-surface-dark rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden transition-colors duration-300">
@@ -427,6 +464,36 @@ const Dashboard: React.FC<Props> = ({
     </div>
   );
 };
+
+const ToolCard: React.FC<{ 
+  label: string; 
+  icon: string; 
+  desc: string;
+  color: string;
+  onClick?: () => void;
+}> = ({ label, icon, desc, color, onClick }) => {
+    const colorStyles: {[key: string]: string} = {
+        emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+        red: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+        cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
+        orange: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+    };
+
+    return (
+        <button 
+            onClick={onClick}
+            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-95 transition-all text-center gap-2 h-full"
+        >
+            <div className={`size-10 rounded-full flex items-center justify-center ${colorStyles[color] || colorStyles.emerald}`}>
+                <span className="material-symbols-outlined text-[20px]">{icon}</span>
+            </div>
+            <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{label}</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">{desc}</p>
+            </div>
+        </button>
+    );
+}
 
 const MetricCard: React.FC<{ 
   label: string; 
