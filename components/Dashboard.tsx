@@ -206,7 +206,7 @@ const Dashboard: React.FC<Props> = ({
              </h1>
           </div>
 
-          {/* 1. BALANCE (HERO - ESTELAR) */}
+          {/* 1. BALANCE HERO */}
           <div className="w-full bg-gradient-to-r from-slate-900 to-slate-800 dark:from-blue-900 dark:to-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl shadow-slate-200 dark:shadow-none relative overflow-hidden group">
              {/* Decorative Background Elements */}
              <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-500"></div>
@@ -236,10 +236,10 @@ const Dashboard: React.FC<Props> = ({
              </div>
           </div>
 
-          {/* 2. GRID PRINCIPAL (Operativo Diario) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* 2. GRID OPERATIVO (4 Columnas) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             
-            {/* 1. Ingresos */}
+            {/* Ingresos */}
             <MetricCard 
               label="Ingresos" 
               amount={formatMoney(metrics.salaryPaid)} 
@@ -250,7 +250,7 @@ const Dashboard: React.FC<Props> = ({
               isBlurred={privacyMode}
             />
 
-            {/* 2. Gastos Totales del Mes */}
+            {/* Gastos Mes */}
             <MetricCard 
               label="Gastos Mes" 
               amount={formatMoney(totalMonthlyOutflow)} 
@@ -261,7 +261,7 @@ const Dashboard: React.FC<Props> = ({
               isBlurred={privacyMode}
             />
 
-            {/* 3. Gastos Fijos */}
+            {/* Gastos Fijos */}
             <MetricCard 
               label="Fijos" 
               amount={formatMoney(metrics.fixedExpenses)} 
@@ -272,22 +272,28 @@ const Dashboard: React.FC<Props> = ({
               isBlurred={privacyMode}
             />
 
-            {/* 4. Registrar (Acción Principal) */}
-            <MetricCard 
-              label="Nuevo" 
-              amount="+" 
-              color="emerald" 
-              icon="add_circle" 
-              highlight 
-              onClick={onAddTransaction}
-              helperText="Registrar Movimiento"
-            />
+            {/* Botón Acción Principal: NUEVO */}
+            <button 
+                onClick={onAddTransaction}
+                className="col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-4 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95 transition-all flex flex-col justify-between group h-full min-h-[140px]"
+            >
+                <div className="flex justify-between items-start w-full">
+                    <div className="bg-white/20 rounded-full p-2">
+                        <span className="material-symbols-outlined text-2xl">add</span>
+                    </div>
+                    <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+                </div>
+                <div className="text-left">
+                    <p className="font-bold text-lg leading-tight">Nuevo<br/>Movimiento</p>
+                    <p className="text-[10px] opacity-80 mt-1">Registrar Gasto o Ingreso</p>
+                </div>
+            </button>
           </div>
 
-          {/* 3. SECCIÓN: METAS Y PROYECTOS (Secundario) */}
+          {/* 3. METAS Y ACTIVOS (Grid Secundario) */}
           <div className="flex flex-col gap-3">
              <h3 className="font-bold text-slate-900 dark:text-white px-1 flex items-center gap-2 text-sm uppercase tracking-wider opacity-80">
-                Metas y Proyectos
+                Ahorros y Metas
              </h3>
              <div className="grid grid-cols-2 gap-4">
                 {/* Apartados */}
@@ -297,23 +303,23 @@ const Dashboard: React.FC<Props> = ({
                   color="purple" 
                   icon="savings" 
                   onClick={onOpenSavingsBuckets}
-                  helperText="Ahorros Activos"
+                  helperText="Dinero Reservado"
                   isBlurred={privacyMode}
                 />
 
                 {/* Mis Viajes */}
                 <MetricCard 
                   label="Mis Viajes" 
-                  amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Ver'} 
+                  amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Planificar'} 
                   color="pink" 
                   icon="flight_takeoff" 
                   onClick={onOpenEvents}
-                  helperText="Gestionar Eventos"
+                  helperText="Presupuestos Especiales"
                 />
              </div>
           </div>
 
-          {/* 4. SECCIÓN HERRAMIENTAS VISIBLES (REDSEÑADA PREMIUM) */}
+          {/* 4. HERRAMIENTAS (Premium Cards) */}
           <div className="mt-4 mb-2">
              <div className="flex items-center gap-3 mb-4 px-1">
                 <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
@@ -330,33 +336,33 @@ const Dashboard: React.FC<Props> = ({
                     icon="price_check" 
                     onClick={onOpenSalaryCalculator} 
                     gradient="from-emerald-400 to-teal-600"
-                    desc="¿Cuántas horas de trabajo te cuesta ese gasto? Calcula el valor real." 
+                    desc="¿Cuánto vale tu tiempo? Calcula el impacto real." 
                 />
                 <ToolCard 
                     label="Simulador Futuro" 
                     icon="timeline" 
                     onClick={onOpenFuture} 
                     gradient="from-violet-500 to-fuchsia-600"
-                    desc="Predice tu saldo a fin de mes basándote en tus gastos recurrentes." 
+                    desc="Predice tu saldo a fin de mes según tus hábitos." 
                 />
                 <ToolCard 
                     label="Gestor de Deudas" 
                     icon="credit_score" 
                     onClick={onOpenDebts} 
                     gradient="from-rose-500 to-orange-500"
-                    desc="Estrategia 'Bola de Nieve' para eliminar intereses y liquidar pendientes." 
+                    desc="Organiza tus pendientes y elimina intereses." 
                 />
                 <ToolCard 
                     label="Analíticas Pro" 
                     icon="donut_large" 
                     onClick={onOpenAnalytics} 
                     gradient="from-blue-500 to-cyan-500"
-                    desc="Visualiza flujos de dinero, categorías y mapas de calor de actividad." 
+                    desc="Visualiza flujos, categorías y mapas de calor." 
                 />
              </div>
           </div>
 
-          {/* 5. MÉTRICAS SECUNDARIAS (HEALTH SCORE + RUNWAY) */}
+          {/* 5. MÉTRICAS GLOBALES (Health Score + Runway) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              {/* Health Score Card */}
              <div className="md:col-span-2 bg-surface-light dark:bg-surface-dark rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden transition-colors duration-300">
@@ -520,11 +526,10 @@ const MetricCard: React.FC<{
   amount: string; 
   color: string; 
   icon: string; 
-  highlight?: boolean;
   onClick?: () => void;
   helperText?: string;
   isBlurred?: boolean;
-}> = ({ label, amount, color, icon, highlight, onClick, helperText, isBlurred }) => {
+}> = ({ label, amount, color, icon, onClick, helperText, isBlurred }) => {
   const colorStyles: {[key: string]: string} = {
      emerald: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400',
      red: 'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400',
@@ -538,19 +543,20 @@ const MetricCard: React.FC<{
   return (
      <button 
         onClick={onClick}
-        className={`text-left bg-surface-light dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col gap-2 transition-all hover:-translate-y-1 hover:shadow-md active:scale-95 cursor-pointer group w-full ${highlight ? 'ring-2 ring-emerald-500/30' : ''}`}
+        className="text-left bg-surface-light dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-md active:scale-95 cursor-pointer group w-full min-h-[140px]"
      >
-        <div className="flex items-center justify-between w-full">
-           <div className="flex items-center gap-2">
-              <div className={`size-6 rounded-full flex items-center justify-center ${colorStyles[color] || colorStyles.blue}`}>
-                 <span className="material-symbols-outlined text-[14px]">{icon}</span>
-              </div>
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</span>
+        <div className="flex items-center justify-between w-full mb-4">
+           <div className={`size-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${colorStyles[color] || colorStyles.blue}`}>
+              <span className="material-symbols-outlined text-[20px]">{icon}</span>
            </div>
-           <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[16px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
+           <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
         </div>
-        <p className={`text-lg font-bold truncate ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${isBlurred ? 'blur-sm select-none' : ''}`}>{amount}</p>
-        {helperText && <p className="text-[10px] text-slate-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">{helperText}</p>}
+        
+        <div>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">{label}</span>
+            <p className={`text-xl font-bold truncate text-slate-900 dark:text-white leading-tight ${isBlurred ? 'blur-sm select-none' : ''}`}>{amount}</p>
+            {helperText && <p className="text-[10px] text-slate-400 mt-1">{helperText}</p>}
+        </div>
      </button>
   );
 }
