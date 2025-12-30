@@ -6,6 +6,7 @@ export enum ViewState {
   ACTIVITY = 'ACTIVITY', 
   BUDGET_CONTROL = 'BUDGET_CONTROL',
   BUDGET_ADJUST = 'BUDGET_ADJUST', // Nueva vista para mover dinero
+  SALARY_CALCULATOR = 'SALARY_CALCULATOR', // Nueva calculadora de sueldo/ahorro
   SUCCESS = 'SUCCESS',
   PROFILE = 'PROFILE',
   INCOME_MANAGER = 'INCOME_MANAGER',

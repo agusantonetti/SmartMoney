@@ -16,6 +16,7 @@ interface Props {
   onOpenEvents: () => void; 
   onOpenFuture: () => void;
   onOpenBudgetAdjust?: () => void; 
+  onOpenSalaryCalculator?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -38,6 +39,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenEvents,
   onOpenFuture,
   onOpenBudgetAdjust,
+  onOpenSalaryCalculator,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -156,10 +158,18 @@ const Dashboard: React.FC<Props> = ({
                       <div className="size-8 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">gavel</span></div>
                       <div><p className="text-sm font-bold text-slate-800 dark:text-white">Deudas</p><p className="text-[10px] text-slate-400">Impuestos y créditos</p></div>
                     </button>
+                    
+                    <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
+                    
+                    <button onClick={() => { setIsBudgetMenuOpen(false); if(onOpenSalaryCalculator) onOpenSalaryCalculator(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
+                      <div className="size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">calculate</span></div>
+                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Calculadora</p><p className="text-[10px] text-slate-400">Proyección Ahorro</p></div>
+                    </button>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenFuture(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
                       <div className="size-8 rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">crystal_ball</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Simulador</p><p className="text-[10px] text-slate-400">Proyección Futura</p></div>
+                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Simulador</p><p className="text-[10px] text-slate-400">Futuro</p></div>
                     </button>
+                    
                     <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenAnalytics(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors group">
                       <div className="size-8 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors"><span className="material-symbols-outlined text-[18px]">bar_chart</span></div>

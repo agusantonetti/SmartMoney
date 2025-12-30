@@ -16,6 +16,7 @@ import EventManager from './components/EventManager';
 import FutureSimulator from './components/FutureSimulator'; 
 import LandingPage from './components/LandingPage';
 import BudgetAdjust from './components/BudgetAdjust';
+import SalaryCalculator from './components/SalaryCalculator'; // Import new component
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -300,6 +301,7 @@ const App: React.FC = () => {
             onOpenEvents={() => setCurrentView(ViewState.EVENTS)} 
             onOpenFuture={() => setCurrentView(ViewState.FUTURE_SIMULATOR)}
             onOpenBudgetAdjust={() => setCurrentView(ViewState.BUDGET_ADJUST)} 
+            onOpenSalaryCalculator={() => setCurrentView(ViewState.SALARY_CALCULATOR)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -317,6 +319,15 @@ const App: React.FC = () => {
                   freeBalance={metrics.balance - metrics.totalReserved}
                   onUpdateProfile={handleUpdateProfile}
                   onBack={() => setCurrentView(ViewState.DASHBOARD)}
+              />
+          );
+      case ViewState.SALARY_CALCULATOR:
+          return (
+              <SalaryCalculator
+                  profile={financialProfile}
+                  transactions={transactions}
+                  onBack={() => setCurrentView(ViewState.DASHBOARD)}
+                  onUpdateProfile={handleUpdateProfile}
               />
           );
       case ViewState.TRANSACTION:
@@ -452,6 +463,7 @@ const App: React.FC = () => {
             onOpenEvents={() => setCurrentView(ViewState.EVENTS)}
             onOpenFuture={() => setCurrentView(ViewState.FUTURE_SIMULATOR)}
             onOpenBudgetAdjust={() => setCurrentView(ViewState.BUDGET_ADJUST)}
+            onOpenSalaryCalculator={() => setCurrentView(ViewState.SALARY_CALCULATOR)}
             onAddTransaction={() => setCurrentView(ViewState.TRANSACTION)}
             isDarkMode={darkMode}
             onToggleTheme={toggleTheme}
@@ -475,6 +487,7 @@ const App: React.FC = () => {
                          currentView !== ViewState.FUTURE_SIMULATOR &&
                          currentView !== ViewState.LANDING &&
                          currentView !== ViewState.BUDGET_ADJUST &&
+                         currentView !== ViewState.SALARY_CALCULATOR &&
                          !authLoading;
 
   return (
