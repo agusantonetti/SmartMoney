@@ -313,39 +313,45 @@ const Dashboard: React.FC<Props> = ({
              </div>
           </div>
 
-          {/* 4. SECCIÓN HERRAMIENTAS VISIBLES */}
-          <div className="flex flex-col gap-3">
-             <h3 className="font-bold text-slate-900 dark:text-white px-1 flex items-center gap-2 text-sm uppercase tracking-wider opacity-80">
-                Herramientas
-             </h3>
-             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* 4. SECCIÓN HERRAMIENTAS VISIBLES (REDSEÑADA) */}
+          <div className="mt-4 mb-2">
+             <div className="flex items-center gap-3 mb-4 px-1">
+                <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
+                <h3 className="font-bold text-slate-400 dark:text-slate-500 text-xs uppercase tracking-widest flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">construction</span>
+                    Centro de Herramientas
+                </h3>
+                <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
+             </div>
+             
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <ToolCard 
                     label="Costo de Vida" 
                     icon="calculate" 
                     onClick={onOpenSalaryCalculator} 
-                    color="emerald" 
-                    desc="Análisis Real" 
+                    gradient="from-emerald-400 to-teal-600"
+                    desc="¿Cuánto vale tu tiempo? Analiza el impacto real de tus gastos fijos." 
                 />
                 <ToolCard 
-                    label="Simulador" 
+                    label="Simulador Futuro" 
                     icon="crystal_ball" 
                     onClick={onOpenFuture} 
-                    color="cyan" 
-                    desc="Futuro a 30 días" 
+                    gradient="from-violet-500 to-fuchsia-600"
+                    desc="Viaja al futuro. Predice tu saldo a 30 días según tus hábitos." 
                 />
                 <ToolCard 
-                    label="Deudas" 
+                    label="Gestión de Deudas" 
                     icon="gavel" 
                     onClick={onOpenDebts} 
-                    color="red" 
-                    desc="Gestión Pagos" 
+                    gradient="from-rose-500 to-orange-500"
+                    desc="Domina tus obligaciones. Organiza y liquida tus pendientes." 
                 />
                 <ToolCard 
-                    label="Analíticas" 
+                    label="Analíticas Pro" 
                     icon="bar_chart" 
                     onClick={onOpenAnalytics} 
-                    color="orange" 
-                    desc="Gráficos" 
+                    gradient="from-blue-500 to-cyan-500"
+                    desc="Visualiza el flujo. Gráficos detallados de ingresos vs gastos." 
                 />
              </div>
           </div>
@@ -476,27 +482,27 @@ const ToolCard: React.FC<{
   label: string; 
   icon: string; 
   desc: string;
-  color: string;
+  gradient: string;
   onClick?: () => void;
-}> = ({ label, icon, desc, color, onClick }) => {
-    const colorStyles: {[key: string]: string} = {
-        emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
-        red: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
-        cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
-        orange: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
-    };
-
+}> = ({ label, icon, desc, gradient, onClick }) => {
     return (
         <button 
             onClick={onClick}
-            className="flex flex-col items-center justify-center p-3 rounded-2xl bg-surface-light dark:bg-surface-dark border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-95 transition-all text-center gap-2 h-full"
+            className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-3xl p-5 text-left border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full flex flex-col"
         >
-            <div className={`size-10 rounded-full flex items-center justify-center ${colorStyles[color] || colorStyles.emerald}`}>
-                <span className="material-symbols-outlined text-[20px]">{icon}</span>
+            {/* Gradient Orb Background */}
+            <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full bg-gradient-to-br ${gradient} opacity-10 group-hover:opacity-20 transition-opacity blur-2xl`}></div>
+            
+            <div className={`size-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-lg mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                <span className="material-symbols-outlined text-2xl">{icon}</span>
             </div>
-            <div>
-                <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{label}</p>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">{desc}</p>
+            
+            <h3 className="font-bold text-slate-900 dark:text-white text-lg mb-1 leading-tight">{label}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium mb-4 flex-1">{desc}</p>
+            
+            <div className={`flex items-center gap-1 text-xs font-bold opacity-60 group-hover:opacity-100 transition-opacity text-slate-900 dark:text-white`}>
+               <span>Abrir</span>
+               <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
             </div>
         </button>
     );
