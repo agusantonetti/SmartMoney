@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ViewState, Transaction, FinancialMetrics, FinancialProfile, QuickAction } from './types';
 import Dashboard from './components/Dashboard';
@@ -58,6 +59,9 @@ const App: React.FC = () => {
   const [tempEventContext, setTempEventContext] = useState<{id: string, name: string} | null>(null);
   const [showToast, setShowToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   
+  // PRIVACY MODE STATE
+  const [privacyMode, setPrivacyMode] = useState(false);
+
   // DARK MODE STATE
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -302,6 +306,8 @@ const App: React.FC = () => {
             }}
             isDarkMode={darkMode}
             onToggleTheme={toggleTheme}
+            privacyMode={privacyMode}
+            onTogglePrivacy={() => setPrivacyMode(!privacyMode)}
           />
         );
       case ViewState.BUDGET_ADJUST:
@@ -354,6 +360,7 @@ const App: React.FC = () => {
             transactions={transactions}
             onUpdateTransactions={handleUpdateTransactions}
             onBack={() => setCurrentView(ViewState.DASHBOARD)} 
+            privacyMode={privacyMode}
           />
         );
       case ViewState.BUDGET_CONTROL:
@@ -389,6 +396,7 @@ const App: React.FC = () => {
             transactions={transactions}
             onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
           />
         );
       case ViewState.SAVINGS_BUCKETS:
@@ -398,6 +406,7 @@ const App: React.FC = () => {
             totalBalance={metrics.balance}
             onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
           />
         );
       case ViewState.SUBSCRIPTIONS:
@@ -406,6 +415,7 @@ const App: React.FC = () => {
             profile={financialProfile}
             onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
           />
         );
       case ViewState.DEBTS:
@@ -415,6 +425,7 @@ const App: React.FC = () => {
             totalBalance={metrics.balance}
             onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
           />
         );
       case ViewState.ANALYTICS:
@@ -444,6 +455,8 @@ const App: React.FC = () => {
             onAddTransaction={() => setCurrentView(ViewState.TRANSACTION)}
             isDarkMode={darkMode}
             onToggleTheme={toggleTheme}
+            privacyMode={privacyMode}
+            onTogglePrivacy={() => setPrivacyMode(!privacyMode)}
           />
         );
     }

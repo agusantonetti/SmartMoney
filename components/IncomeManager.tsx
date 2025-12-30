@@ -7,9 +7,10 @@ interface Props {
   transactions: any[];
   onUpdateProfile: (profile: FinancialProfile) => void;
   onBack: () => void;
+  privacyMode?: boolean;
 }
 
-const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) => {
+const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
   const [sources, setSources] = useState<IncomeSource[]>(profile.incomeSources || []);
   
   // View State
@@ -185,13 +186,13 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) =>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                               <p className="text-slate-500">Valor Hora</p>
-                              <p className="font-bold text-slate-900 dark:text-white">
+                              <p className={`font-bold text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
                                   {formatMoney(calculateRates(selectedSource.amount, selectedSource.hoursPerDay || 0, selectedSource.daysPerWeek || 0).hourly)}
                               </p>
                           </div>
                           <div>
                               <p className="text-slate-500">Por Programa</p>
-                              <p className="font-bold text-slate-900 dark:text-white">
+                              <p className={`font-bold text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
                                   {formatMoney(calculateRates(selectedSource.amount, selectedSource.hoursPerDay || 0, selectedSource.daysPerWeek || 0).perProgram)}
                               </p>
                           </div>
@@ -231,7 +232,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) =>
                           <div className="flex items-center gap-2">
                              <input 
                                 type="number" 
-                                className="w-24 bg-slate-50 dark:bg-slate-900 rounded-lg px-2 py-1 text-right font-bold outline-none"
+                                className={`w-24 bg-slate-50 dark:bg-slate-900 rounded-lg px-2 py-1 text-right font-bold outline-none transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}
                                 placeholder={placeholder}
                                 value={currentAmount || ''}
                                 onChange={(e) => handleUpdatePayment(selectedSource.id, {
@@ -287,7 +288,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) =>
                         <span className="material-symbols-outlined text-sm">payments</span>
                         <span className="text-xs font-bold uppercase tracking-widest">Fijo Mensual Est.</span>
                     </div>
-                    <h2 className="text-4xl font-black tracking-tight">{formatMoney(totalFixedIncome)}</h2>
+                    <h2 className={`text-4xl font-black tracking-tight transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(totalFixedIncome)}</h2>
                 </div>
             </div>
 
@@ -298,7 +299,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) =>
                         <span className="text-xs font-bold uppercase tracking-widest">Valor Hora (Medios)</span>
                     </div>
                     <h2 className="text-3xl font-black text-slate-900 dark:text-white">
-                        {formatMoney(globalStats.avgHourly)}<span className="text-sm font-medium text-slate-400">/hr</span>
+                        <span className={`transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(globalStats.avgHourly)}</span><span className="text-sm font-medium text-slate-400">/hr</span>
                     </h2>
                 </div>
             </div>
@@ -469,7 +470,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) =>
                             </div>
                             {type !== 'SPORADIC' && (
                                 <div className="text-right pr-8">
-                                    <p className="font-black text-lg">{formatMoney(src.amount)}</p>
+                                    <p className={`font-black text-lg transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(src.amount)}</p>
                                     <p className="text-xs text-slate-400">Mensual</p>
                                 </div>
                             )}
@@ -486,11 +487,11 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) =>
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
                                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Por Programa</p>
-                                    <p className="font-bold text-slate-700 dark:text-slate-200">{formatMoney(rates.perProgram)}</p>
+                                    <p className={`font-bold text-slate-700 dark:text-slate-200 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(rates.perProgram)}</p>
                                 </div>
                                 <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
                                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Por Hora</p>
-                                    <p className="font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(rates.hourly)}</p>
+                                    <p className={`font-bold text-emerald-600 dark:text-emerald-400 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(rates.hourly)}</p>
                                 </div>
                             </div>
                         )}

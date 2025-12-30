@@ -7,9 +7,10 @@ interface Props {
   totalBalance: number;
   onUpdateProfile: (profile: FinancialProfile) => void;
   onBack: () => void;
+  privacyMode?: boolean;
 }
 
-const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, onBack }) => {
+const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, onBack, privacyMode }) => {
   const [debts, setDebts] = useState<Debt[]>(profile.debts || []);
   const [isAdding, setIsAdding] = useState(false);
   const [showStrategy, setShowStrategy] = useState(false); // New state for Snowball view
@@ -115,11 +116,11 @@ const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, 
           <div className="flex justify-between items-end relative z-10">
             <div>
               <p className="text-red-500 text-xs font-bold uppercase tracking-wider mb-1">Total Pendiente por Pagar</p>
-              <h1 className="text-4xl font-black text-slate-900 dark:text-white">{formatMoney(remainingDebt)}</h1>
+              <h1 className={`text-4xl font-black text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(remainingDebt)}</h1>
             </div>
             <div className="text-right">
               <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Deuda Total</p>
-              <p className="text-xl font-bold opacity-60">{formatMoney(totalDebtAmount)}</p>
+              <p className={`text-xl font-bold opacity-60 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(totalDebtAmount)}</p>
             </div>
           </div>
           
@@ -131,7 +132,7 @@ const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, 
                 ></div>
              </div>
              <div className="flex justify-between mt-2 text-xs font-medium text-slate-500">
-               <span>Pagado: {formatMoney(totalPaid)}</span>
+               <span className={`transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>Pagado: {formatMoney(totalPaid)}</span>
                <span>{totalDebtAmount > 0 ? Math.round((totalPaid / totalDebtAmount) * 100) : 0}%</span>
              </div>
           </div>
@@ -162,7 +163,7 @@ const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, 
                                 </div>
                                 <div className="flex-1">
                                     <h4 className="font-bold">{debt.name}</h4>
-                                    <p className="text-xs text-slate-500">Te falta: {formatMoney(debt.totalAmount - debt.currentAmount)}</p>
+                                    <p className={`text-xs text-slate-500 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>Te falta: {formatMoney(debt.totalAmount - debt.currentAmount)}</p>
                                 </div>
                                 {index === 0 && (
                                     <span className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-1 rounded-full animate-pulse">
@@ -281,7 +282,7 @@ const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, 
                         </div>
                         <div>
                         <h4 className="font-bold text-slate-900 dark:text-white">{debt.name}</h4>
-                        <p className="text-xs text-slate-500">Total: {formatMoney(debt.totalAmount)}</p>
+                        <p className={`text-xs text-slate-500 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>Total: {formatMoney(debt.totalAmount)}</p>
                         </div>
                     </div>
                     <div className="flex gap-2">
@@ -324,11 +325,11 @@ const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, 
                     <div className="flex justify-between items-end relative z-10">
                         <div>
                         <p className="text-[10px] text-slate-400 uppercase font-bold">Reservado / Pagado</p>
-                        <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{formatMoney(debt.currentAmount)}</p>
+                        <p className={`text-xl font-bold text-emerald-600 dark:text-emerald-400 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(debt.currentAmount)}</p>
                         </div>
                         <div className="text-right">
                         <p className="text-[10px] text-slate-400 uppercase font-bold">Restante</p>
-                        <p className="text-lg font-bold text-red-500">{formatMoney(debt.totalAmount - debt.currentAmount)}</p>
+                        <p className={`text-lg font-bold text-red-500 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(debt.totalAmount - debt.currentAmount)}</p>
                         </div>
                     </div>
                     )}

@@ -6,9 +6,10 @@ interface Props {
   transactions: Transaction[];
   onUpdateTransactions: (transactions: Transaction[]) => void;
   onBack: () => void;
+  privacyMode?: boolean;
 }
 
-const ActivityHub: React.FC<Props> = ({ transactions, onUpdateTransactions, onBack }) => {
+const ActivityHub: React.FC<Props> = ({ transactions, onUpdateTransactions, onBack, privacyMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'income' | 'expense'>('ALL');
   
@@ -133,7 +134,7 @@ const ActivityHub: React.FC<Props> = ({ transactions, onUpdateTransactions, onBa
          {/* Results Counter */}
          <div className="flex justify-between items-center mb-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
             <span>{filteredTransactions.length} Movimientos</span>
-            <span>Total: {formatMoney(filteredTransactions.reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0))}</span>
+            <span className={`transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>Total: {formatMoney(filteredTransactions.reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0))}</span>
          </div>
 
          {/* Transaction List */}
@@ -160,7 +161,7 @@ const ActivityHub: React.FC<Props> = ({ transactions, onUpdateTransactions, onBa
                              </div>
                         </div>
                         <div className="flex items-center gap-3 pl-2">
-                             <span className={`font-bold text-sm whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
+                             <span className={`font-bold text-sm whitespace-nowrap ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${privacyMode ? 'blur-sm select-none' : ''}`}>
                                 {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
                              </span>
                              <button 

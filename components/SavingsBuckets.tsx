@@ -7,9 +7,10 @@ interface Props {
   totalBalance: number;
   onUpdateProfile: (profile: FinancialProfile) => void;
   onBack: () => void;
+  privacyMode?: boolean;
 }
 
-const SavingsBuckets: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, onBack }) => {
+const SavingsBuckets: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, onBack, privacyMode }) => {
   const [buckets, setBuckets] = useState<SavingsBucket[]>(profile.savingsBuckets || []);
   const [isAdding, setIsAdding] = useState(false);
   
@@ -110,18 +111,18 @@ const SavingsBuckets: React.FC<Props> = ({ profile, totalBalance, onUpdateProfil
           <div className="flex justify-between items-end">
             <div>
               <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Disponible Real</p>
-              <h1 className="text-4xl font-black text-primary">{formatMoney(freeBalance)}</h1>
+              <h1 className={`text-4xl font-black text-primary transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(freeBalance)}</h1>
             </div>
             <div className="text-right">
               <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Saldo Total</p>
-              <p className="text-xl font-bold opacity-60">{formatMoney(totalBalance)}</p>
+              <p className={`text-xl font-bold opacity-60 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(totalBalance)}</p>
             </div>
           </div>
           
           <div className="space-y-2">
             <div className="flex justify-between text-xs font-bold">
               <span className="text-slate-500">Reservado en Apartados</span>
-              <span className="text-slate-900 dark:text-white">{formatMoney(totalReserved)}</span>
+              <span className={`text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(totalReserved)}</span>
             </div>
             <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
               <div 
@@ -273,7 +274,7 @@ const SavingsBuckets: React.FC<Props> = ({ profile, totalBalance, onUpdateProfil
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="font-black text-lg text-slate-900 dark:text-white">{formatMoney(bucket.currentAmount)}</p>
+                      <p className={`font-black text-lg text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(bucket.currentAmount)}</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <button 

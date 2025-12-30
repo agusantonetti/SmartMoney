@@ -15,10 +15,12 @@ interface Props {
   onOpenBudget: () => void;
   onOpenEvents: () => void; 
   onOpenFuture: () => void;
-  onOpenBudgetAdjust?: () => void; // New Prop
+  onOpenBudgetAdjust?: () => void; 
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
+  privacyMode?: boolean;
+  onTogglePrivacy?: () => void;
   onUpdateProfile?: (profile: FinancialProfile) => void;
 }
 
@@ -38,7 +40,9 @@ const Dashboard: React.FC<Props> = ({
   onOpenBudgetAdjust,
   onAddTransaction, 
   isDarkMode, 
-  onToggleTheme
+  onToggleTheme,
+  privacyMode,
+  onTogglePrivacy
 }) => {
   const [isBudgetMenuOpen, setIsBudgetMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -92,6 +96,17 @@ const Dashboard: React.FC<Props> = ({
           </div>
           <div className="flex items-center gap-3">
             
+            {/* Privacy Toggle */}
+            <button 
+              onClick={onTogglePrivacy}
+              className="size-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95"
+              title={privacyMode ? "Mostrar datos" : "Ocultar datos"}
+            >
+              <span className="material-symbols-outlined text-[22px]">
+                {privacyMode ? 'visibility_off' : 'visibility'}
+              </span>
+            </button>
+
             {/* Dark Mode Toggle */}
             <button 
               onClick={onToggleTheme}
@@ -194,11 +209,11 @@ const Dashboard: React.FC<Props> = ({
                       <span className="material-symbols-outlined text-sm">account_balance</span>
                       <p className="text-sm font-bold uppercase tracking-widest">Balance Total</p>
                    </div>
-                   <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-2">
+                   <h1 className={`text-5xl md:text-7xl font-black tracking-tight mb-2 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
                       {formatMoney(metrics.balance)}
                    </h1>
-                   <p className="text-sm md:text-base text-slate-300 font-medium">
-                      Disponible Real: <span className="text-white font-bold">{formatMoney(metrics.balance - metrics.totalReserved)}</span>
+                   <p className="text-sm md:text-base text-slate-300 font-medium flex items-center gap-1">
+                      Disponible Real: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
                    </p>
                 </div>
                 
@@ -223,6 +238,7 @@ const Dashboard: React.FC<Props> = ({
               icon="payments" 
               onClick={onOpenIncomeManager}
               helperText="Gestionar Sueldos"
+              isBlurred={privacyMode}
             />
 
             {/* 2. Gastos Totales del Mes (Variables + Fijos) */}
@@ -233,6 +249,7 @@ const Dashboard: React.FC<Props> = ({
               icon="receipt_long" 
               onClick={onOpenBudget}
               helperText="Ver Límites"
+              isBlurred={privacyMode}
             />
 
             {/* 3. Viajes / Eventos (NUEVO) */}
@@ -253,6 +270,7 @@ const Dashboard: React.FC<Props> = ({
               icon="home_work" 
               onClick={onOpenSubscriptions}
               helperText="Alquiler y Servicios"
+              isBlurred={privacyMode}
             />
 
             {/* 5. Apartados */}
@@ -263,6 +281,7 @@ const Dashboard: React.FC<Props> = ({
               icon="folder_special" 
               onClick={onOpenSavingsBuckets}
               helperText="Ver Proyectos"
+              isBlurred={privacyMode}
             />
 
             {/* 6. Registrar (Apartada) */}
@@ -356,7 +375,7 @@ const Dashboard: React.FC<Props> = ({
                               </div>
                            </div>
                            <div className="col-span-4 sm:col-span-4 text-right">
-                              <span className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
+                              <span className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${privacyMode ? 'blur-sm select-none' : ''}`}>
                                  {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
                               </span>
                               {/* Show original currency if different */}
@@ -379,7 +398,7 @@ const Dashboard: React.FC<Props> = ({
                   <div className="space-y-4">
                      <div className="flex justify-between items-center text-sm">
                         <span className="text-slate-500">Saldo Libre</span>
-                        <span className="font-bold text-emerald-500">
+                        <span className={`font-bold text-emerald-500 ${privacyMode ? 'blur-sm select-none' : ''}`}>
                            {formatMoney(metrics.balance - metrics.totalReserved)}
                         </span>
                      </div>
@@ -407,7 +426,8 @@ const MetricCard: React.FC<{
   highlight?: boolean;
   onClick?: () => void;
   helperText?: string;
-}> = ({ label, amount, color, icon, highlight, onClick, helperText }) => {
+  isBlurred?: boolean;
+}> = ({ label, amount, color, icon, highlight, onClick, helperText, isBlurred }) => {
   const colorStyles: {[key: string]: string} = {
      emerald: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400',
      red: 'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400',
@@ -432,7 +452,7 @@ const MetricCard: React.FC<{
            </div>
            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[16px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
         </div>
-        <p className={`text-lg font-bold truncate ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>{amount}</p>
+        <p className={`text-lg font-bold truncate ${highlight ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${isBlurred ? 'blur-sm select-none' : ''}`}>{amount}</p>
         {helperText && <p className="text-[10px] text-slate-400 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">{helperText}</p>}
      </button>
   );

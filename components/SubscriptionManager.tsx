@@ -6,6 +6,7 @@ interface Props {
   profile: FinancialProfile;
   onUpdateProfile: (profile: FinancialProfile) => void;
   onBack: () => void;
+  privacyMode?: boolean;
 }
 
 const CATEGORIES = [
@@ -15,7 +16,7 @@ const CATEGORIES = [
   { id: 'education', label: 'Educación', icon: 'school', color: 'blue' },
 ];
 
-const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack }) => {
+const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(profile.subscriptions || []);
   
   // View State
@@ -194,7 +195,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">$</span>
                                  <input 
                                     type="number" 
-                                    className={`w-full bg-slate-50 dark:bg-slate-900/50 rounded-xl pl-6 pr-3 py-2 outline-none focus:ring-2 focus:ring-primary/50 font-bold text-right transition-colors ${currentAmount > 0 ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}
+                                    className={`w-full bg-slate-50 dark:bg-slate-900/50 rounded-xl pl-6 pr-3 py-2 outline-none focus:ring-2 focus:ring-primary/50 font-bold text-right transition-all duration-300 ${currentAmount > 0 ? 'text-slate-900 dark:text-white' : 'text-slate-400'} ${privacyMode ? 'blur-sm select-none' : ''}`}
                                     placeholder="0"
                                     value={currentAmount}
                                     onChange={(e) => handleUpdatePayment(selectedSub.id, {
@@ -256,7 +257,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-indigo-900 dark:to-slate-900 rounded-3xl p-8 text-white shadow-xl shadow-slate-500/20 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
           <p className="text-slate-300 font-medium mb-1 relative z-10">Total a Pagar este Mes</p>
-          <h1 className="text-5xl font-black tracking-tight relative z-10">{formatMoney(totalMonthly)}</h1>
+          <h1 className={`text-5xl font-black tracking-tight relative z-10 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(totalMonthly)}</h1>
           <p className="text-xs text-slate-400 mt-4 relative z-10 opacity-80">
              Suma de Alquiler, Expensas, Servicios y Suscripciones.
           </p>
@@ -401,7 +402,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                      </div>
                    </div>
                    <div className="flex items-center gap-4">
-                     <span className="font-black text-lg text-slate-800 dark:text-slate-200">{formatMoney(sub.amount)}</span>
+                     <span className={`font-black text-lg text-slate-800 dark:text-slate-200 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(sub.amount)}</span>
                      <div className="flex gap-1">
                         <button 
                             className="size-8 flex items-center justify-center rounded-full text-slate-300 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
