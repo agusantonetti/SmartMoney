@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile } from '../types';
 
 interface Props {
@@ -46,7 +46,7 @@ const Dashboard: React.FC<Props> = ({
   onTogglePrivacy
 }) => {
   const [isBudgetMenuOpen, setIsBudgetMenuOpen] = useState(false);
-  const [isToolsOpen, setIsToolsOpen] = useState(false); // Estado para colapsar herramientas
+  const [isToolsOpen, setIsToolsOpen] = useState(false); 
   const menuRef = useRef<HTMLDivElement>(null);
   const isEmpty = transactions.length === 0;
 
@@ -74,13 +74,52 @@ const Dashboard: React.FC<Props> = ({
 
   const defaultAvatar = "https://lh3.googleusercontent.com/aida-public/AB6AXuD3W_-QV28bpv6tswBdb3gVXfvQ9Sd1qa2FIGrEXSr2QQhwgjBocZveQ_iZ7J4KEKay2_eW-X1e_D_YgmIkcA8CzxI9m9DrfSKITYEyZh1QbS_cU-ikAMnjc7jppiRpUtx2MU_e_8F4iEoxnnZDfqR5h0oOSuSVTm6ylZNFaJtmmBRyWTnZFGJLM0cmMDBGgzzyJBlAtbXeWNN-cYcN-zQt3qUI1cKXVPswGJB4Tmr449006R1-PDELmsW7e06pa1WY4URePcx_rEcX";
 
-  // CÁLCULO GASTOS DEL MES
-  const currentMonthKey = new Date().toISOString().slice(0, 7); 
-  const currentMonthVariableExpenses = transactions
-    .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
-    .reduce((acc, t) => acc + t.amount, 0);
-  
-  const totalMonthlyOutflow = metrics.fixedExpenses + currentMonthVariableExpenses;
+  // --- CÁLCULOS COMPARATIVOS (MES ACTUAL vs ANTERIOR) ---
+  const stats = useMemo(() => {
+      const now = new Date();
+      const currentMonthKey = now.toISOString().slice(0, 7); // YYYY-MM
+      
+      // Calcular clave mes anterior
+      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevMonthKey = prevDate.toISOString().slice(0, 7);
+
+      // 1. Ingresos Variables (Transacciones tipo income)
+      // Nota: metrics.salaryPaid es lo fijo. Aquí comparamos lo variable/registrado.
+      const currentIncome = transactions
+        .filter(t => t.type === 'income' && t.date.startsWith(currentMonthKey))
+        .reduce((acc, t) => acc + t.amount, 0);
+      
+      const prevIncome = transactions
+        .filter(t => t.type === 'income' && t.date.startsWith(prevMonthKey))
+        .reduce((acc, t) => acc + t.amount, 0);
+
+      // 2. Gastos Variables
+      const currentVariableExpenses = transactions
+        .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
+        .reduce((acc, t) => acc + t.amount, 0);
+
+      const prevVariableExpenses = transactions
+        .filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey))
+        .reduce((acc, t) => acc + t.amount, 0);
+
+      const totalMonthlyOutflow = metrics.fixedExpenses + currentVariableExpenses;
+      
+      // Asumimos gastos fijos constantes para la comparación simple, o solo comparamos variable
+      const prevTotalOutflow = metrics.fixedExpenses + prevVariableExpenses;
+
+      const incomeTrend = prevIncome > 0 ? ((currentIncome - prevIncome) / prevIncome) * 100 : 0;
+      const expenseTrend = prevTotalOutflow > 0 ? ((totalMonthlyOutflow - prevTotalOutflow) / prevTotalOutflow) * 100 : 0;
+
+      return {
+          currentVariableExpenses,
+          totalMonthlyOutflow,
+          prevTotalOutflow,
+          currentIncome,
+          prevIncome,
+          incomeTrend,
+          expenseTrend
+      };
+  }, [transactions, metrics.fixedExpenses]);
 
   // Contar eventos activos para mostrar en el badge
   const activeEventsCount = profile.events?.filter(e => e.status === 'active').length || 0;
@@ -210,7 +249,10 @@ const Dashboard: React.FC<Props> = ({
           {/* 1. SECCIÓN PRINCIPAL: BALANCE Y OPERATIVA (Agrupada) */}
           <section className="flex flex-col gap-4">
               {/* BALANCE HERO */}
-              <div className="w-full bg-gradient-to-r from-slate-900 to-slate-800 dark:from-blue-900 dark:to-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl shadow-slate-200 dark:shadow-none relative overflow-hidden group">
+              <div 
+                className="w-full bg-gradient-to-r from-slate-900 to-slate-800 dark:from-blue-900 dark:to-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl shadow-slate-200 dark:shadow-none relative overflow-hidden group"
+                title={`Valor exacto: $${metrics.balance}`}
+              >
                  {/* Decorative Background Elements */}
                  <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-500"></div>
                  <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3"></div>
@@ -241,29 +283,35 @@ const Dashboard: React.FC<Props> = ({
 
               {/* GRID OPERATIVO (4 Columnas) */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Ingresos */}
+                {/* Ingresos (Comparar Ingresos Totales de mes actual vs anterior) */}
                 <MetricCard 
                   label="Ingresos" 
-                  amount={formatMoney(metrics.salaryPaid)} 
+                  amount={formatMoney(metrics.salaryPaid + stats.currentIncome)} // Base Salarial + Variables del mes
                   color="blue" 
                   icon="payments" 
                   onClick={onOpenIncomeManager}
                   helperText="Gestionar Sueldos"
                   isBlurred={privacyMode}
+                  trend={stats.incomeTrend}
+                  trendPositiveIsGood={true}
+                  prevAmount={`Ant: ${formatMoney(metrics.salaryPaid + stats.prevIncome)}`} // Estimado
                 />
 
                 {/* Gastos Mes */}
                 <MetricCard 
                   label="Gastos Mes" 
-                  amount={formatMoney(totalMonthlyOutflow)} 
+                  amount={formatMoney(stats.totalMonthlyOutflow)} 
                   color="indigo" 
                   icon="calendar_today" 
                   onClick={onOpenBudget}
                   helperText="Ver Límites"
                   isBlurred={privacyMode}
+                  trend={stats.expenseTrend}
+                  trendPositiveIsGood={false}
+                  prevAmount={`Ant: ${formatMoney(stats.prevTotalOutflow)}`}
                 />
 
-                {/* Gastos Fijos */}
+                {/* Gastos Fijos (Solo mostramos monto, sin tendencia compleja calculada aquí, o 0) */}
                 <MetricCard 
                   label="Fijos" 
                   amount={formatMoney(metrics.fixedExpenses)} 
@@ -544,7 +592,10 @@ const MetricCard: React.FC<{
   onClick?: () => void;
   helperText?: string;
   isBlurred?: boolean;
-}> = ({ label, amount, color, icon, onClick, helperText, isBlurred }) => {
+  trend?: number; // % change
+  trendPositiveIsGood?: boolean;
+  prevAmount?: string;
+}> = ({ label, amount, color, icon, onClick, helperText, isBlurred, trend, trendPositiveIsGood, prevAmount }) => {
   const colorStyles: {[key: string]: string} = {
      emerald: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400',
      red: 'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400',
@@ -555,16 +606,48 @@ const MetricCard: React.FC<{
      pink: 'text-pink-600 bg-pink-100 dark:bg-pink-900/20 dark:text-pink-400',
   };
 
+  // Determine trend color
+  let trendColor = 'text-slate-400';
+  let trendIcon = 'remove';
+  if (trend !== undefined && Math.abs(trend) > 0) {
+      if (trend > 0) {
+          trendIcon = 'trending_up';
+          trendColor = trendPositiveIsGood ? 'text-emerald-500' : 'text-red-500';
+      } else {
+          trendIcon = 'trending_down';
+          trendColor = trendPositiveIsGood ? 'text-red-500' : 'text-emerald-500';
+      }
+  }
+
   return (
      <button 
         onClick={onClick}
-        className="text-left bg-surface-light dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-md active:scale-95 cursor-pointer group w-full min-h-[140px]"
+        className="text-left bg-surface-light dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-md active:scale-95 cursor-pointer group w-full min-h-[140px] relative overflow-hidden"
      >
+        {/* Hover Details Overlay */}
+        <div className="absolute inset-0 bg-white/90 dark:bg-slate-800/95 backdrop-blur-sm z-10 flex flex-col justify-center items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-center p-2">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+            <p className={`text-lg font-black text-slate-900 dark:text-white mb-2 ${isBlurred ? 'blur-sm select-none' : ''}`}>{amount}</p>
+            {trend !== undefined && (
+                <div className={`flex items-center gap-1 text-xs font-bold ${trendColor} bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-full`}>
+                    <span className="material-symbols-outlined text-[14px]">{trendIcon}</span>
+                    <span>{Math.abs(trend).toFixed(1)}%</span>
+                </div>
+            )}
+            {prevAmount && <p className="text-[10px] text-slate-400 mt-2">{prevAmount}</p>}
+        </div>
+
         <div className="flex items-center justify-between w-full mb-4">
            <div className={`size-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${colorStyles[color] || colorStyles.blue}`}>
               <span className="material-symbols-outlined text-[20px]">{icon}</span>
            </div>
-           <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+           {/* Mini Trend Indicator (Always Visible) */}
+           {trend !== undefined && Math.abs(trend) > 1 && (
+               <div className={`flex items-center text-[10px] font-bold ${trendColor}`}>
+                   <span className="material-symbols-outlined text-[14px]">{trendIcon}</span>
+                   {Math.abs(trend).toFixed(0)}%
+               </div>
+           )}
         </div>
         
         <div>
