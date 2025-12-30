@@ -46,6 +46,7 @@ const Dashboard: React.FC<Props> = ({
   onTogglePrivacy
 }) => {
   const [isBudgetMenuOpen, setIsBudgetMenuOpen] = useState(false);
+  const [isToolsOpen, setIsToolsOpen] = useState(false); // Estado para colapsar herramientas
   const menuRef = useRef<HTMLDivElement>(null);
   const isEmpty = transactions.length === 0;
 
@@ -206,199 +207,213 @@ const Dashboard: React.FC<Props> = ({
              </h1>
           </div>
 
-          {/* 1. BALANCE HERO */}
-          <div className="w-full bg-gradient-to-r from-slate-900 to-slate-800 dark:from-blue-900 dark:to-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl shadow-slate-200 dark:shadow-none relative overflow-hidden group">
-             {/* Decorative Background Elements */}
-             <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-500"></div>
-             <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3"></div>
+          {/* 1. SECCIÓN PRINCIPAL: BALANCE Y OPERATIVA (Agrupada) */}
+          <section className="flex flex-col gap-4">
+              {/* BALANCE HERO */}
+              <div className="w-full bg-gradient-to-r from-slate-900 to-slate-800 dark:from-blue-900 dark:to-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl shadow-slate-200 dark:shadow-none relative overflow-hidden group">
+                 {/* Decorative Background Elements */}
+                 <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-500"></div>
+                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3"></div>
 
-             <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                <div>
-                   <div className="flex items-center gap-2 mb-2 opacity-80">
-                      <span className="material-symbols-outlined text-sm">account_balance</span>
-                      <p className="text-sm font-bold uppercase tracking-widest">Balance Total</p>
-                   </div>
-                   <h1 className={`text-5xl md:text-7xl font-black tracking-tight mb-2 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
-                      {formatMoney(metrics.balance)}
-                   </h1>
-                   <p className="text-sm md:text-base text-slate-300 font-medium flex items-center gap-1">
-                      Disponible Real: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
-                   </p>
-                </div>
-                
-                <button 
-                  onClick={onOpenBudgetAdjust}
-                  className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full font-bold text-sm transition-all flex items-center gap-2"
-                >
-                   <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-                   Mover Dinero
-                </button>
-             </div>
-          </div>
-
-          {/* 2. GRID OPERATIVO (4 Columnas) */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            
-            {/* Ingresos */}
-            <MetricCard 
-              label="Ingresos" 
-              amount={formatMoney(metrics.salaryPaid)} 
-              color="blue" 
-              icon="payments" 
-              onClick={onOpenIncomeManager}
-              helperText="Gestionar Sueldos"
-              isBlurred={privacyMode}
-            />
-
-            {/* Gastos Mes */}
-            <MetricCard 
-              label="Gastos Mes" 
-              amount={formatMoney(totalMonthlyOutflow)} 
-              color="indigo" 
-              icon="calendar_today" 
-              onClick={onOpenBudget}
-              helperText="Ver Límites"
-              isBlurred={privacyMode}
-            />
-
-            {/* Gastos Fijos */}
-            <MetricCard 
-              label="Fijos" 
-              amount={formatMoney(metrics.fixedExpenses)} 
-              color="indigo" 
-              icon="home_work" 
-              onClick={onOpenSubscriptions}
-              helperText="Alquiler y Servicios"
-              isBlurred={privacyMode}
-            />
-
-            {/* Botón Acción Principal: NUEVO */}
-            <button 
-                onClick={onAddTransaction}
-                className="col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-4 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95 transition-all flex flex-col justify-between group h-full min-h-[140px]"
-            >
-                <div className="flex justify-between items-start w-full">
-                    <div className="bg-white/20 rounded-full p-2">
-                        <span className="material-symbols-outlined text-2xl">add</span>
+                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                    <div>
+                       <div className="flex items-center gap-2 mb-2 opacity-80">
+                          <span className="material-symbols-outlined text-sm">account_balance</span>
+                          <p className="text-sm font-bold uppercase tracking-widest">Balance Total</p>
+                       </div>
+                       <h1 className={`text-5xl md:text-7xl font-black tracking-tight mb-2 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
+                          {formatMoney(metrics.balance)}
+                       </h1>
+                       <p className="text-sm md:text-base text-slate-300 font-medium flex items-center gap-1">
+                          Disponible Real: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
+                       </p>
                     </div>
-                    <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
-                </div>
-                <div className="text-left">
-                    <p className="font-bold text-lg leading-tight">Nuevo<br/>Movimiento</p>
-                    <p className="text-[10px] opacity-80 mt-1">Registrar Gasto o Ingreso</p>
-                </div>
-            </button>
-          </div>
+                    
+                    <button 
+                      onClick={onOpenBudgetAdjust}
+                      className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full font-bold text-sm transition-all flex items-center gap-2"
+                    >
+                       <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                       Mover Dinero
+                    </button>
+                 </div>
+              </div>
 
-          {/* 3. METAS Y ACTIVOS (Grid Secundario) */}
-          <div className="flex flex-col gap-3">
-             <h3 className="font-bold text-slate-900 dark:text-white px-1 flex items-center gap-2 text-sm uppercase tracking-wider opacity-80">
-                Ahorros y Metas
-             </h3>
-             <div className="grid grid-cols-2 gap-4">
-                {/* Apartados */}
+              {/* GRID OPERATIVO (4 Columnas) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Ingresos */}
                 <MetricCard 
-                  label="Apartados" 
-                  amount={formatMoney(metrics.totalReserved)} 
-                  color="purple" 
-                  icon="savings" 
-                  onClick={onOpenSavingsBuckets}
-                  helperText="Dinero Reservado"
+                  label="Ingresos" 
+                  amount={formatMoney(metrics.salaryPaid)} 
+                  color="blue" 
+                  icon="payments" 
+                  onClick={onOpenIncomeManager}
+                  helperText="Gestionar Sueldos"
                   isBlurred={privacyMode}
                 />
 
-                {/* Mis Viajes */}
+                {/* Gastos Mes */}
                 <MetricCard 
-                  label="Mis Viajes" 
-                  amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Planificar'} 
-                  color="pink" 
-                  icon="flight_takeoff" 
-                  onClick={onOpenEvents}
-                  helperText="Presupuestos Especiales"
+                  label="Gastos Mes" 
+                  amount={formatMoney(totalMonthlyOutflow)} 
+                  color="indigo" 
+                  icon="calendar_today" 
+                  onClick={onOpenBudget}
+                  helperText="Ver Límites"
+                  isBlurred={privacyMode}
                 />
-             </div>
-          </div>
 
-          {/* 4. HERRAMIENTAS (Premium Cards) */}
-          <div className="mt-4 mb-2">
-             <div className="flex items-center gap-3 mb-4 px-1">
-                <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
-                <h3 className="font-bold text-slate-400 dark:text-slate-500 text-xs uppercase tracking-widest flex items-center gap-2">
-                    <span className="material-symbols-outlined text-sm">construction</span>
-                    Centro de Herramientas
-                </h3>
-                <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
-             </div>
+                {/* Gastos Fijos */}
+                <MetricCard 
+                  label="Fijos" 
+                  amount={formatMoney(metrics.fixedExpenses)} 
+                  color="indigo" 
+                  icon="home_work" 
+                  onClick={onOpenSubscriptions}
+                  helperText="Alquiler y Servicios"
+                  isBlurred={privacyMode}
+                />
+
+                {/* Botón Acción Principal: NUEVO */}
+                <button 
+                    onClick={onAddTransaction}
+                    className="col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-4 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95 transition-all flex flex-col justify-between group h-full min-h-[140px]"
+                >
+                    <div className="flex justify-between items-start w-full">
+                        <div className="bg-white/20 rounded-full p-2">
+                            <span className="material-symbols-outlined text-2xl">add</span>
+                        </div>
+                        <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+                    </div>
+                    <div className="text-left">
+                        <p className="font-bold text-lg leading-tight">Nuevo<br/>Movimiento</p>
+                        <p className="text-[10px] opacity-80 mt-1">Registrar Gasto o Ingreso</p>
+                    </div>
+                </button>
+              </div>
+          </section>
+
+          {/* 2. HERRAMIENTAS (Colapsable/Acordeón) */}
+          <div className="w-full">
+             <button 
+                onClick={() => setIsToolsOpen(!isToolsOpen)}
+                className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all group"
+             >
+                <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 group-hover:text-primary transition-colors">
+                        <span className="material-symbols-outlined">construction</span>
+                    </div>
+                    <div className="text-left">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">Herramientas Avanzadas</h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Simuladores, Calculadoras y Analíticas</p>
+                    </div>
+                </div>
+                <span className={`material-symbols-outlined text-slate-400 transition-transform duration-300 ${isToolsOpen ? 'rotate-180' : ''}`}>expand_more</span>
+             </button>
              
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <ToolCard 
-                    label="Costo de Vida" 
-                    icon="price_check" 
-                    onClick={onOpenSalaryCalculator} 
-                    gradient="from-emerald-400 to-teal-600"
-                    desc="¿Cuánto vale tu tiempo? Calcula el impacto real." 
-                />
-                <ToolCard 
-                    label="Simulador Futuro" 
-                    icon="timeline" 
-                    onClick={onOpenFuture} 
-                    gradient="from-violet-500 to-fuchsia-600"
-                    desc="Predice tu saldo a fin de mes según tus hábitos." 
-                />
-                <ToolCard 
-                    label="Gestor de Deudas" 
-                    icon="credit_score" 
-                    onClick={onOpenDebts} 
-                    gradient="from-rose-500 to-orange-500"
-                    desc="Organiza tus pendientes y elimina intereses." 
-                />
-                <ToolCard 
-                    label="Analíticas Pro" 
-                    icon="donut_large" 
-                    onClick={onOpenAnalytics} 
-                    gradient="from-blue-500 to-cyan-500"
-                    desc="Visualiza flujos, categorías y mapas de calor." 
-                />
-             </div>
+             {isToolsOpen && (
+                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-[fadeIn_0.3s_ease-out]">
+                    <ToolCard 
+                        label="Costo de Vida" 
+                        icon="price_check" 
+                        onClick={onOpenSalaryCalculator} 
+                        gradient="from-emerald-400 to-teal-600"
+                        desc="¿Cuánto vale tu tiempo? Calcula el impacto real." 
+                    />
+                    <ToolCard 
+                        label="Simulador Futuro" 
+                        icon="timeline" 
+                        onClick={onOpenFuture} 
+                        gradient="from-violet-500 to-fuchsia-600"
+                        desc="Predice tu saldo a fin de mes según tus hábitos." 
+                    />
+                    <ToolCard 
+                        label="Gestor de Deudas" 
+                        icon="credit_score" 
+                        onClick={onOpenDebts} 
+                        gradient="from-rose-500 to-orange-500"
+                        desc="Organiza tus pendientes y elimina intereses." 
+                    />
+                    <ToolCard 
+                        label="Analíticas Pro" 
+                        icon="donut_large" 
+                        onClick={onOpenAnalytics} 
+                        gradient="from-blue-500 to-cyan-500"
+                        desc="Visualiza flujos, categorías y mapas de calor." 
+                    />
+                 </div>
+             )}
           </div>
 
-          {/* 5. MÉTRICAS GLOBALES (Health Score + Runway) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-             {/* Health Score Card */}
-             <div className="md:col-span-2 bg-surface-light dark:bg-surface-dark rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden transition-colors duration-300">
-                <div className="flex justify-between items-start z-10 relative">
-                   <div>
-                      <h3 className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Health Score</h3>
-                      <p className="text-slate-400 text-xs mb-4">Tu salud financiera global.</p>
-                      <h2 className="text-4xl font-black text-slate-900 dark:text-white flex items-end gap-2">
-                        {metrics.healthScore}/100
-                        <span className="text-sm font-medium text-slate-400 mb-1 pb-1">Puntos</span>
-                      </h2>
-                   </div>
-                   <div className={`p-3 rounded-xl ${metrics.healthScore > 70 ? 'bg-emerald-100 text-emerald-600' : metrics.healthScore > 40 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
-                      <span className="material-symbols-outlined text-2xl">
-                        {metrics.healthScore > 70 ? 'ecg_heart' : metrics.healthScore > 40 ? 'monitor_heart' : 'heart_broken'}
-                      </span>
-                   </div>
-                </div>
-                <div className="mt-6 w-full bg-slate-100 dark:bg-slate-700 h-4 rounded-full overflow-hidden">
-                   <div 
-                      className={`h-full rounded-full transition-all duration-1000 ease-out ${metrics.healthScore > 70 ? 'bg-emerald-500' : metrics.healthScore > 40 ? 'bg-yellow-400' : 'bg-red-500'}`} 
-                      style={{ width: `${metrics.healthScore}%` }}
-                   ></div>
-                </div>
+          {/* 3. PATRIMONIO Y SALUD (Metas + Métricas Globales) */}
+          <section className="flex flex-col gap-4">
+             <div className="flex items-center gap-2 px-1">
+                <span className="material-symbols-outlined text-slate-400 text-sm">monitor_heart</span>
+                <h3 className="font-bold text-slate-900 dark:text-white text-sm uppercase tracking-wider opacity-80">
+                    Estado General
+                </h3>
              </div>
 
-             {/* Runway Card */}
-             <div className="bg-primary text-white rounded-3xl p-6 shadow-lg shadow-primary/20 relative overflow-hidden flex flex-col justify-center items-center text-center">
-                <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% -20%, white 0%, transparent 20%)' }}></div>
-                <h3 className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-2 z-10">Vida Útil (Runway)</h3>
-                <span className="text-5xl font-black z-10">{metrics.runway}</span>
-                <span className="text-sm font-medium text-blue-100 z-10">Meses de libertad</span>
-                <p className="text-[10px] text-blue-200 mt-2 z-10 opacity-80">Saldo disponible / Gastos promedio.</p>
-             </div>
-          </div>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                 {/* Left Column: Assets */}
+                 <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Apartados */}
+                    <MetricCard 
+                      label="Apartados" 
+                      amount={formatMoney(metrics.totalReserved)} 
+                      color="purple" 
+                      icon="savings" 
+                      onClick={onOpenSavingsBuckets}
+                      helperText="Dinero Reservado"
+                      isBlurred={privacyMode}
+                    />
 
+                    {/* Mis Viajes */}
+                    <MetricCard 
+                      label="Mis Viajes" 
+                      amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Planificar'} 
+                      color="pink" 
+                      icon="flight_takeoff" 
+                      onClick={onOpenEvents}
+                      helperText="Presupuestos Especiales"
+                    />
+
+                    {/* Health Score Card (Span full width of this sub-grid on mobile, or just another tile) */}
+                    <div className="sm:col-span-2 bg-surface-light dark:bg-surface-dark rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden flex items-center justify-between">
+                       <div>
+                          <h3 className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Health Score</h3>
+                          <h2 className="text-3xl font-black text-slate-900 dark:text-white flex items-end gap-2">
+                            {metrics.healthScore}
+                            <span className="text-sm font-medium text-slate-400 mb-1 pb-1">/100</span>
+                          </h2>
+                       </div>
+                       <div className={`p-3 rounded-full ${metrics.healthScore > 70 ? 'bg-emerald-100 text-emerald-600' : metrics.healthScore > 40 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                          <span className="material-symbols-outlined text-2xl">
+                            {metrics.healthScore > 70 ? 'ecg_heart' : metrics.healthScore > 40 ? 'monitor_heart' : 'heart_broken'}
+                          </span>
+                       </div>
+                       {/* Progress Bar Background */}
+                       <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-100 dark:bg-slate-700">
+                           <div 
+                              className={`h-full transition-all duration-1000 ease-out ${metrics.healthScore > 70 ? 'bg-emerald-500' : metrics.healthScore > 40 ? 'bg-yellow-400' : 'bg-red-500'}`} 
+                              style={{ width: `${metrics.healthScore}%` }}
+                           ></div>
+                       </div>
+                    </div>
+                 </div>
+
+                 {/* Right Column: Runway (Vertical Card) */}
+                 <div className="bg-primary text-white rounded-3xl p-6 shadow-lg shadow-primary/20 relative overflow-hidden flex flex-col justify-center items-center text-center">
+                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% -20%, white 0%, transparent 20%)' }}></div>
+                    <h3 className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-2 z-10">Vida Útil (Runway)</h3>
+                    <span className="text-5xl font-black z-10">{metrics.runway}</span>
+                    <span className="text-sm font-medium text-blue-100 z-10">Meses de libertad</span>
+                    <p className="text-[10px] text-blue-200 mt-2 z-10 opacity-80">Saldo disponible / Gastos promedio.</p>
+                 </div>
+             </div>
+          </section>
+
+          {/* 4. LISTA TRANSACCIONES */}
           <div className="flex flex-col lg:flex-row gap-6">
             <main className="flex-1 flex flex-col gap-6 min-w-0">
                <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm transition-colors duration-300">
