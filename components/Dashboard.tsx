@@ -236,10 +236,10 @@ const Dashboard: React.FC<Props> = ({
              </div>
           </div>
 
-          {/* 2. GRID DE OPCIONES (PRIORIDAD REORDENADA) */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* 2. GRID PRINCIPAL (Operativo Diario) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             
-            {/* 1. Sueldos */}
+            {/* 1. Ingresos */}
             <MetricCard 
               label="Ingresos" 
               amount={formatMoney(metrics.salaryPaid)} 
@@ -250,7 +250,7 @@ const Dashboard: React.FC<Props> = ({
               isBlurred={privacyMode}
             />
 
-            {/* 2. Gastos Totales del Mes (Variables + Fijos) */}
+            {/* 2. Gastos Totales del Mes */}
             <MetricCard 
               label="Gastos Mes" 
               amount={formatMoney(totalMonthlyOutflow)} 
@@ -261,17 +261,7 @@ const Dashboard: React.FC<Props> = ({
               isBlurred={privacyMode}
             />
 
-            {/* 3. Viajes / Eventos (NUEVO) */}
-             <MetricCard 
-              label="Mis Viajes" 
-              amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Ver'} 
-              color="pink" 
-              icon="flight_takeoff" 
-              onClick={onOpenEvents}
-              helperText="Gestionar Eventos"
-            />
-
-            {/* 4. Gastos Fijos (antes Suscripciones) */}
+            {/* 3. Gastos Fijos */}
             <MetricCard 
               label="Fijos" 
               amount={formatMoney(metrics.fixedExpenses)} 
@@ -282,18 +272,7 @@ const Dashboard: React.FC<Props> = ({
               isBlurred={privacyMode}
             />
 
-            {/* 5. Apartados */}
-            <MetricCard 
-              label="Apartados" 
-              amount={formatMoney(metrics.totalReserved)} 
-              color="purple" 
-              icon="savings" 
-              onClick={onOpenSavingsBuckets}
-              helperText="Ver Proyectos"
-              isBlurred={privacyMode}
-            />
-
-            {/* 6. Registrar (Apartada) */}
+            {/* 4. Registrar (Acción Principal) */}
             <MetricCard 
               label="Nuevo" 
               amount="+" 
@@ -305,7 +284,36 @@ const Dashboard: React.FC<Props> = ({
             />
           </div>
 
-          {/* 3. SECCIÓN HERRAMIENTAS VISIBLES (Nuevo para Móvil) */}
+          {/* 3. SECCIÓN: METAS Y PROYECTOS (Secundario) */}
+          <div className="flex flex-col gap-3">
+             <h3 className="font-bold text-slate-900 dark:text-white px-1 flex items-center gap-2 text-sm uppercase tracking-wider opacity-80">
+                Metas y Proyectos
+             </h3>
+             <div className="grid grid-cols-2 gap-4">
+                {/* Apartados */}
+                <MetricCard 
+                  label="Apartados" 
+                  amount={formatMoney(metrics.totalReserved)} 
+                  color="purple" 
+                  icon="savings" 
+                  onClick={onOpenSavingsBuckets}
+                  helperText="Ahorros Activos"
+                  isBlurred={privacyMode}
+                />
+
+                {/* Mis Viajes */}
+                <MetricCard 
+                  label="Mis Viajes" 
+                  amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Ver'} 
+                  color="pink" 
+                  icon="flight_takeoff" 
+                  onClick={onOpenEvents}
+                  helperText="Gestionar Eventos"
+                />
+             </div>
+          </div>
+
+          {/* 4. SECCIÓN HERRAMIENTAS VISIBLES */}
           <div className="flex flex-col gap-3">
              <h3 className="font-bold text-slate-900 dark:text-white px-1 flex items-center gap-2 text-sm uppercase tracking-wider opacity-80">
                 Herramientas
@@ -342,7 +350,7 @@ const Dashboard: React.FC<Props> = ({
              </div>
           </div>
 
-          {/* 4. MÉTRICAS SECUNDARIAS (HEALTH SCORE + RUNWAY) */}
+          {/* 5. MÉTRICAS SECUNDARIAS (HEALTH SCORE + RUNWAY) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
              {/* Health Score Card */}
              <div className="md:col-span-2 bg-surface-light dark:bg-surface-dark rounded-3xl p-6 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden transition-colors duration-300">
