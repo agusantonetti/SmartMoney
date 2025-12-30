@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, FinancialProfile, QuickAction } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -68,33 +67,60 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         const context = canvas.getContext('2d');
         const frames: string[] = [];
         
-        // Optimize URL handling
         const url = URL.createObjectURL(videoFile);
+        
+        // 1. Timeout de Seguridad (15 segundos)
+        const timeoutId = setTimeout(() => {
+            cleanup();
+            reject(new Error("El procesamiento del video tardó demasiado. Intenta con un clip más corto o verifica el formato."));
+        }, 15000);
+
+        const cleanup = () => {
+            clearTimeout(timeoutId);
+            URL.revokeObjectURL(url);
+            video.remove();
+            canvas.remove();
+        };
+
         video.src = url;
         video.muted = true;
         video.playsInline = true;
         video.crossOrigin = "anonymous";
+        video.preload = "metadata";
 
-        // Wait for metadata to know duration
         video.onloadedmetadata = async () => {
             const duration = video.duration;
-            const interval = duration / (numFrames + 1); // Distribute frames
+            
+            // Validación de duración
+            if (!isFinite(duration) || duration <= 0) {
+                cleanup();
+                reject(new Error("No se pudo determinar la duración del video o el archivo está corrupto."));
+                return;
+            }
+
+            const interval = duration / (numFrames + 1);
             
             try {
                 for (let i = 1; i <= numFrames; i++) {
                     const time = interval * i;
                     video.currentTime = time;
                     
-                    // Wait for seek to complete
-                    await new Promise<void>((r) => {
+                    // Esperar a que el seek se complete
+                    await new Promise<void>((r, seekReject) => {
                         const seekHandler = () => {
                             video.removeEventListener('seeked', seekHandler);
+                            video.removeEventListener('error', errorHandler);
                             r();
                         };
+                        const errorHandler = () => {
+                            video.removeEventListener('seeked', seekHandler);
+                            video.removeEventListener('error', errorHandler);
+                            seekReject(new Error("Error al leer un fotograma del video."));
+                        };
                         video.addEventListener('seeked', seekHandler);
+                        video.addEventListener('error', errorHandler);
                     });
 
-                    // Set canvas dimensions based on video (limit max size for performance)
                     const MAX_WIDTH = 800;
                     const scale = Math.min(1, MAX_WIDTH / video.videoWidth);
                     canvas.width = video.videoWidth * scale;
@@ -102,22 +128,40 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
 
                     if (context) {
                         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        // Extract base64 without prefix for Gemini
                         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                        frames.push(dataUrl.split(',')[1]); 
+                        // Validación básica de que la imagen no está vacía
+                        if (dataUrl && dataUrl.length > 100) {
+                            frames.push(dataUrl.split(',')[1]); 
+                        }
                     }
                 }
-                URL.revokeObjectURL(url);
-                resolve(frames);
+                
+                cleanup();
+                
+                if (frames.length === 0) {
+                    reject(new Error("No se pudieron extraer imágenes válidas del video."));
+                } else {
+                    resolve(frames);
+                }
             } catch (err) {
-                URL.revokeObjectURL(url);
+                cleanup();
                 reject(err);
             }
         };
 
-        video.onerror = (e) => {
-             URL.revokeObjectURL(url);
-             reject(e);
+        // Manejo de errores nativos de HTMLMediaElement
+        video.onerror = () => {
+             cleanup();
+             let errorMsg = "Error desconocido al cargar el video.";
+             if (video.error) {
+                 switch (video.error.code) {
+                     case MediaError.MEDIA_ERR_ABORTED: errorMsg = "La carga del video fue interrumpida."; break;
+                     case MediaError.MEDIA_ERR_NETWORK: errorMsg = "Error de red al intentar cargar el video."; break;
+                     case MediaError.MEDIA_ERR_DECODE: errorMsg = "El video está dañado o utiliza un codec no soportado por este navegador."; break;
+                     case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: errorMsg = "Formato de video no soportado. Intenta convertirlo a MP4."; break;
+                 }
+             }
+             reject(new Error(errorMsg));
         };
     });
   };
@@ -130,6 +174,8 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
 
     setLoading(true);
     setScanMode(true);
+    // Limpiamos errores previos o mensajes viejos
+    setLoadingMessage("Iniciando análisis...");
     
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -138,9 +184,12 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
 
         // CHECK IF VIDEO
         if (file.type.startsWith('video/')) {
-            setLoadingMessage("Procesando video...");
+            setLoadingMessage("Extrayendo fotogramas del video...");
+            
+            // Aquí capturamos errores específicos de la extracción
             const frames = await extractFramesFromVideo(file);
             
+            setLoadingMessage("Analizando secuencia con IA...");
             prompt = `
                 Analiza esta secuencia de fotogramas de una grabación de pantalla de una app financiera o de servicios (Uber, Didi, Banco, MercadoPago, etc.).
                 Busca la transacción principal o el resumen del viaje/compra que se muestra.
@@ -233,12 +282,21 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
             setAnalyzed(true);
         }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error scanning:", error);
-        alert("No se pudo analizar el archivo. Intenta ingresar los datos manualmente.");
+        const errorMessage = error.message || "Error desconocido al procesar el archivo.";
+        alert(`❌ ${errorMessage}`);
+        // Reset state to allow retry
+        setAnalyzed(false);
+        setScanMode(false);
+        setInputValue('');
     } finally {
         setLoading(false);
         setLoadingMessage("");
+        // Reset input value to allow selecting same file again if needed
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+        }
     }
   };
 
