@@ -313,7 +313,7 @@ const Dashboard: React.FC<Props> = ({
              </div>
           </div>
 
-          {/* 4. SECCIÓN HERRAMIENTAS VISIBLES (REDSEÑADA) */}
+          {/* 4. SECCIÓN HERRAMIENTAS VISIBLES (REDSEÑADA PREMIUM) */}
           <div className="mt-4 mb-2">
              <div className="flex items-center gap-3 mb-4 px-1">
                 <div className="h-px bg-slate-200 dark:bg-slate-700 flex-1"></div>
@@ -327,31 +327,31 @@ const Dashboard: React.FC<Props> = ({
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <ToolCard 
                     label="Costo de Vida" 
-                    icon="calculate" 
+                    icon="price_check" 
                     onClick={onOpenSalaryCalculator} 
                     gradient="from-emerald-400 to-teal-600"
-                    desc="¿Cuánto vale tu tiempo? Analiza el impacto real de tus gastos fijos." 
+                    desc="¿Cuántas horas de trabajo te cuesta ese gasto? Calcula el valor real." 
                 />
                 <ToolCard 
                     label="Simulador Futuro" 
-                    icon="crystal_ball" 
+                    icon="timeline" 
                     onClick={onOpenFuture} 
                     gradient="from-violet-500 to-fuchsia-600"
-                    desc="Viaja al futuro. Predice tu saldo a 30 días según tus hábitos." 
+                    desc="Predice tu saldo a fin de mes basándote en tus gastos recurrentes." 
                 />
                 <ToolCard 
-                    label="Gestión de Deudas" 
-                    icon="gavel" 
+                    label="Gestor de Deudas" 
+                    icon="credit_score" 
                     onClick={onOpenDebts} 
                     gradient="from-rose-500 to-orange-500"
-                    desc="Domina tus obligaciones. Organiza y liquida tus pendientes." 
+                    desc="Estrategia 'Bola de Nieve' para eliminar intereses y liquidar pendientes." 
                 />
                 <ToolCard 
                     label="Analíticas Pro" 
-                    icon="bar_chart" 
+                    icon="donut_large" 
                     onClick={onOpenAnalytics} 
                     gradient="from-blue-500 to-cyan-500"
-                    desc="Visualiza el flujo. Gráficos detallados de ingresos vs gastos." 
+                    desc="Visualiza flujos de dinero, categorías y mapas de calor de actividad." 
                 />
              </div>
           </div>
@@ -488,21 +488,28 @@ const ToolCard: React.FC<{
     return (
         <button 
             onClick={onClick}
-            className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-3xl p-5 text-left border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full flex flex-col"
+            className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-[1.5rem] p-5 text-left border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full flex flex-col items-start"
         >
-            {/* Gradient Orb Background */}
-            <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full bg-gradient-to-br ${gradient} opacity-10 group-hover:opacity-20 transition-opacity blur-2xl`}></div>
+            {/* Gradient Background Effect on Hover */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}></div>
             
-            <div className={`size-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-lg mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                <span className="material-symbols-outlined text-2xl">{icon}</span>
+            {/* Icon Container */}
+            <div className={`relative mb-4`}>
+                <div className={`size-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300`}>
+                    <span className="material-symbols-outlined text-[24px]">{icon}</span>
+                </div>
+                {/* Decorative Blur behind icon */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} blur-xl opacity-40 -z-10 scale-150`}></div>
             </div>
             
-            <h3 className="font-bold text-slate-900 dark:text-white text-lg mb-1 leading-tight">{label}</h3>
+            <h3 className="font-bold text-slate-900 dark:text-white text-base mb-2 leading-tight group-hover:text-primary transition-colors">{label}</h3>
             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium mb-4 flex-1">{desc}</p>
             
-            <div className={`flex items-center gap-1 text-xs font-bold opacity-60 group-hover:opacity-100 transition-opacity text-slate-900 dark:text-white`}>
-               <span>Abrir</span>
-               <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            <div className="w-full flex items-center justify-between mt-auto pt-2 border-t border-slate-100 dark:border-slate-700/50">
+               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">Abrir Herramienta</span>
+               <div className="size-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
+                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+               </div>
             </div>
         </button>
     );
