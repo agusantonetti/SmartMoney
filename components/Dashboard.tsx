@@ -16,6 +16,7 @@ interface Props {
   onOpenFuture: () => void;
   onOpenBudgetAdjust?: () => void; 
   onOpenSalaryCalculator?: () => void;
+  onOpenCurrencyConverter?: () => void; // NUEVO
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -39,6 +40,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenFuture,
   onOpenBudgetAdjust,
   onOpenSalaryCalculator,
+  onOpenCurrencyConverter,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -362,6 +364,13 @@ const Dashboard: React.FC<Props> = ({
              {isToolsOpen && (
                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-[fadeIn_0.3s_ease-out]">
                     <ToolCard 
+                        label="Conversor Divisas" 
+                        icon="currency_exchange" 
+                        onClick={onOpenCurrencyConverter} 
+                        gradient="from-yellow-400 to-orange-500"
+                        desc="Calcula cambios a Dólar, Euro y más." 
+                    />
+                    <ToolCard 
                         label="Costo de Vida" 
                         icon="price_check" 
                         onClick={onOpenSalaryCalculator} 
@@ -381,13 +390,6 @@ const Dashboard: React.FC<Props> = ({
                         onClick={onOpenDebts} 
                         gradient="from-rose-500 to-orange-500"
                         desc="Organiza tus pendientes y elimina intereses." 
-                    />
-                    <ToolCard 
-                        label="Analíticas Pro" 
-                        icon="donut_large" 
-                        onClick={onOpenAnalytics} 
-                        gradient="from-blue-500 to-cyan-500"
-                        desc="Visualiza flujos, categorías y mapas de calor." 
                     />
                  </div>
              )}

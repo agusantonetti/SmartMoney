@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ViewState, Transaction, FinancialMetrics, FinancialProfile, QuickAction } from './types';
 import Dashboard from './components/Dashboard';
@@ -16,7 +15,9 @@ import EventManager from './components/EventManager';
 import FutureSimulator from './components/FutureSimulator'; 
 import LandingPage from './components/LandingPage';
 import BudgetAdjust from './components/BudgetAdjust';
-import SalaryCalculator from './components/SalaryCalculator'; // Import new component
+import SalaryCalculator from './components/SalaryCalculator';
+import FinancialAssistant from './components/FinancialAssistant'; // Import AI Chat
+import CurrencyConverter from './components/CurrencyConverter'; // Import Converter
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -89,14 +90,11 @@ const App: React.FC = () => {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
           setCurrentUser(user);
           if (user) {
-              // Si hay usuario, vamos al Dashboard (si estábamos en Landing)
-              // Pero permitimos navegar a otras vistas si ya estábamos logueados
               if (currentView === ViewState.LANDING) {
                   setCurrentView(ViewState.DASHBOARD);
               }
               triggerToast(`Conectado como ${user.email}`, 'success');
           } else {
-              // Si no hay usuario, volvemos a Landing y limpiamos datos
               setCurrentView(ViewState.LANDING);
               setTransactions([]);
               setFinancialProfile(DEFAULT_PROFILE);
@@ -104,7 +102,7 @@ const App: React.FC = () => {
           setAuthLoading(false);
       });
       return () => unsubscribe();
-  }, []); // Run once on mount
+  }, []);
 
   // 2. FIRESTORE REALTIME LISTENER
   useEffect(() => {
@@ -115,14 +113,11 @@ const App: React.FC = () => {
       const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
               const data = docSnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
-              // Actualizar estado local con datos de la nube
               if (data.transactions) setTransactions(data.transactions);
               if (data.profile) {
-                  // Merge para asegurar integridad de nuevos campos
                   setFinancialProfile({ ...DEFAULT_PROFILE, ...data.profile });
               }
           } else {
-              // Usuario nuevo en Firestore: Crear documento inicial
               const initialProfile = { 
                   ...DEFAULT_PROFILE, 
                   name: currentUser.email?.split('@')[0] || 'Viajero' 
@@ -144,24 +139,26 @@ const App: React.FC = () => {
 
   // --- DATA HELPERS ---
   
-  // Función central para guardar en Firestore
-  // Recibe los NUEVOS estados que queremos guardar
   const saveToFirestore = async (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
       if (!currentUser) return;
       
-      // Actualización optimista del estado local
+      // Actualización optimista local
       setFinancialProfile(newProfile);
       setTransactions(newTransactions);
 
       try {
           const userDocRef = doc(db, 'users', currentUser.uid);
+          
+          // SANITIZACIÓN: Eliminar valores 'undefined' que causan error en Firestore (especialmente en arrays)
+          const sanitize = (data: any) => JSON.parse(JSON.stringify(data));
+
           await setDoc(userDocRef, {
-              profile: newProfile,
-              transactions: newTransactions
+              profile: sanitize(newProfile),
+              transactions: sanitize(newTransactions)
           }, { merge: true });
-      } catch (e) {
+      } catch (e: any) {
           console.error("Error guardando en nube:", e);
-          triggerToast("Error al guardar en la nube", 'error');
+          triggerToast(`Error al guardar: ${e.message || 'Verifica tu conexión'}`, 'error');
       }
   };
 
@@ -203,11 +200,11 @@ const App: React.FC = () => {
   };
 
   const handleLoginSuccess = () => {
-      // Auth listener handles the redirection and data loading
+      // Auth listener handles redirection
   };
 
   const handleLogout = () => {
-      // Firebase signOut handled in ProfileSetup, Auth listener will clean up
+      // Logic handled in ProfileSetup
   };
 
   const triggerToast = (message: string, type: 'success' | 'error') => {
@@ -302,6 +299,7 @@ const App: React.FC = () => {
             onOpenFuture={() => setCurrentView(ViewState.FUTURE_SIMULATOR)}
             onOpenBudgetAdjust={() => setCurrentView(ViewState.BUDGET_ADJUST)} 
             onOpenSalaryCalculator={() => setCurrentView(ViewState.SALARY_CALCULATOR)}
+            onOpenCurrencyConverter={() => setCurrentView(ViewState.CURRENCY_CONVERTER)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -328,6 +326,21 @@ const App: React.FC = () => {
                   transactions={transactions}
                   onBack={() => setCurrentView(ViewState.DASHBOARD)}
                   onUpdateProfile={handleUpdateProfile}
+              />
+          );
+      case ViewState.CURRENCY_CONVERTER:
+          return (
+              <CurrencyConverter 
+                  onBack={() => setCurrentView(ViewState.DASHBOARD)}
+              />
+          );
+      case ViewState.ASSISTANT:
+          return (
+              <FinancialAssistant
+                  profile={financialProfile}
+                  transactions={transactions}
+                  metrics={metrics}
+                  onBack={() => setCurrentView(ViewState.DASHBOARD)}
               />
           );
       case ViewState.TRANSACTION:
@@ -448,29 +461,7 @@ const App: React.FC = () => {
           />
         );
       default:
-        return (
-          <Dashboard 
-            metrics={metrics} 
-            transactions={transactions} 
-            profile={financialProfile}
-            onOpenProfile={() => setCurrentView(ViewState.PROFILE)}
-            onOpenIncomeManager={() => setCurrentView(ViewState.INCOME_MANAGER)}
-            onOpenSavingsBuckets={() => setCurrentView(ViewState.SAVINGS_BUCKETS)}
-            onOpenSubscriptions={() => setCurrentView(ViewState.SUBSCRIPTIONS)}
-            onOpenDebts={() => setCurrentView(ViewState.DEBTS)}
-            onOpenAnalytics={() => setCurrentView(ViewState.ANALYTICS)}
-            onOpenBudget={() => setCurrentView(ViewState.BUDGET_CONTROL)}
-            onOpenEvents={() => setCurrentView(ViewState.EVENTS)}
-            onOpenFuture={() => setCurrentView(ViewState.FUTURE_SIMULATOR)}
-            onOpenBudgetAdjust={() => setCurrentView(ViewState.BUDGET_ADJUST)}
-            onOpenSalaryCalculator={() => setCurrentView(ViewState.SALARY_CALCULATOR)}
-            onAddTransaction={() => setCurrentView(ViewState.TRANSACTION)}
-            isDarkMode={darkMode}
-            onToggleTheme={toggleTheme}
-            privacyMode={privacyMode}
-            onTogglePrivacy={() => setPrivacyMode(!privacyMode)}
-          />
-        );
+        return null;
     }
   };
 
@@ -488,6 +479,8 @@ const App: React.FC = () => {
                          currentView !== ViewState.LANDING &&
                          currentView !== ViewState.BUDGET_ADJUST &&
                          currentView !== ViewState.SALARY_CALCULATOR &&
+                         currentView !== ViewState.CURRENCY_CONVERTER &&
+                         currentView !== ViewState.ASSISTANT &&
                          !authLoading;
 
   return (
@@ -508,29 +501,39 @@ const App: React.FC = () => {
 
       {/* Navegación Flotante */}
       {showNavigation && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-sm px-4">
-          <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2 flex justify-between items-center">
-            <NavButton 
-              active={currentView === ViewState.DASHBOARD} 
-              onClick={() => setCurrentView(ViewState.DASHBOARD)} 
-              icon="dashboard" 
-              label="Panel" 
-            />
-            <NavButton 
-              active={false} 
-              onClick={() => setCurrentView(ViewState.TRANSACTION)} 
-              icon="add_circle" 
-              label="Añadir" 
-              highlight
-            />
-            <NavButton 
-              active={currentView === ViewState.ACTIVITY} 
-              onClick={() => setCurrentView(ViewState.ACTIVITY)} 
-              icon="list_alt" 
-              label="Actividad" 
-            />
-          </div>
-        </div>
+        <>
+            {/* AI Assistant FAB */}
+            <button 
+                onClick={() => setCurrentView(ViewState.ASSISTANT)}
+                className="fixed bottom-24 right-4 z-[100] size-14 bg-gradient-to-tr from-blue-600 to-purple-600 text-white rounded-full shadow-xl shadow-blue-500/30 flex items-center justify-center transition-transform hover:scale-110 active:scale-95 animate-[bounce_3s_infinite]"
+            >
+                <span className="material-symbols-outlined text-[28px]">auto_awesome</span>
+            </button>
+
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-sm px-4">
+                <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2 flex justify-between items-center">
+                    <NavButton 
+                    active={currentView === ViewState.DASHBOARD} 
+                    onClick={() => setCurrentView(ViewState.DASHBOARD)} 
+                    icon="dashboard" 
+                    label="Panel" 
+                    />
+                    <NavButton 
+                    active={false} 
+                    onClick={() => setCurrentView(ViewState.TRANSACTION)} 
+                    icon="add_circle" 
+                    label="Añadir" 
+                    highlight
+                    />
+                    <NavButton 
+                    active={currentView === ViewState.ACTIVITY} 
+                    onClick={() => setCurrentView(ViewState.ACTIVITY)} 
+                    icon="list_alt" 
+                    label="Actividad" 
+                    />
+                </div>
+            </div>
+        </>
       )}
     </div>
   );

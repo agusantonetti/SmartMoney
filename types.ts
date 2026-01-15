@@ -7,6 +7,7 @@ export enum ViewState {
   BUDGET_CONTROL = 'BUDGET_CONTROL',
   BUDGET_ADJUST = 'BUDGET_ADJUST', // Nueva vista para mover dinero
   SALARY_CALCULATOR = 'SALARY_CALCULATOR', // Nueva calculadora de sueldo/ahorro
+  CURRENCY_CONVERTER = 'CURRENCY_CONVERTER', // Nueva herramienta de conversión
   SUCCESS = 'SUCCESS',
   PROFILE = 'PROFILE',
   INCOME_MANAGER = 'INCOME_MANAGER',
@@ -16,6 +17,7 @@ export enum ViewState {
   ANALYTICS = 'ANALYTICS',
   EVENTS = 'EVENTS',
   FUTURE_SIMULATOR = 'FUTURE_SIMULATOR',
+  ASSISTANT = 'ASSISTANT', // Nuevo Asistente IA
 }
 
 export interface Transaction {
