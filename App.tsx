@@ -286,8 +286,8 @@ const App: React.FC = () => {
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => acc + safeNum(t.amount), 0);
 
-    // Calcular Balance: Inicial + Ingresos - Gastos
-    const calculatedBalance = safeNum(financialProfile.initialBalance || 0) + income - expense;
+    // FIX: El Balance ahora es SOLO el valor manual (Patrimonio Neto), desconectado del flujo de caja diario.
+    const manualBalance = safeNum(financialProfile.initialBalance || 0);
 
     const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => sum + src.amount, 0);
     const totalReserved = (financialProfile.savingsBuckets || []).reduce((sum, bucket) => sum + bucket.currentAmount, 0);
@@ -297,7 +297,8 @@ const App: React.FC = () => {
     const uniqueMonths = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : ''))).size || 1;
     const avgMonthlyExpense = (expense / Math.max(1, uniqueMonths)) + fixedExpenses;
     
-    const liquidAssets = calculatedBalance - totalReserved;
+    // Liquid assets: Patrimonio Manual - Apartados
+    const liquidAssets = manualBalance - totalReserved;
     
     let runway = 0;
     if (avgMonthlyExpense > 0) {
@@ -323,7 +324,7 @@ const App: React.FC = () => {
     return {
       income: safeNum(income),
       expense: safeNum(expense),
-      balance: calculatedBalance, 
+      balance: manualBalance, // Return manual balance directly
       salaryPaid: safeNum(salaryPaid),
       totalReserved: safeNum(totalReserved),
       fixedExpenses: safeNum(fixedExpenses),
