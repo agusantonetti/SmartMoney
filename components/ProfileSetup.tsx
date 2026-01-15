@@ -118,9 +118,9 @@ const ProfileSetup: React.FC<Props> = ({ currentProfile, allTransactions, onSave
   return (
     <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col items-center p-6 text-slate-900 dark:text-white transition-colors duration-200">
       
-      {/* Header */}
-      <div className="w-full max-w-lg flex items-center justify-between mb-8 pt-4">
-        <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+      {/* Header - FIXED SAFE AREA */}
+      <div className="w-full max-w-lg flex items-center justify-between mb-8 pt-[calc(env(safe-area-inset-top)+1rem)]">
+        <button onClick={onBack} className="p-3 -ml-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <h2 className="text-lg font-bold">Editar Perfil</h2>

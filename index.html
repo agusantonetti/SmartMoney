@@ -54,6 +54,14 @@
         font-family: 'Inter', sans-serif; 
         overscroll-behavior-y: none; /* Prevenir rebote de scroll en iOS */
         -webkit-tap-highlight-color: transparent; /* Eliminar highlight azul al tocar */
+        -webkit-touch-callout: none; /* Prevenir menú contextual al mantener pulsado */
+        -webkit-user-select: none; /* Prevenir selección de texto en UI */
+        user-select: none;
+      }
+      /* Permitir selección e interacción en inputs */
+      input, textarea, [contenteditable="true"] {
+        -webkit-user-select: text;
+        user-select: text;
       }
       .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
       .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
@@ -63,6 +71,11 @@
       
       /* Smooth scrolling for entire app */
       html { scroll-behavior: smooth; }
+      
+      /* Fix para iOS inputs */
+      input, textarea, select, button {
+        font-size: 16px; /* Evita zoom automático en iOS */
+      }
     </style>
     <!-- Importmap para cargar la librería desde CDN ya que no está estable en NPM -->
     <script type="importmap">

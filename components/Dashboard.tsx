@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile, Subscription } from '../types';
 
 interface Props {
@@ -25,6 +25,7 @@ interface Props {
   onToggleTheme: () => void;
   privacyMode?: boolean;
   onTogglePrivacy?: () => void;
+  onUpdateProfile?: (profile: FinancialProfile) => void;
 }
 
 const Dashboard: React.FC<Props> = ({ 
@@ -49,10 +50,29 @@ const Dashboard: React.FC<Props> = ({
   isDarkMode, 
   onToggleTheme,
   privacyMode,
-  onTogglePrivacy
+  onTogglePrivacy,
+  onUpdateProfile
 }) => {
   
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isEditingRate, setIsEditingRate] = useState(false);
+  const [tempRate, setTempRate] = useState(profile.customDollarRate?.toString() || "1130");
+
+  useEffect(() => {
+      setTempRate(profile.customDollarRate?.toString() || "1130");
+  }, [profile.customDollarRate]);
+
+  const handleRateBlur = () => {
+      setIsEditingRate(false);
+      const newRate = parseFloat(tempRate);
+      if (newRate > 0 && onUpdateProfile) {
+          onUpdateProfile({ ...profile, customDollarRate: newRate });
+      } else {
+          setTempRate(profile.customDollarRate?.toString() || "1130");
+      }
+  };
+
+  const currentDollarRate = parseFloat(tempRate) || 1130;
 
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
@@ -183,9 +203,8 @@ const Dashboard: React.FC<Props> = ({
       return { label: 'Novato', icon: 'start', color: 'text-slate-400' };
   };
 
-  const dollarRate = profile.customDollarRate || 1130; 
-  const wealthLevel = getWealthLevel(metrics.balance, dollarRate);
-  const balanceUSD = metrics.balance / dollarRate;
+  const wealthLevel = getWealthLevel(metrics.balance, currentDollarRate);
+  const balanceUSD = metrics.balance / currentDollarRate;
 
   // --- TOOLTIP COMPONENT ---
   const TooltipContent = ({ label, amount, percent, inverse = false }: { label: string, amount: number, percent: number, inverse?: boolean }) => {
@@ -208,9 +227,9 @@ const Dashboard: React.FC<Props> = ({
 
   return (
     <div className="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-x-hidden transition-colors duration-300">
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-50 w-full bg-surface-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors duration-300">
-        <div className="px-4 md:px-8 py-3 flex items-center justify-between max-w-[1440px] mx-auto w-full">
+      {/* Top Navigation - ADJUSTED FOR IOS SAFE AREA */}
+      <header className="sticky top-0 z-50 w-full bg-surface-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors duration-300 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
+        <div className="px-4 md:px-8 flex items-center justify-between max-w-[1440px] mx-auto w-full">
           <div className="flex items-center gap-2 md:gap-4">
             <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
               <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
@@ -322,6 +341,32 @@ const Dashboard: React.FC<Props> = ({
                <div className="absolute top-0 right-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-700"></div>
                
                <div className="relative z-10 flex flex-col gap-6">
+                  {/* CONFIGURACIÓN DÓLAR REF */}
+                  <div className="absolute top-0 right-0 flex items-center gap-2">
+                      {isEditingRate ? (
+                          <div className="flex items-center bg-black/40 rounded-full px-2 py-1 backdrop-blur-sm border border-white/20">
+                              <span className="text-xs font-bold text-white mr-1">$</span>
+                              <input 
+                                  type="number" 
+                                  value={tempRate}
+                                  onChange={(e) => setTempRate(e.target.value)}
+                                  onBlur={handleRateBlur}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleRateBlur()}
+                                  className="w-16 bg-transparent outline-none text-xs font-bold text-white placeholder-white/50"
+                                  autoFocus
+                              />
+                          </div>
+                      ) : (
+                          <button 
+                              onClick={() => setIsEditingRate(true)}
+                              className="text-[10px] font-bold text-white/50 bg-white/10 hover:bg-white/20 px-2 py-1 rounded-full transition-colors backdrop-blur-sm flex items-center gap-1"
+                          >
+                              1 USD = ${currentDollarRate}
+                              <span className="material-symbols-outlined text-[10px]">edit</span>
+                          </button>
+                      )}
+                  </div>
+
                   {/* Balance Principal */}
                   <div className="flex flex-col gap-1 group relative w-fit">
                       <div className="flex items-center gap-2 mb-1 opacity-80 cursor-help">
@@ -360,17 +405,26 @@ const Dashboard: React.FC<Props> = ({
                   <div className="grid grid-cols-3 gap-2 md:gap-4 bg-white/5 backdrop-blur-md rounded-2xl p-3 md:p-4 border border-white/10">
                       <div onClick={onOpenIncomeManager} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors text-center md:text-left group relative">
                           <p className="text-[10px] uppercase font-bold text-emerald-400 mb-0.5">Ganado</p>
-                          <p className={`text-sm md:text-xl font-bold truncate ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.totalMonthlyIncome)}</p>
+                          <div className={`${privacyMode ? 'blur-sm' : ''}`}>
+                              <p className="text-sm md:text-xl font-bold truncate">{formatMoney(stats.totalMonthlyIncome)}</p>
+                              <p className="text-[10px] text-slate-400 font-medium font-mono">(US$ {Math.round(stats.totalMonthlyIncome / currentDollarRate)})</p>
+                          </div>
                           {!privacyMode && <TooltipContent label="Mes Anterior" amount={stats.prevIncome} percent={stats.incomePct} />}
                       </div>
                       <div onClick={onOpenBudget} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors border-l border-white/10 text-center md:text-left group relative">
                           <p className="text-[10px] uppercase font-bold text-red-400 mb-0.5">Gastado</p>
-                          <p className={`text-sm md:text-xl font-bold truncate ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.totalMonthlyOutflow)}</p>
+                          <div className={`${privacyMode ? 'blur-sm' : ''}`}>
+                              <p className="text-sm md:text-xl font-bold truncate">{formatMoney(stats.totalMonthlyOutflow)}</p>
+                              <p className="text-[10px] text-slate-400 font-medium font-mono">(US$ {Math.round(stats.totalMonthlyOutflow / currentDollarRate)})</p>
+                          </div>
                           {!privacyMode && <TooltipContent label="Mes Anterior" amount={stats.prevExpense} percent={stats.expensePct} inverse={true} />}
                       </div>
                       <div onClick={onOpenAnalytics} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors border-l border-white/10 text-center md:text-left">
                           <p className="text-[10px] uppercase font-bold text-blue-400 mb-0.5">Neto</p>
-                          <p className={`text-sm md:text-xl font-bold truncate ${privacyMode ? 'blur-sm' : ''} ${stats.netMonthly < 0 ? 'text-red-300' : ''}`}>{formatMoney(stats.netMonthly)}</p>
+                          <div className={`${privacyMode ? 'blur-sm' : ''}`}>
+                              <p className={`text-sm md:text-xl font-bold truncate ${stats.netMonthly < 0 ? 'text-red-300' : ''}`}>{formatMoney(stats.netMonthly)}</p>
+                              <p className="text-[10px] text-slate-400 font-medium font-mono">(US$ {Math.round(stats.netMonthly / currentDollarRate)})</p>
+                          </div>
                       </div>
                   </div>
                </div>

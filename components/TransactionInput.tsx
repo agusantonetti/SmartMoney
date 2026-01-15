@@ -324,11 +324,11 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen flex flex-col transition-colors duration-200">
       {/* Top Navbar */}
-      <header className="w-full bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
-        <div className="px-4 py-3 flex items-center justify-between max-w-7xl mx-auto w-full">
+      <header className="w-full bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
+        <div className="px-4 flex items-center justify-between max-w-7xl mx-auto w-full">
           <div className="flex items-center gap-4">
              {onBack && (
-               <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+               <button onClick={onBack} className="p-3 -ml-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                   <span className="material-symbols-outlined">arrow_back</span>
                </button>
              )}
@@ -387,7 +387,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                             />
                         </div>
                         <div className="flex justify-between mt-2 items-center">
-                            <button onClick={triggerFileInput} className="p-2 rounded-full text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                            <button onClick={triggerFileInput} className="p-3 rounded-full text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                                 <span className="material-symbols-outlined text-[24px]">document_scanner</span>
                             </button>
                             <input type="file" accept="image/*,video/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
