@@ -10,79 +10,53 @@ interface Props {
 }
 
 const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUpdateProfile }) => {
-  // --- STATE: DATOS BASE (Editables Manualmente) ---
-  const [income, setIncome] = useState<string>('');
-  const [patrimony, setPatrimony] = useState<string>(''); // NUEVO: Patrimonio editable
-  const [rent, setRent] = useState<string>('');
-  const [otherFixed, setOtherFixed] = useState<string>('');
-  const [variable, setVariable] = useState<string>('');
-  
-  // --- STATE: SIMULADOR ---
-  const [simRent, setSimRent] = useState<string>('');
-  const [simExpenses, setSimExpenses] = useState<string>(''); // Expensas (Siempre ARS)
-  const [simCurrency, setSimCurrency] = useState<'ARS' | 'USD'>('ARS'); // Solo afecta al alquiler
-  const [targetRentPercentage, setTargetRentPercentage] = useState<number>(30); // Regla del 30% por defecto
+  const [activeTab, setActiveTab] = useState<'SALARY' | 'RUNWAY'>('SALARY');
 
-  // Cargar datos iniciales del perfil (pero permitir edición)
-  useEffect(() => {
-    const salary = (profile.incomeSources || []).reduce((acc, src) => acc + src.amount, 0) || (profile.monthlySalary || 0);
-    const totalFixed = (profile.subscriptions || []).reduce((acc, sub) => acc + sub.amount, 0);
-    const currentSavings = profile.initialBalance || 0;
-    
-    // Calcular variables promedio (último mes)
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const variableCalc = transactions
-      .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
-      .reduce((acc, t) => acc + t.amount, 0);
-
-    setIncome(salary.toString());
-    setPatrimony(currentSavings.toString()); // Carga inicial
-    setRent('0'); 
-    setOtherFixed(totalFixed.toString());
-    setVariable(variableCalc.toString());
-  }, [profile, transactions]);
-
-  // --- CALCULOS ---
-  
+  // --- SHARED DATA ---
   const currentDollarRate = profile.customDollarRate || 1130;
-
-  // Valores Numéricos de los Inputs
-  const valIncome = parseFloat(income) || 0;
-  const valPatrimony = parseFloat(patrimony) || 0; // Usamos el estado local, no el perfil
-  const valRent = parseFloat(rent) || 0;
-  const valOtherFixed = parseFloat(otherFixed) || 0;
-  const valVariable = parseFloat(variable) || 0;
-
-  const currentTotalExpenses = valRent + valOtherFixed + valVariable;
-  const currentNet = valIncome - currentTotalExpenses;
-
-  // SIMULACION
-  const valSimBaseRentRaw = parseFloat(simRent) || 0;
-  const valSimExpensesARS = parseFloat(simExpenses) || 0; // Siempre en pesos
   
-  // Convertir Alquiler a ARS si está en USD
-  const valSimRentARS = simCurrency === 'USD' ? valSimBaseRentRaw * currentDollarRate : valSimBaseRentRaw;
-  
-  // Costo Total Vivienda en ARS (Alquiler Convertido + Expensas Pesos)
-  const valSimHousingARS = valSimRentARS + valSimExpensesARS;
-  
-  // Nuevo costo de vida total estimado
-  const simTotalExpenses = valSimHousingARS + valOtherFixed + valVariable;
-  
-  // 1. Sueldo necesario basado en porcentaje de vivienda
-  const requiredSalaryForRent = targetRentPercentage > 0 ? valSimHousingARS / (targetRentPercentage / 100) : 0;
-  
-  // 2. Sueldo necesario para vida cómoda (Regla 50/30/20 simplificada: Costos Fijos+Variables = 80%)
-  const requiredSalaryForLife = simTotalExpenses / 0.8;
+  // --- TAB 1: SALARY CALCULATOR STATE ---
+  const [income, setIncome] = useState<string>('');
+  const [rent, setRent] = useState<string>(''); 
+  const [expenses, setExpenses] = useState<string>('');
+  const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS');
+  const [targetRentPercentage, setTargetRentPercentage] = useState<number>(30);
 
-  // 3. Fondo de emergencia sugerido (6 meses de gastos simulados)
-  const requiredEmergencyFund = simTotalExpenses * 6;
+  // --- TAB 2: RUNWAY CALCULATOR STATE ---
+  const [runwayPatrimony, setRunwayPatrimony] = useState<string>('');
+  const [runwayRent, setRunwayRent] = useState<string>('');
+  const [runwayExpenses, setRunwayExpenses] = useState<string>('');
+  const [runwayCurrency, setRunwayCurrency] = useState<'ARS' | 'USD'>('USD'); // Default USD for rent in runway usually
 
-  // 4. NUEVO: COBERTURA DE ALQUILER CON PATRIMONIO (Runway)
-  // ¿Cuántos meses puedo pagar SOLO el costo de vivienda (Alquiler + Expensas) con mis ahorros?
-  const patrimonyHousingCoverageMonths = valSimHousingARS > 0 ? valPatrimony / valSimHousingARS : 0;
-  const patrimonyHousingCoverageYears = patrimonyHousingCoverageMonths / 12;
+  // Load initial data
+  useEffect(() => {
+    // Load Income for Tab 1
+    const salary = (profile.incomeSources || []).reduce((acc, src) => acc + src.amount, 0) || (profile.monthlySalary || 0);
+    setIncome(salary.toString());
+
+    // Load Patrimony for Tab 2
+    const currentSavings = profile.initialBalance || 0;
+    setRunwayPatrimony(currentSavings.toString());
+  }, [profile]);
+
+  // --- CALCULATIONS: SALARY ---
+  const calcSalaryRent = parseFloat(rent) || 0;
+  const calcSalaryExpenses = parseFloat(expenses) || 0;
+  const calcSalaryTotalHousing = (currency === 'USD' ? calcSalaryRent * currentDollarRate : calcSalaryRent) + calcSalaryExpenses;
+  
+  const requiredSalary = targetRentPercentage > 0 ? calcSalaryTotalHousing / (targetRentPercentage / 100) : 0;
+  const currentSalary = parseFloat(income) || 0;
+  const salaryDiff = currentSalary - requiredSalary;
+
+  // --- CALCULATIONS: RUNWAY ---
+  const calcRunwayPatrimony = parseFloat(runwayPatrimony) || 0;
+  const calcRunwayRent = parseFloat(runwayRent) || 0;
+  const calcRunwayExpenses = parseFloat(runwayExpenses) || 0;
+  
+  const calcRunwayTotalHousing = (runwayCurrency === 'USD' ? calcRunwayRent * currentDollarRate : calcRunwayRent) + calcRunwayExpenses;
+  
+  const monthsCovered = calcRunwayTotalHousing > 0 ? calcRunwayPatrimony / calcRunwayTotalHousing : 0;
+  const yearsCovered = monthsCovered / 12;
 
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
@@ -101,194 +75,199 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div>
-            <h2 className="text-lg font-bold">Calculadora de Estilo de Vida</h2>
-            <p className="text-xs text-slate-500">Simula costos, sueldos y libertad financiera</p>
+            <h2 className="text-lg font-bold">Calculadora de Vivienda</h2>
+            <p className="text-xs text-slate-500">Herramientas de planificación</p>
         </div>
       </div>
 
-      <div className="flex-1 w-full max-w-5xl mx-auto p-4 md:p-6 space-y-8 pb-32">
+      {/* Tabs */}
+      <div className="w-full max-w-2xl mx-auto px-6 pt-6">
+        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+            <button 
+                onClick={() => setActiveTab('SALARY')}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'SALARY' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-400'}`}
+            >
+                <span className="material-symbols-outlined">payments</span>
+                Sueldo Ideal
+            </button>
+            <button 
+                onClick={() => setActiveTab('RUNWAY')}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'RUNWAY' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-400'}`}
+            >
+                <span className="material-symbols-outlined">hourglass_top</span>
+                Cobertura Alquiler
+            </button>
+        </div>
+      </div>
+
+      <div className="flex-1 w-full max-w-2xl mx-auto p-6 pb-32">
         
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            {/* COLUMNA 1: CONFIGURACIÓN MANUAL (4 Columnas) */}
-            <div className="lg:col-span-5 space-y-6">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="size-6 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">1</span>
-                    <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-sm">Datos Manuales</h3>
-                </div>
-
-                <div className="bg-surface-light dark:bg-surface-dark p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-5">
+        {/* --- TOOL 1: SALARY CALCULATOR --- */}
+        {activeTab === 'SALARY' && (
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+                <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg flex items-center gap-2">
+                        <span className="material-symbols-outlined text-blue-500">calculate</span>
+                        ¿Qué sueldo necesito?
+                    </h3>
+                    <p className="text-sm text-slate-500">Calcula cuánto deberías ganar para pagar un alquiler específico según la regla del {targetRentPercentage}%.</p>
                     
-                    {/* INPUT 1: SUELDO */}
-                    <div>
-                        <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Ingreso Mensual Neto</label>
-                        <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800/50 p-3 rounded-xl border border-transparent focus-within:border-primary transition-colors">
-                            <span className="text-slate-500 font-bold">$</span>
-                            <input type="number" value={income} onChange={e => setIncome(e.target.value)} className="bg-transparent w-full outline-none font-bold text-lg" placeholder="0" />
-                        </div>
-                    </div>
-
-                    {/* INPUT 2: PATRIMONIO (Nuevo) */}
-                    <div>
-                        <label className="text-[10px] uppercase font-bold text-emerald-500 block mb-1">Ahorros / Patrimonio Total</label>
-                        <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/10 p-3 rounded-xl border border-emerald-100 dark:border-emerald-800 focus-within:border-emerald-500 transition-colors">
-                            <span className="text-emerald-500 font-bold">$</span>
-                            <input type="number" value={patrimony} onChange={e => setPatrimony(e.target.value)} className="bg-transparent w-full outline-none font-bold text-lg text-emerald-700 dark:text-emerald-400" placeholder="0" />
-                        </div>
-                        <p className="text-[9px] text-slate-400 mt-1">Usado para calcular cobertura de alquiler.</p>
-                    </div>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-700"></div>
-                    
-                    {/* GASTOS ACTUALES */}
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Gastos Fijos</label>
-                            <input type="number" value={otherFixed} onChange={e => setOtherFixed(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 p-2 rounded-lg outline-none font-bold text-sm" placeholder="0" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Gastos Variables</label>
-                            <input type="number" value={variable} onChange={e => setVariable(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 p-2 rounded-lg outline-none font-bold text-sm" placeholder="0" />
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-xl flex justify-between items-center">
-                        <span className="text-xs font-bold text-slate-500">Capacidad Ahorro Actual</span>
-                        <span className={`font-black ${currentNet >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{formatMoney(currentNet)}</span>
-                    </div>
-                </div>
-            </div>
-
-            {/* COLUMNA 2: SIMULADOR Y RESULTADOS (7 Columnas) */}
-            <div className="lg:col-span-7 space-y-6">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="size-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                    <h3 className="font-bold text-slate-900 dark:text-white uppercase tracking-wider text-sm">Escenario de Vivienda</h3>
-                </div>
-
-                {/* TARJETA DE INPUTS DE SIMULACIÓN */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-primary/20 shadow-lg relative overflow-visible">
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-                        {/* Input Alquiler */}
-                        <div>
-                            <div className="flex justify-between mb-1">
-                                <label className="text-xs font-bold text-primary block">Alquiler</label>
-                                <div className="flex bg-slate-100 dark:bg-slate-700 p-0.5 rounded-md scale-90 origin-right">
-                                    <button onClick={() => setSimCurrency('ARS')} className={`px-2 py-0.5 rounded text-[10px] font-bold ${simCurrency === 'ARS' ? 'bg-white text-black shadow' : 'text-slate-500'}`}>ARS</button>
-                                    <button onClick={() => setSimCurrency('USD')} className={`px-2 py-0.5 rounded text-[10px] font-bold ${simCurrency === 'USD' ? 'bg-emerald-500 text-white shadow' : 'text-slate-500'}`}>USD</button>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                             <label className="text-xs font-bold text-slate-400 block mb-1">Costo Alquiler</label>
+                             <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <input 
+                                        type="number" 
+                                        value={rent} 
+                                        onChange={e => setRent(e.target.value)} 
+                                        className="w-full bg-slate-100 dark:bg-slate-800 p-3 rounded-xl outline-none font-bold"
+                                        placeholder="0"
+                                    />
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 focus-within:border-primary transition-all">
-                                <span className="font-bold text-slate-400">{simCurrency === 'ARS' ? '$' : 'US$'}</span>
-                                <input 
-                                    type="number" 
-                                    value={simRent} 
-                                    onChange={e => setSimRent(e.target.value)} 
-                                    className="bg-transparent w-full outline-none font-black text-xl text-slate-900 dark:text-white" 
-                                    placeholder="0" 
-                                />
-                            </div>
-                            {simCurrency === 'USD' && <p className="text-[9px] text-slate-400 text-right mt-1">Dólar: ${currentDollarRate}</p>}
-                        </div>
-
-                        {/* Input Expensas */}
-                        <div>
-                             <label className="text-xs font-bold text-slate-400 block mb-1">Expensas (Opcional)</label>
-                             <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 focus-within:border-primary transition-all h-[54px]">
-                                <span className="font-bold text-slate-400">$</span>
-                                <input 
-                                    type="number" 
-                                    value={simExpenses} 
-                                    onChange={e => setSimExpenses(e.target.value)} 
-                                    className="bg-transparent w-full outline-none font-bold text-lg text-slate-900 dark:text-white" 
-                                    placeholder="0" 
-                                />
+                                <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex items-center">
+                                    <button onClick={() => setCurrency('ARS')} className={`px-3 py-2 rounded-lg text-xs font-bold ${currency === 'ARS' ? 'bg-white dark:bg-slate-600 shadow' : 'text-slate-400'}`}>ARS</button>
+                                    <button onClick={() => setCurrency('USD')} className={`px-3 py-2 rounded-lg text-xs font-bold ${currency === 'USD' ? 'bg-white dark:bg-slate-600 shadow' : 'text-slate-400'}`}>USD</button>
+                                </div>
                              </div>
-                             <p className="text-[9px] text-slate-400 text-right mt-1">Siempre en Pesos</p>
+                             {currency === 'USD' && <p className="text-[10px] text-slate-400 mt-1 text-right">Cotización: ${currentDollarRate}</p>}
                         </div>
-                    </div>
 
-                    {/* Slider */}
-                    <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                        <label className="text-[10px] font-bold text-slate-400 block mb-2 flex justify-between">
-                            <span>Regla de Presupuesto (Vivienda máx %)</span>
-                            <span className="text-slate-900 dark:text-white">{targetRentPercentage}%</span>
-                        </label>
-                        <input 
-                            type="range" 
-                            min="10" max="60" step="5" 
-                            value={targetRentPercentage} 
-                            onChange={e => setTargetRentPercentage(parseInt(e.target.value))}
-                            className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
-                        />
+                        <div className="col-span-2">
+                             <label className="text-xs font-bold text-slate-400 block mb-1">Expensas (ARS)</label>
+                             <input 
+                                type="number" 
+                                value={expenses} 
+                                onChange={e => setExpenses(e.target.value)} 
+                                className="w-full bg-slate-100 dark:bg-slate-800 p-3 rounded-xl outline-none font-bold"
+                                placeholder="0"
+                             />
+                        </div>
+
+                        <div className="col-span-2">
+                            <label className="text-xs font-bold text-slate-400 block mb-2 flex justify-between">
+                                <span>Regla (Vivienda máx %)</span>
+                                <span className="text-slate-900 dark:text-white">{targetRentPercentage}%</span>
+                            </label>
+                            <input 
+                                type="range" 
+                                min="10" max="60" step="5" 
+                                value={targetRentPercentage} 
+                                onChange={e => setTargetRentPercentage(parseInt(e.target.value))}
+                                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {/* --- RESULTADOS --- */}
-                {valSimHousingARS > 0 && (
-                    <div className="space-y-4 animate-[fadeIn_0.3s_ease-out]">
-                        
-                        {/* 1. TARJETA SUELDO REQUERIDO */}
-                        <div className="bg-gradient-to-r from-indigo-600 to-blue-600 text-white p-5 rounded-2xl shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div>
-                                <p className="text-indigo-200 text-[10px] font-bold uppercase tracking-widest mb-1">Sueldo Mínimo Sugerido</p>
-                                <h2 className="text-3xl font-black">{formatMoney(requiredSalaryForRent)}</h2>
-                                <p className="text-xs opacity-80">Para cubrir alquiler + expensas con el {targetRentPercentage}%.</p>
-                            </div>
-                            <div className="text-right bg-white/10 p-3 rounded-xl min-w-[140px]">
-                                <p className="text-[10px] font-bold uppercase mb-1">Tu Sueldo Actual</p>
-                                <p className={`text-lg font-bold ${valIncome >= requiredSalaryForRent ? 'text-emerald-300' : 'text-red-300'}`}>
-                                    {formatMoney(valIncome)}
-                                </p>
-                                <p className="text-[9px] opacity-70">
-                                    {valIncome >= requiredSalaryForRent ? '✅ Cubierto' : '⚠️ Insuficiente'}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* 2. TARJETA COBERTURA PATRIMONIAL (LA QUE PEDISTE) */}
-                        <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 p-5 rounded-2xl shadow-md border border-slate-700 dark:border-slate-200 relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 group-hover:bg-emerald-500/30 transition-colors"></div>
+                {calcSalaryTotalHousing > 0 && (
+                    <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+                        <div className="relative z-10">
+                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Sueldo Neto Sugerido</p>
+                            <h2 className="text-4xl font-black mb-4">{formatMoney(requiredSalary)}</h2>
                             
-                            <div className="relative z-10">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className="size-8 rounded-full bg-emerald-500 flex items-center justify-center text-white">
-                                        <span className="material-symbols-outlined text-lg">savings</span>
-                                    </div>
-                                    <p className="text-xs font-bold uppercase tracking-widest opacity-70">Cobertura con Ahorros</p>
+                            <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs font-bold text-indigo-100 uppercase">Tu sueldo actual</span>
+                                    <span className="font-bold">{formatMoney(currentSalary)}</span>
                                 </div>
-                                
-                                <div className="flex flex-col sm:flex-row sm:items-end gap-1 sm:gap-4 mb-2">
-                                    <h2 className="text-4xl font-black leading-none">{patrimonyHousingCoverageMonths.toFixed(1)}</h2>
-                                    <span className="text-xl font-bold opacity-80 mb-1">Meses</span>
-                                    <span className="text-sm opacity-50 mb-1.5 ml-auto hidden sm:block">({patrimonyHousingCoverageYears.toFixed(1)} Años)</span>
+                                <div className="h-2 bg-black/20 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full ${salaryDiff >= 0 ? 'bg-emerald-400' : 'bg-red-400'}`} 
+                                        style={{ width: `${Math.min(100, (currentSalary / requiredSalary) * 100)}%` }}
+                                    ></div>
                                 </div>
-                                
-                                <p className="text-sm opacity-80 leading-snug max-w-md">
-                                    Podrías pagar este costo de vivienda (<strong>{formatMoney(valSimHousingARS)}</strong>) exclusivamente usando tus ahorros actuales de <strong>{formatMoney(valPatrimony)}</strong>.
+                                <p className="text-[10px] mt-2 text-right">
+                                    {salaryDiff >= 0 
+                                        ? `¡Genial! Te sobran ${formatMoney(salaryDiff)}` 
+                                        : `Te faltan ${formatMoney(Math.abs(salaryDiff))}`
+                                    }
                                 </p>
                             </div>
                         </div>
-
-                        {/* 3. DATOS ADICIONALES */}
-                        <div className="grid grid-cols-2 gap-3">
-                             <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                                <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Costo Total Mensual</p>
-                                <p className="text-lg font-black text-slate-900 dark:text-white">{formatMoney(simTotalExpenses)}</p>
-                                <p className="text-[9px] text-slate-400">Vivienda + Gastos Fijos + Var.</p>
-                             </div>
-                             <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-                                <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Reserva 6 Meses</p>
-                                <p className="text-lg font-black text-slate-900 dark:text-white">{formatMoney(requiredEmergencyFund)}</p>
-                                <p className="text-[9px] text-slate-400">Fondo de Paz Mental</p>
-                             </div>
-                        </div>
-
                     </div>
                 )}
             </div>
-        </div>
+        )}
+
+        {/* --- TOOL 2: RUNWAY CALCULATOR --- */}
+        {activeTab === 'RUNWAY' && (
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+                 <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg flex items-center gap-2">
+                        <span className="material-symbols-outlined text-emerald-500">savings</span>
+                        Cobertura Patrimonial
+                    </h3>
+                    <p className="text-sm text-slate-500">Calcula cuántos meses podrías vivir pagando este alquiler solo con tus ahorros.</p>
+                    
+                    <div className="space-y-4">
+                        <div>
+                             <label className="text-xs font-bold text-emerald-500 block mb-1">Tus Ahorros / Patrimonio (ARS)</label>
+                             <input 
+                                type="number" 
+                                value={runwayPatrimony} 
+                                onChange={e => setRunwayPatrimony(e.target.value)} 
+                                className="w-full bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-800 p-4 rounded-xl outline-none font-black text-xl text-emerald-700 dark:text-emerald-400"
+                                placeholder="0"
+                             />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                             <div className="col-span-2 sm:col-span-1">
+                                 <label className="text-xs font-bold text-slate-400 block mb-1">Costo Alquiler</label>
+                                 <div className="flex gap-2">
+                                     <div className="relative flex-1">
+                                        <input 
+                                            type="number" 
+                                            value={runwayRent} 
+                                            onChange={e => setRunwayRent(e.target.value)} 
+                                            className="w-full bg-slate-100 dark:bg-slate-800 p-3 rounded-xl outline-none font-bold"
+                                            placeholder="0"
+                                        />
+                                     </div>
+                                     <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex items-center">
+                                         <button onClick={() => setRunwayCurrency('ARS')} className={`px-2 py-2 rounded-lg text-[10px] font-bold ${runwayCurrency === 'ARS' ? 'bg-white dark:bg-slate-600 shadow' : 'text-slate-400'}`}>ARS</button>
+                                         <button onClick={() => setRunwayCurrency('USD')} className={`px-2 py-2 rounded-lg text-[10px] font-bold ${runwayCurrency === 'USD' ? 'bg-white dark:bg-slate-600 shadow' : 'text-slate-400'}`}>USD</button>
+                                     </div>
+                                 </div>
+                             </div>
+                             <div className="col-span-2 sm:col-span-1">
+                                 <label className="text-xs font-bold text-slate-400 block mb-1">Expensas (ARS)</label>
+                                 <input 
+                                    type="number" 
+                                    value={runwayExpenses} 
+                                    onChange={e => setRunwayExpenses(e.target.value)} 
+                                    className="w-full bg-slate-100 dark:bg-slate-800 p-3 rounded-xl outline-none font-bold"
+                                    placeholder="0"
+                                 />
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {calcRunwayTotalHousing > 0 && (
+                    <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 size-48 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                        
+                        <div className="relative z-10 text-center py-4">
+                            <p className="text-emerald-100 text-xs font-bold uppercase tracking-widest mb-2">Libertad de Alquiler</p>
+                            <div className="flex items-baseline justify-center gap-2 mb-2">
+                                <h1 className="text-6xl font-black">{monthsCovered.toFixed(1)}</h1>
+                                <span className="text-xl font-medium opacity-80">Meses</span>
+                            </div>
+                            <p className="text-sm opacity-90">
+                                Equivalente a <strong>{yearsCovered.toFixed(1)} años</strong> de vivienda cubierta.
+                            </p>
+                            
+                            <div className="mt-6 pt-4 border-t border-white/20 flex justify-between text-xs font-medium opacity-80">
+                                <span>Costo Mensual Total:</span>
+                                <span>{formatMoney(calcRunwayTotalHousing)}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        )}
 
       </div>
     </div>
