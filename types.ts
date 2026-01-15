@@ -42,10 +42,9 @@ export interface IncomePayment {
   isPaid: boolean;
   isInvoiceSent?: boolean;
   notes?: string;
-  // NUEVO: Métricas para creadores
   metrics?: {
-    impressions?: number; // En millones (ej. 5.2M)
-    rpm?: number; // Revenue per Million calculado
+    impressions?: number; 
+    rpm?: number; 
   };
 }
 
@@ -60,15 +59,11 @@ export interface IncomeSource {
   amount: number; 
   payments: IncomePayment[];
   type?: IncomeType;
-  
   frequency?: PaymentFrequency; 
   startDate?: string; 
   endDate?: string; 
   isActive?: boolean; 
-
-  // NUEVO: Flag para activar UI de Creador (X/Youtube)
   isCreatorSource?: boolean;
-
   medium?: MediaType;
   hoursPerDay?: number;
   daysPerWeek?: number;
@@ -79,6 +74,7 @@ export interface SubscriptionPayment {
   realAmount: number;
   isPaid: boolean;
   datePaid?: string;
+  transactionId?: string; // NUEVO: ID de la transacción generada automáticamente
 }
 
 export interface Subscription {

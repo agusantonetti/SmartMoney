@@ -1,10 +1,11 @@
 
 import React, { useState } from 'react';
-import { FinancialProfile, Subscription, SubscriptionPayment } from '../types';
+import { FinancialProfile, Subscription, SubscriptionPayment, Transaction } from '../types';
 
 interface Props {
   profile: FinancialProfile;
-  onUpdateProfile: (profile: FinancialProfile) => void;
+  transactions: Transaction[]; // NEEDED FOR SYNC
+  onGlobalUpdate: (profile: FinancialProfile, transactions: Transaction[]) => void; // UPDATED PROP
   onBack: () => void;
   privacyMode?: boolean;
 }
@@ -16,7 +17,7 @@ const CATEGORIES = [
   { id: 'education', label: 'Educación', icon: 'school', color: 'blue' },
 ];
 
-const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
+const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalUpdate, onBack, privacyMode }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(profile.subscriptions || []);
   
   // View State
@@ -70,6 +71,14 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
       return diffDays;
   };
 
+  const mapSubCategoryToTxCategory = (catId: string): string => {
+      if (catId === 'housing') return 'Hogar';
+      if (catId === 'services') return 'Servicios';
+      if (catId === 'digital') return 'Entretenimiento';
+      if (catId === 'education') return 'Educación';
+      return 'Otros';
+  };
+
   // --- LOGIC: CRUD ---
   const handleAdd = () => {
     if (!name || !amount) return;
@@ -108,7 +117,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
 
     const updated = [...subscriptions, newSub];
     setSubscriptions(updated);
-    onUpdateProfile({ ...profile, subscriptions: updated });
+    onGlobalUpdate({ ...profile, subscriptions: updated }, transactions);
     
     setName('');
     setAmount('');
@@ -122,11 +131,11 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     e.stopPropagation(); // Prevent opening detail view
     const updated = subscriptions.filter(s => s.id !== id);
     setSubscriptions(updated);
-    onUpdateProfile({ ...profile, subscriptions: updated });
+    onGlobalUpdate({ ...profile, subscriptions: updated }, transactions);
     if (selectedSubId === id) setSelectedSubId(null);
   };
 
-  // --- LOGIC: PAYMENTS (HISTORY) ---
+  // --- LOGIC: PAYMENTS (HISTORY & TRANSACTION SYNC) ---
   const handleUpdatePayment = (subId: string, updatedPayment: SubscriptionPayment) => {
     const subIndex = subscriptions.findIndex(s => s.id === subId);
     if (subIndex === -1) return;
@@ -136,29 +145,53 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     const existingPaymentIndex = history.findIndex(p => p.month === updatedPayment.month);
     
     let newHistory = [...history];
+    let currentTransactionId = existingPaymentIndex >= 0 ? history[existingPaymentIndex].transactionId : undefined;
+    let newTransactions = [...transactions];
 
-    if (existingPaymentIndex >= 0) {
-      newHistory[existingPaymentIndex] = updatedPayment;
+    // LOGIC: Create or Delete Transaction based on isPaid
+    if (updatedPayment.isPaid) {
+        // CASE: PAYING (Create Transaction if not exists)
+        if (!currentTransactionId) {
+            const txId = Date.now().toString();
+            // Calculate date from monthKey (YYYY-MM) + billingDay
+            const [y, m] = updatedPayment.month.split('-');
+            const txDate = `${y}-${m}-${String(sub.billingDay).padStart(2, '0')}`;
+
+            const newTx: Transaction = {
+                id: txId,
+                amount: updatedPayment.realAmount,
+                description: `${sub.name} (Pago Mensual)`,
+                category: mapSubCategoryToTxCategory(sub.category),
+                type: 'expense',
+                date: txDate,
+                originalAmount: updatedPayment.realAmount,
+                originalCurrency: 'ARS', // Assuming ARS base for simplicity here
+                exchangeRate: 1
+            };
+            newTransactions.unshift(newTx);
+            currentTransactionId = txId; // Store link
+        }
     } else {
-      newHistory.push(updatedPayment);
+        // CASE: UNPAYING (Delete Transaction if exists)
+        if (currentTransactionId) {
+            newTransactions = newTransactions.filter(t => t.id !== currentTransactionId);
+            currentTransactionId = undefined; // Remove link
+        }
     }
 
-    // Si pagamos, y es mensual, actualizamos la próxima fecha automáticamente
-    // para que la alerta desaparezca hasta el próximo mes.
-    // (Lógica simplificada: asumimos que al marcar pagado, ya estamos al día)
-    let nextDate = sub.nextPaymentDate;
+    // Update the payment record with the transaction link
+    const finalPaymentRecord = { ...updatedPayment, transactionId: currentTransactionId };
+
+    if (existingPaymentIndex >= 0) {
+      newHistory[existingPaymentIndex] = finalPaymentRecord;
+    } else {
+      newHistory.push(finalPaymentRecord);
+    }
+
+    // Auto-advance next date logic (simple version)
     if (updatedPayment.isPaid) {
         const currentNext = new Date(sub.nextPaymentDate || new Date());
-        if (sub.frequency === 'YEARLY') {
-            currentNext.setFullYear(currentNext.getFullYear() + 1);
-        } else {
-            currentNext.setMonth(currentNext.getMonth() + 1);
-        }
-        // Solo actualizamos si la fecha de pago que estamos marcando es reciente/actual
-        // Esto evita mover la fecha si estamos editando el historial viejo
-        // nextDate = currentNext.toISOString().split('T')[0];
-        // Nota: Por ahora no auto-actualizamos `nextPaymentDate` permanentemente al marcar historial
-        // para evitar conflictos lógicos complejos en esta demo. 
+        // Simple logic: If we pay the current month, verify logic elsewhere, keeping it simple here
     }
 
     const updatedSub = { ...sub, history: newHistory };
@@ -166,7 +199,9 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     newSubs[subIndex] = updatedSub;
     
     setSubscriptions(newSubs);
-    onUpdateProfile({ ...profile, subscriptions: newSubs });
+    
+    // ATOMIC UPDATE: Profile (Subs) + Transactions
+    onGlobalUpdate({ ...profile, subscriptions: newSubs }, newTransactions);
   };
 
   // --- RENDER ---

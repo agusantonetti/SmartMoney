@@ -195,6 +195,11 @@ const App: React.FC = () => {
     saveToFirestore(financialProfile, newTransactions);
   };
 
+  // Función combinada para actualizar ambos al mismo tiempo (usada en SubscriptionManager)
+  const handleGlobalUpdate = (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
+      saveToFirestore(newProfile, newTransactions);
+  };
+
   const handleImportData = (data: { profile: FinancialProfile, transactions: Transaction[] }) => {
     if (data.profile && data.transactions) {
        saveToFirestore(data.profile, data.transactions);
@@ -475,7 +480,8 @@ const App: React.FC = () => {
         return (
           <SubscriptionManager 
             profile={financialProfile}
-            onUpdateProfile={handleUpdateProfile}
+            transactions={transactions}
+            onGlobalUpdate={handleGlobalUpdate}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
             privacyMode={privacyMode}
           />
