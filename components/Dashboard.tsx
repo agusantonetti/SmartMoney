@@ -19,6 +19,7 @@ interface Props {
   onOpenSalaryCalculator?: () => void;
   onOpenCurrencyConverter?: () => void;
   onOpenWealthLevels?: () => void;
+  onOpenAchievements?: () => void; // NUEVO PROP
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -43,6 +44,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenSalaryCalculator,
   onOpenCurrencyConverter,
   onOpenWealthLevels,
+  onOpenAchievements,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -346,11 +348,11 @@ const Dashboard: React.FC<Props> = ({
                       onClick={onOpenCurrencyConverter} 
                   />
                   <AppCard 
-                      title="Costo de Vida" 
-                      subtitle="Calculadora" 
-                      icon="price_check" 
-                      color="emerald" 
-                      onClick={onOpenSalaryCalculator} 
+                      title="Trofeos" 
+                      subtitle="Tus Logros" 
+                      icon="emoji_events" 
+                      color="amber" 
+                      onClick={onOpenAchievements} 
                   />
                   <AppCard 
                       title="Simulador" 
@@ -390,6 +392,7 @@ const AppCard: React.FC<{
         yellow: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
         emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
         violet: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400',
+        amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
     };
 
     return (
