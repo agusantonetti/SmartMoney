@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { ViewState, Transaction, FinancialMetrics, FinancialProfile, QuickAction } from './types';
 import Dashboard from './components/Dashboard';
@@ -375,6 +374,7 @@ const App: React.FC = () => {
             onToggleTheme={toggleTheme}
             privacyMode={privacyMode}
             onTogglePrivacy={() => setPrivacyMode(!privacyMode)}
+            onUpdateProfile={handleUpdateProfile} // FIX: Pasar la función para actualizar
           />
         );
       case ViewState.ACHIEVEMENTS:
