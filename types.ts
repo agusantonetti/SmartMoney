@@ -37,15 +37,19 @@ export interface Transaction {
 }
 
 export interface IncomePayment {
-  month: string; // Formato "YYYY-MM"
+  month: string; // Formato "YYYY-MM" o "YYYY-MM-Q1" para quincenas
   realAmount: number;
   isPaid: boolean;
   isInvoiceSent?: boolean;
   notes?: string;
+  // NUEVO: Métricas para creadores
+  metrics?: {
+    impressions?: number; // En millones (ej. 5.2M)
+    rpm?: number; // Revenue per Million calculado
+  };
 }
 
 export type MediaType = 'TV' | 'RADIO' | 'STREAM' | 'REDACCION' | 'EVENTO' | 'OTRO';
-// IncomeType simplificado para la nueva lógica, mantenemos compatibilidad
 export type IncomeType = 'FIXED' | 'MEDIA' | 'SPORADIC'; 
 
 export type PaymentFrequency = 'MONTHLY' | 'BIWEEKLY' | 'ONE_TIME';
@@ -53,17 +57,18 @@ export type PaymentFrequency = 'MONTHLY' | 'BIWEEKLY' | 'ONE_TIME';
 export interface IncomeSource {
   id: string;
   name: string;
-  amount: number; // Monto base estimado por PERIODO (ej: si es quincenal, es monto por quincena)
+  amount: number; 
   payments: IncomePayment[];
   type?: IncomeType;
   
-  // NUEVOS CAMPOS PARA CONTRATOS
-  frequency?: PaymentFrequency; // Mensual, Quincenal, Único
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string; // YYYY-MM-DD (Opcional, si es null es indefinido)
-  isActive?: boolean; // Toggle manual para archivar
+  frequency?: PaymentFrequency; 
+  startDate?: string; 
+  endDate?: string; 
+  isActive?: boolean; 
 
-  // ESPECIFICO PARA MEDIOS (Legacy support, pero útil)
+  // NUEVO: Flag para activar UI de Creador (X/Youtube)
+  isCreatorSource?: boolean;
+
   medium?: MediaType;
   hoursPerDay?: number;
   daysPerWeek?: number;

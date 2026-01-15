@@ -19,8 +19,9 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const [amount, setAmount] = useState('');
   const [frequency, setFrequency] = useState<PaymentFrequency>('MONTHLY');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(''); // Empty string = Indefinite
+  const [endDate, setEndDate] = useState(''); 
   const [isEndDateEnabled, setIsEndDateEnabled] = useState(false);
+  const [isCreatorSource, setIsCreatorSource] = useState(false); // NEW
 
   // States for viewing details
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -36,30 +37,22 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   };
 
   const isContractActive = (src: IncomeSource, targetDate: Date = new Date()) => {
-      // Si está archivado manualmente
       if (src.isActive === false) return false;
-
-      const start = src.startDate ? new Date(src.startDate) : new Date(0); // Si no hay fecha, asumimos siempre activo desde inicio
+      const start = src.startDate ? new Date(src.startDate) : new Date(0);
       const end = src.endDate ? new Date(src.endDate) : null;
-      
-      // Normalizar horas
       targetDate.setHours(0,0,0,0);
       start.setHours(0,0,0,0);
       if (end) end.setHours(23,59,59,999);
-
-      if (targetDate < start) return false; // Aún no empieza
-      if (end && targetDate > end) return false; // Ya terminó
-
+      if (targetDate < start) return false; 
+      if (end && targetDate > end) return false; 
       return true;
   };
 
-  // Calcular el ingreso MENSUAL proyectado de una fuente (normalizando quincenal, etc)
   const getMonthlyProjection = (src: IncomeSource) => {
       if (!isContractActive(src)) return 0;
-
       if (src.frequency === 'BIWEEKLY') return src.amount * 2;
-      if (src.frequency === 'ONE_TIME') return 0; // No suma al flujo mensual regular, es un bono
-      return src.amount; // MONTHLY
+      if (src.frequency === 'ONE_TIME') return 0; 
+      return src.amount; 
   };
 
   const totalMonthlyProjected = useMemo(() => {
@@ -78,8 +71,9 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
           startDate,
           endDate: isEndDateEnabled ? endDate : undefined,
           isActive: true,
+          isCreatorSource: isCreatorSource,
           payments: [],
-          type: 'FIXED' // Default type for compatibility
+          type: 'FIXED' 
       };
 
       const updated = [...sources, newSource];
@@ -96,6 +90,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       setStartDate(new Date().toISOString().split('T')[0]);
       setEndDate('');
       setIsEndDateEnabled(false);
+      setIsCreatorSource(false);
       setIsAdding(false);
   };
 
@@ -117,7 +112,9 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       const existIdx = newPayments.findIndex(p => p.month === payment.month);
 
       if (existIdx >= 0) {
-          newPayments[existIdx] = payment;
+          // Merge existing metrics if not provided in update
+          const existing = newPayments[existIdx];
+          newPayments[existIdx] = { ...existing, ...payment, metrics: { ...existing.metrics, ...payment.metrics } };
       } else {
           newPayments.push(payment);
       }
@@ -136,6 +133,11 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   if (selectedSource) {
       const monthsList = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
       
+      // Calculate Stats for Creator Source
+      const totalImpressions = selectedSource.payments.reduce((acc, p) => acc + (p.metrics?.impressions || 0), 0);
+      const totalEarnings = selectedSource.payments.filter(p => p.isPaid).reduce((acc, p) => acc + p.realAmount, 0);
+      const avgRPM = totalImpressions > 0 ? (totalEarnings / totalImpressions) : 0;
+
       return (
         <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
             <div className="sticky top-0 z-20 bg-surface-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between shadow-sm">
@@ -144,7 +146,10 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                         <span className="material-symbols-outlined">arrow_back</span>
                     </button>
                     <div>
-                        <h2 className="text-lg font-bold leading-none">{selectedSource.name}</h2>
+                        <h2 className="text-lg font-bold leading-none flex items-center gap-2">
+                            {selectedSource.name}
+                            {selectedSource.isCreatorSource && <span className="material-symbols-outlined text-sm text-slate-400">verified</span>}
+                        </h2>
                         <div className="flex items-center gap-2 mt-1">
                             <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
                                 selectedSource.frequency === 'BIWEEKLY' ? 'bg-purple-100 text-purple-600' :
@@ -165,6 +170,32 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             </div>
 
             <div className="flex-1 w-full max-w-3xl mx-auto p-4 md:p-6 space-y-6 pb-24">
+                
+                {/* CREATOR STATS DASHBOARD */}
+                {selectedSource.isCreatorSource && (
+                    <div className="bg-slate-900 text-white rounded-3xl p-6 relative overflow-hidden shadow-lg">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                        <div className="relative z-10 grid grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-xs text-slate-400 font-bold uppercase mb-1">Ganado (Año Actual)</p>
+                                <p className={`text-2xl font-black ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(totalEarnings)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-400 font-bold uppercase mb-1">RPM Promedio</p>
+                                <p className="text-2xl font-black text-yellow-400">${avgRPM.toFixed(2)}</p>
+                                <p className="text-[10px] text-slate-500">x 1 Millón Impresiones</p>
+                            </div>
+                            <div className="col-span-2 mt-2 pt-4 border-t border-white/10">
+                                <p className="text-xs text-slate-400 font-bold uppercase mb-1">Total Interacciones</p>
+                                <p className="text-lg font-bold flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-blue-400">bar_chart</span>
+                                    {totalImpressions.toFixed(1)} Millones
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Year Selector */}
                 <div className="flex items-center justify-center gap-6 bg-surface-light dark:bg-surface-dark p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                     <button onClick={() => setViewYear(viewYear - 1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_left</span></button>
@@ -174,64 +205,118 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
 
                 <div className="space-y-3">
                     {monthsList.map((monthName, idx) => {
-                        const monthKey = `${viewYear}-${String(idx + 1).padStart(2, '0')}`;
-                        const payment = selectedSource.payments.find(p => p.month === monthKey);
+                        // Logic for Creator vs Standard
+                        // If creator/biweekly, render 2 slots per month.
                         
-                        // Check if active in this month
-                        const checkDate = new Date(viewYear, idx, 15); // Middle of month
-                        const isActive = isContractActive(selectedSource, checkDate);
+                        const renderPaymentSlot = (periodKey: string, periodLabel: string) => {
+                            const payment = selectedSource.payments.find(p => p.month === periodKey);
+                            const checkDate = new Date(viewYear, idx, 15);
+                            const isActive = isContractActive(selectedSource, checkDate);
+                            
+                            const currentVal = payment?.realAmount ?? 0;
+                            const isPaid = payment?.isPaid || false;
+                            const impressions = payment?.metrics?.impressions || 0;
+                            const rpm = (impressions > 0 && currentVal > 0) ? (currentVal / impressions) : 0;
 
-                        const currentVal = payment?.realAmount ?? 0;
-                        const isPaid = payment?.isPaid || false;
+                            const expected = selectedSource.amount; // Base amount
 
-                        // Calculate expected total for this month based on frequency
-                        const expected = selectedSource.frequency === 'BIWEEKLY' ? selectedSource.amount * 2 : selectedSource.amount;
-
-                        return (
-                            <div key={monthName} className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${
-                                !isActive ? 'opacity-40 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900' :
-                                isPaid ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800' :
-                                'bg-surface-light dark:bg-surface-dark border-slate-200 dark:border-slate-700'
-                            }`}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`size-10 rounded-full flex items-center justify-center font-bold text-xs ${isActive ? 'bg-slate-200 dark:bg-slate-700' : 'bg-slate-100 text-slate-300'}`}>
-                                        {monthName.substring(0, 3)}
+                            return (
+                                <div key={periodKey} className={`p-4 rounded-xl border flex flex-col gap-3 transition-colors ${
+                                    !isActive ? 'opacity-40 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900' :
+                                    isPaid ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800' :
+                                    'bg-surface-light dark:bg-surface-dark border-slate-200 dark:border-slate-700'
+                                }`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`size-8 rounded-full flex items-center justify-center font-bold text-[10px] uppercase ${isActive ? 'bg-slate-200 dark:bg-slate-700' : 'bg-slate-100 text-slate-300'}`}>
+                                                {periodLabel.substring(0, 3)}
+                                            </div>
+                                            <div>
+                                                <span className="font-bold text-sm block">{monthName} - {periodLabel}</span>
+                                                {selectedSource.isCreatorSource && impressions > 0 && (
+                                                    <span className="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                                                        <span className="material-symbols-outlined text-[10px]">visibility</span>
+                                                        {impressions}M • RPM: ${rpm.toFixed(0)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        {isActive && (
+                                            <button 
+                                                onClick={() => handleUpdatePayment(selectedSource.id, { 
+                                                    month: periodKey, 
+                                                    realAmount: currentVal || expected, 
+                                                    isPaid: !isPaid 
+                                                })} 
+                                                className={`size-8 rounded-full flex items-center justify-center transition-all ${isPaid ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
+                                            >
+                                                <span className="material-symbols-outlined text-sm">{isPaid ? 'check' : 'attach_money'}</span>
+                                            </button>
+                                        )}
                                     </div>
-                                    <div>
-                                        <span className="font-bold block">{monthName}</span>
-                                        {!isActive && <span className="text-[10px] text-slate-400">Fuera de contrato</span>}
-                                        {isActive && selectedSource.frequency === 'BIWEEKLY' && <span className="text-[10px] text-purple-500 font-bold">2 Pagos de {formatMoney(selectedSource.amount)}</span>}
-                                    </div>
-                                </div>
 
-                                {isActive && (
-                                    <div className="flex items-center gap-2">
-                                        <div className="text-right">
-                                            <p className="text-[10px] text-slate-400 uppercase font-bold">Recibido</p>
+                                    {/* Creator Metric Inputs */}
+                                    {isActive && selectedSource.isCreatorSource && (
+                                        <div className="grid grid-cols-2 gap-3 pl-11">
+                                            <div>
+                                                <label className="text-[9px] text-slate-400 font-bold uppercase block mb-0.5">Ingreso ($)</label>
+                                                <input 
+                                                    type="number"
+                                                    className={`w-full bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 text-sm font-bold outline-none ${privacyMode ? 'blur-sm' : ''}`}
+                                                    value={currentVal || ''}
+                                                    placeholder="0"
+                                                    onChange={(e) => handleUpdatePayment(selectedSource.id, {
+                                                        month: periodKey, realAmount: parseFloat(e.target.value), isPaid
+                                                    })}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[9px] text-slate-400 font-bold uppercase block mb-0.5">Impresiones (M)</label>
+                                                <input 
+                                                    type="number"
+                                                    step="0.1"
+                                                    className="w-full bg-slate-100 dark:bg-slate-800 rounded px-2 py-1 text-sm font-bold outline-none"
+                                                    value={impressions || ''}
+                                                    placeholder="0.0"
+                                                    onChange={(e) => handleUpdatePayment(selectedSource.id, {
+                                                        month: periodKey, realAmount: currentVal, isPaid,
+                                                        metrics: { impressions: parseFloat(e.target.value) }
+                                                    })}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Standard Input */}
+                                    {isActive && !selectedSource.isCreatorSource && (
+                                        <div className="flex items-center justify-end gap-2 pl-11">
+                                            <p className="text-[10px] text-slate-400 uppercase font-bold">Monto:</p>
                                             <input 
                                                 type="number" 
                                                 className={`w-24 bg-transparent text-right font-bold outline-none border-b border-dashed border-slate-300 focus:border-primary ${privacyMode ? 'blur-sm' : ''}`}
                                                 placeholder={expected.toString()}
                                                 value={currentVal || ''}
                                                 onChange={(e) => handleUpdatePayment(selectedSource.id, {
-                                                    month: monthKey, realAmount: parseFloat(e.target.value), isPaid
+                                                    month: periodKey, realAmount: parseFloat(e.target.value), isPaid
                                                 })}
                                             />
                                         </div>
-                                        <button 
-                                            onClick={() => handleUpdatePayment(selectedSource.id, { 
-                                                month: monthKey, 
-                                                realAmount: currentVal || expected, 
-                                                isPaid: !isPaid 
-                                            })} 
-                                            className={`size-10 rounded-full flex items-center justify-center transition-all ${isPaid ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
-                                        >
-                                            <span className="material-symbols-outlined">{isPaid ? 'check' : 'attach_money'}</span>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        );
+                                    )}
+                                </div>
+                            );
+                        };
+
+                        if (selectedSource.frequency === 'BIWEEKLY') {
+                            return (
+                                <div key={monthName} className="space-y-2">
+                                    {renderPaymentSlot(`${viewYear}-${String(idx+1).padStart(2,'0')}-Q1`, '1ª Quincena')}
+                                    {renderPaymentSlot(`${viewYear}-${String(idx+1).padStart(2,'0')}-Q2`, '2ª Quincena')}
+                                </div>
+                            );
+                        }
+                        
+                        return renderPaymentSlot(`${viewYear}-${String(idx+1).padStart(2,'0')}`, 'Mensual');
                     })}
                 </div>
             </div>
@@ -295,19 +380,20 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                         {/* Contracts */}
                         <div className="space-y-3">
                             {sources.filter(s => isContractActive(s)).map(src => {
-                                // Calculate visualization
-                                // This is a simplified visualizer for the next 6 months
                                 return (
                                     <div key={src.id} className="flex items-center group">
                                         <div className="w-32 shrink-0 pr-4">
-                                            <p className="font-bold text-xs truncate">{src.name}</p>
+                                            <p className="font-bold text-xs truncate flex items-center gap-1">
+                                                {src.name}
+                                                {src.isCreatorSource && <span className="size-1.5 rounded-full bg-blue-500" title="Creador"></span>}
+                                            </p>
                                             <p className="text-[10px] text-slate-500">{src.frequency === 'BIWEEKLY' ? 'Quincenal' : 'Mensual'}</p>
                                         </div>
                                         <div className="flex-1 flex gap-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative">
                                             {/* Bar logic: Check active status for next 6 months */}
                                             {Array.from({length: 6}).map((_, i) => {
                                                 const d = new Date();
-                                                d.setDate(15); // check middle of month
+                                                d.setDate(15); 
                                                 d.setMonth(d.getMonth() + i);
                                                 const active = isContractActive(src, d);
                                                 
@@ -345,13 +431,13 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                             <input 
                                 type="text" 
                                 className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm"
-                                placeholder="Ej. Startup X"
+                                placeholder="Ej. X Ads"
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                             />
                         </div>
                         <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Monto (Por pago)</label>
+                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Monto Estimado</label>
                             <input 
                                 type="number" 
                                 className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm"
@@ -359,6 +445,18 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                 value={amount}
                                 onChange={e => setAmount(e.target.value)}
                             />
+                        </div>
+                    </div>
+
+                    {/* Creator Toggle */}
+                    <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-3 rounded-xl">
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" className="sr-only peer" checked={isCreatorSource} onChange={(e) => setIsCreatorSource(e.target.checked)} />
+                            <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-black"></div>
+                        </label>
+                        <div>
+                            <span className="text-sm font-bold block">Ingreso de Creador (X / YouTube)</span>
+                            <span className="text-[10px] text-slate-500">Habilita registro de métricas (impresiones) y cálculo RPM.</span>
                         </div>
                     </div>
 
@@ -370,19 +468,19 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                 onClick={() => setFrequency('MONTHLY')} 
                                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${frequency === 'MONTHLY' ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
                             >
-                                Mensual (Fijo)
+                                Mensual
                             </button>
                             <button 
                                 onClick={() => setFrequency('BIWEEKLY')} 
                                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${frequency === 'BIWEEKLY' ? 'bg-purple-50 border-purple-500 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
                             >
-                                Quincenal (X/Tw)
+                                Quincenal
                             </button>
                             <button 
                                 onClick={() => setFrequency('ONE_TIME')} 
                                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${frequency === 'ONE_TIME' ? 'bg-orange-50 border-orange-500 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
                             >
-                                Único (Proyecto)
+                                Único
                             </button>
                         </div>
                     </div>
@@ -446,7 +544,12 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
 
                         <div className="flex justify-between items-start pl-3">
                             <div>
-                                <h4 className="font-bold text-lg text-slate-900 dark:text-white">{src.name}</h4>
+                                <div className="flex items-center gap-2">
+                                    <h4 className="font-bold text-lg text-slate-900 dark:text-white">{src.name}</h4>
+                                    {src.isCreatorSource && (
+                                        <span className="bg-black text-white dark:bg-white dark:text-black text-[9px] font-bold px-1.5 rounded uppercase">Ads</span>
+                                    )}
+                                </div>
                                 <div className="flex flex-wrap gap-2 mt-1">
                                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
                                         src.frequency === 'BIWEEKLY' ? 'bg-purple-100 text-purple-600' : 
@@ -469,7 +572,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                     {formatMoney(src.amount)}
                                 </p>
                                 {isBiweekly && isActive && (
-                                    <p className="text-[10px] text-slate-400">Total Mes: {formatMoney(src.amount * 2)}</p>
+                                    <p className="text-[10px] text-slate-400">Est. Mes: {formatMoney(src.amount * 2)}</p>
                                 )}
                             </div>
                         </div>
