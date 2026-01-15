@@ -165,17 +165,23 @@ const App: React.FC = () => {
       }
   };
 
-  const handleAddTransaction = (tx: Transaction) => {
-    const newTransactions = [tx, ...transactions];
+  const handleAddTransaction = (txOrTxs: Transaction | Transaction[]) => {
+    const incoming = Array.isArray(txOrTxs) ? txOrTxs : [txOrTxs];
+    const newTransactions = [...incoming, ...transactions];
     saveToFirestore(financialProfile, newTransactions);
     
-    triggerToast("Transacción guardada", 'success');
+    const message = incoming.length > 1 
+        ? `${incoming.length} movimientos guardados` 
+        : "Transacción guardada";
     
+    triggerToast(message, 'success');
+    
+    // Regresar al Dashboard o Eventos directamente, saltando SuccessScreen
     if (tempEventContext) {
         setCurrentView(ViewState.EVENTS);
         setTempEventContext(null);
     } else {
-        setCurrentView(ViewState.SUCCESS);
+        setCurrentView(ViewState.DASHBOARD);
     }
   };
 

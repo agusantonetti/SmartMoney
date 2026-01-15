@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, FinancialProfile, QuickAction } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface Props {
-  onConfirm: (transaction: Transaction) => void;
+  onConfirm: (transaction: Transaction | Transaction[]) => void;
   onBack?: () => void;
   profile?: FinancialProfile; 
   onUpdateProfile?: (profile: FinancialProfile) => void; // Para guardar atajos
@@ -21,16 +22,24 @@ const CURRENCIES = [
   { code: 'BRL', flag: '🇧🇷', rate: 200, symbol: 'R$' },
 ];
 
+interface ParsedItem {
+    description: string;
+    amount: number;
+    category: string;
+    type: 'income' | 'expense';
+    id: string; // Temp ID for list management
+}
+
 const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdateProfile, defaultEventId, defaultEventName }) => {
   const [inputValue, setInputValue] = useState("");
   const [analyzed, setAnalyzed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
-  const [scanMode, setScanMode] = useState(false); // Mode to handle image upload
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [scanMode, setScanMode] = useState(false); 
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Quick Action Management State - Inicializamos directamente del perfil
+  // Quick Action Management State
   const [quickActions, setQuickActions] = useState<QuickAction[]>(profile?.quickActions || []);
   const [isEditingActions, setIsEditingActions] = useState(false);
   const [showActionModal, setShowActionModal] = useState(false);
@@ -40,7 +49,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   const [newActionAmount, setNewActionAmount] = useState('');
   const [newActionIcon, setNewActionIcon] = useState('category');
 
-  // Sincronizar acciones si el perfil cambia (por ej. tras borrar uno)
+  // Sincronizar acciones
   useEffect(() => {
     if (profile?.quickActions) {
         setQuickActions(profile.quickActions);
@@ -51,13 +60,24 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   const [selectedCurrency, setSelectedCurrency] = useState(CURRENCIES[0]);
   const [customRate, setCustomRate] = useState<string>(""); 
 
-  // State for parsed data
-  const [parsedData, setParsedData] = useState<{description: string, amount: number, category: string, type: 'income' | 'expense'} | null>(null);
+  // State for parsed data (Single or Bulk)
+  const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
 
   useEffect(() => {
     if (selectedCurrency.code === 'ARS') setCustomRate("");
     else setCustomRate(selectedCurrency.rate.toString());
   }, [selectedCurrency]);
+
+  // --- HELPER: CATEGORY GUESSER ---
+  const guessCategory = (text: string, type: 'income' | 'expense'): string => {
+      if (type === 'income') return 'Ingreso';
+      const lower = text.toLowerCase();
+      if (lower.includes('uber') || lower.includes('taxi') || lower.includes('nafta') || lower.includes('tren') || lower.includes('sube')) return 'Transporte';
+      if (lower.includes('comida') || lower.includes('cena') || lower.includes('almuerzo') || lower.includes('burger') || lower.includes('cafe')) return 'Comida';
+      if (lower.includes('super') || lower.includes('mercado') || lower.includes('coto') || lower.includes('carrefour')) return 'Compras';
+      if (lower.includes('alquiler') || lower.includes('luz') || lower.includes('gas') || lower.includes('internet')) return 'Hogar';
+      return 'Otros';
+  };
 
   // --- VIDEO FRAME EXTRACTION HELPER ---
   const extractFramesFromVideo = async (videoFile: File, numFrames: number = 5): Promise<string[]> => {
@@ -69,10 +89,9 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         
         const url = URL.createObjectURL(videoFile);
         
-        // 1. Timeout de Seguridad (15 segundos)
         const timeoutId = setTimeout(() => {
             cleanup();
-            reject(new Error("El procesamiento del video tardó demasiado. Intenta con un clip más corto o verifica el formato."));
+            reject(new Error("Timeout procesando video."));
         }, 15000);
 
         const cleanup = () => {
@@ -90,35 +109,20 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
 
         video.onloadedmetadata = async () => {
             const duration = video.duration;
-            
-            // Validación de duración
             if (!isFinite(duration) || duration <= 0) {
                 cleanup();
-                reject(new Error("No se pudo determinar la duración del video o el archivo está corrupto."));
+                reject(new Error("Duración inválida."));
                 return;
             }
 
             const interval = duration / (numFrames + 1);
-            
             try {
                 for (let i = 1; i <= numFrames; i++) {
-                    const time = interval * i;
-                    video.currentTime = time;
-                    
-                    // Esperar a que el seek se complete
-                    await new Promise<void>((r, seekReject) => {
-                        const seekHandler = () => {
-                            video.removeEventListener('seeked', seekHandler);
-                            video.removeEventListener('error', errorHandler);
-                            r();
-                        };
-                        const errorHandler = () => {
-                            video.removeEventListener('seeked', seekHandler);
-                            video.removeEventListener('error', errorHandler);
-                            seekReject(new Error("Error al leer un fotograma del video."));
-                        };
-                        video.addEventListener('seeked', seekHandler);
-                        video.addEventListener('error', errorHandler);
+                    video.currentTime = interval * i;
+                    await new Promise<void>((r, er) => {
+                        const h = () => { video.removeEventListener('seeked', h); r(); };
+                        video.addEventListener('seeked', h);
+                        video.addEventListener('error', () => er(new Error("Error frame")));
                     });
 
                     const MAX_WIDTH = 800;
@@ -129,52 +133,24 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                     if (context) {
                         context.drawImage(video, 0, 0, canvas.width, canvas.height);
                         const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                        // Validación básica de que la imagen no está vacía
-                        if (dataUrl && dataUrl.length > 100) {
-                            frames.push(dataUrl.split(',')[1]); 
-                        }
+                        if (dataUrl.length > 100) frames.push(dataUrl.split(',')[1]); 
                     }
                 }
-                
                 cleanup();
-                
-                if (frames.length === 0) {
-                    reject(new Error("No se pudieron extraer imágenes válidas del video."));
-                } else {
-                    resolve(frames);
-                }
-            } catch (err) {
-                cleanup();
-                reject(err);
-            }
+                resolve(frames);
+            } catch (err) { cleanup(); reject(err); }
         };
-
-        // Manejo de errores nativos de HTMLMediaElement
-        video.onerror = () => {
-             cleanup();
-             let errorMsg = "Error desconocido al cargar el video.";
-             if (video.error) {
-                 switch (video.error.code) {
-                     case MediaError.MEDIA_ERR_ABORTED: errorMsg = "La carga del video fue interrumpida."; break;
-                     case MediaError.MEDIA_ERR_NETWORK: errorMsg = "Error de red al intentar cargar el video."; break;
-                     case MediaError.MEDIA_ERR_DECODE: errorMsg = "El video está dañado o utiliza un codec no soportado por este navegador."; break;
-                     case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: errorMsg = "Formato de video no soportado. Intenta convertirlo a MP4."; break;
-                 }
-             }
-             reject(new Error(errorMsg));
-        };
+        video.onerror = () => { cleanup(); reject(new Error("Error cargando video")); };
     });
   };
 
   // --- AI SCANNING LOGIC (GEMINI) ---
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setLoading(true);
     setScanMode(true);
-    // Limpiamos errores previos o mensajes viejos
     setLoadingMessage("Iniciando análisis...");
     
     try {
@@ -182,67 +158,23 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         let parts: any[] = [];
         let prompt = "";
 
-        // CHECK IF VIDEO
         if (file.type.startsWith('video/')) {
-            setLoadingMessage("Extrayendo fotogramas del video...");
-            
-            // Aquí capturamos errores específicos de la extracción
+            setLoadingMessage("Extrayendo fotogramas...");
             const frames = await extractFramesFromVideo(file);
-            
-            setLoadingMessage("Analizando secuencia con IA...");
-            prompt = `
-                Analiza esta secuencia de fotogramas de una grabación de pantalla de una app financiera o de servicios (Uber, Didi, Banco, MercadoPago, etc.).
-                Busca la transacción principal o el resumen del viaje/compra que se muestra.
-                Ignora saldos generales, busca el monto específico de la operación mostrada.
-                
-                Extrae la siguiente información:
-                - description: Nombre del comercio, servicio o persona.
-                - amount: El monto total de la transacción.
-                - category: Categoría sugerida.
-                - type: "expense" o "income".
-                - currency: Moneda detectada (ARS por defecto).
-            `;
-
-            // Add all frames to parts
-            parts = [
-                { text: prompt },
-                ...frames.map(frameData => ({
-                    inlineData: { mimeType: 'image/jpeg', data: frameData }
-                }))
-            ];
-
+            setLoadingMessage("Analizando secuencia...");
+            prompt = `Analiza los fotogramas. Busca la transacción principal. Extrae: description, amount, category, type ("expense"|"income"), currency.`;
+            parts = [{ text: prompt }, ...frames.map(d => ({ inlineData: { mimeType: 'image/jpeg', data: d } }))];
         } else {
-            // IS IMAGE
             setLoadingMessage("Analizando imagen...");
-            const base64Data = await new Promise<string>((resolve, reject) => {
+            const base64Data = await new Promise<string>((resolve) => {
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
-                reader.onload = () => {
-                    const result = reader.result as string;
-                    const base64Content = result.split(',')[1];
-                    resolve(base64Content);
-                };
-                reader.onerror = error => reject(error);
+                reader.onload = () => resolve((reader.result as string).split(',')[1]);
             });
-
-            prompt = `
-                Analiza esta imagen (recibo, captura de pantalla).
-                Extrae:
-                - description: Nombre.
-                - amount: Monto.
-                - category: Categoría.
-                - type: "expense" | "income".
-                - currency: Moneda (ARS default).
-            `;
-
-            parts = [
-                { text: prompt },
-                { inlineData: { mimeType: file.type, data: base64Data } }
-            ];
+            prompt = `Analiza el recibo. Extrae: description, amount, category, type, currency.`;
+            parts = [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64Data } }];
         }
 
-        // 2. Call Gemini API
-        // Using gemini-3-flash-preview as it is powerful for multimodal analysis
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview', 
             contents: [{ role: 'user', parts: parts }],
@@ -262,92 +194,87 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
             }
         });
 
-        const textResponse = response.text;
-        const jsonStr = textResponse?.trim();
-        
-        if (jsonStr) {
-            const data = JSON.parse(jsonStr);
-            setParsedData({
+        const data = JSON.parse(response.text || '{}');
+        if (data.amount) {
+            setParsedItems([{
+                id: Date.now().toString(),
                 description: data.description || "Movimiento Detectado",
-                amount: parseFloat(data.amount) || 0,
+                amount: parseFloat(data.amount),
                 category: data.category || "Otros",
                 type: data.type || "expense"
-            });
+            }]);
             
             if (data.currency && data.currency !== 'ARS') {
                 const foundCurr = CURRENCIES.find(c => c.code === data.currency);
                 if (foundCurr) setSelectedCurrency(foundCurr);
             }
-            
             setAnalyzed(true);
         }
-
     } catch (error: any) {
-        console.error("Error scanning:", error);
-        const errorMessage = error.message || "Error desconocido al procesar el archivo.";
-        alert(`❌ ${errorMessage}`);
-        // Reset state to allow retry
+        alert(`❌ Error: ${error.message}`);
         setAnalyzed(false);
         setScanMode(false);
-        setInputValue('');
     } finally {
         setLoading(false);
         setLoadingMessage("");
-        // Reset input value to allow selecting same file again if needed
-        if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-        }
+        if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const triggerFileInput = () => {
-      fileInputRef.current?.click();
-  };
+  const triggerFileInput = () => fileInputRef.current?.click();
 
-  // --- TEXT ANALYSIS LOGIC ---
+  // --- TEXT ANALYSIS LOGIC (SINGLE & BULK) ---
 
   const runAnalysis = (text: string) => {
-    if (!text) return;
+    if (!text.trim()) return;
     setLoading(true);
     setLoadingMessage("Procesando...");
     
     setTimeout(() => {
-      const parts = text.split(' ');
-      let rawAmount = 0;
-      let description = text;
-      
-      // Buscar el último número en la cadena
-      for (let i = parts.length - 1; i >= 0; i--) {
-        const cleanStr = parts[i].replace(/[$,]/g, ''); 
-        const val = parseFloat(cleanStr);
-        
-        if (!isNaN(val)) {
-          rawAmount = val;
-          description = parts.filter((_, idx) => idx !== i).join(' ');
-          break;
-        }
+      const lines = text.split('\n').filter(l => l.trim().length > 0);
+      const results: ParsedItem[] = [];
+
+      lines.forEach((line, index) => {
+          const parts = line.split(' ');
+          let rawAmount = 0;
+          let description = line;
+          
+          // Buscar el último número en la línea
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const cleanStr = parts[i].replace(/[$,]/g, ''); 
+            const val = parseFloat(cleanStr);
+            if (!isNaN(val)) {
+              rawAmount = val;
+              description = parts.filter((_, idx) => idx !== i).join(' ');
+              break;
+            }
+          }
+
+          if (rawAmount > 0 || lines.length === 1) {
+              const type = description.toLowerCase().includes('ingreso') ? 'income' : 'expense';
+              const category = guessCategory(description, type);
+              
+              results.push({
+                  id: `${Date.now()}-${index}`,
+                  description: description.trim() || "Sin descripción",
+                  amount: rawAmount,
+                  category,
+                  type
+              });
+          }
+      });
+
+      if (results.length > 0) {
+          setParsedItems(results);
+          setAnalyzed(true);
+      } else {
+          // Fallback if regex fails completely
+          setAnalyzed(false);
       }
 
-      // Categorización simple
-      let category = "Otros";
-      let type: 'income' | 'expense' = 'expense'; 
-      
-      const lowerDesc = description.toLowerCase();
-      
-      if (lowerDesc.includes('sueldo') || lowerDesc.includes('nomina') || lowerDesc.includes('venta') || lowerDesc.includes('recibiste')) {
-         category = "Ingreso";
-         type = 'income';
-      }
-      else if (lowerDesc.includes('uber') || lowerDesc.includes('taxi') || lowerDesc.includes('didi') || lowerDesc.includes('cabify') || lowerDesc.includes('tren') || lowerDesc.includes('nafta')) category = "Transporte";
-      else if (lowerDesc.includes('cena') || lowerDesc.includes('almuerzo') || lowerDesc.includes('cafe') || lowerDesc.includes('mcdonalds') || lowerDesc.includes('pedidosya')) category = "Comida";
-      else if (lowerDesc.includes('hotel') || lowerDesc.includes('airbnb')) category = "Hospedaje";
-      else if (lowerDesc.includes('regalo') || lowerDesc.includes('souvenir') || lowerDesc.includes('super') || lowerDesc.includes('carrefour') || lowerDesc.includes('coto')) category = "Compras";
-
-      setParsedData({ description, amount: rawAmount, category, type });
       setLoading(false);
       setLoadingMessage("");
-      setAnalyzed(true);
-    }, 600);
+    }, 400); // Small delay for UX feeling
   };
 
   const handleAnalyze = () => {
@@ -358,21 +285,20 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
       if (isEditingActions) {
           const updated = quickActions.filter(a => a.id !== action.id);
           setQuickActions(updated);
-          if (profile && onUpdateProfile) {
-              onUpdateProfile({ ...profile, quickActions: updated });
-          }
+          if (profile && onUpdateProfile) onUpdateProfile({ ...profile, quickActions: updated });
           return;
       }
 
+      // Si tiene monto, procesamos directo
       if (action.amount && action.amount > 0) {
           const text = `${action.label} ${action.amount}`;
+          // Set text just in case they want to see/edit, but we analyze immediately
           setInputValue(text);
           runAnalysis(text);
       } else {
+          // Si no tiene monto, prellenamos el input
           setInputValue(`${action.label} `);
-          if (inputRef.current) {
-              inputRef.current.focus();
-          }
+          inputRef.current?.focus();
       }
   };
 
@@ -387,9 +313,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
       
       const updated = [...quickActions, newAction];
       setQuickActions(updated);
-      if (profile && onUpdateProfile) {
-          onUpdateProfile({ ...profile, quickActions: updated });
-      }
+      if (profile && onUpdateProfile) onUpdateProfile({ ...profile, quickActions: updated });
       
       setNewActionLabel('');
       setNewActionAmount('');
@@ -398,50 +322,54 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   };
 
   const handleConfirm = () => {
-    if (!parsedData) return;
+    if (parsedItems.length === 0) return;
     
     const rate = parseFloat(customRate) || selectedCurrency.rate;
-    const finalAmountBase = parsedData.amount * rate;
-    let finalDesc = parsedData.description;
-    
     const now = new Date();
-    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000))
-                      .toISOString()
-                      .split('T')[0];
+    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
 
-    const newTx: Transaction = {
-      id: Date.now().toString(),
-      amount: finalAmountBase,
-      description: finalDesc,
-      category: parsedData.category,
-      type: parsedData.type,
-      date: localDate,
-      originalCurrency: selectedCurrency.code,
-      originalAmount: parsedData.amount,
-      exchangeRate: rate,
-      eventId: defaultEventId || undefined,
-      eventName: defaultEventName || undefined
-    };
+    const finalTransactions: Transaction[] = parsedItems.map((item, index) => ({
+        id: (Date.now() + index).toString(),
+        amount: item.amount * rate,
+        description: item.description,
+        category: item.category,
+        type: item.type,
+        date: localDate,
+        originalCurrency: selectedCurrency.code,
+        originalAmount: item.amount,
+        exchangeRate: rate,
+        eventId: defaultEventId || undefined,
+        eventName: defaultEventName || undefined
+    }));
 
-    onConfirm(newTx);
-  };
-
-  const handleTypeToggle = () => {
-    if (!parsedData) return;
-    setParsedData({
-      ...parsedData,
-      type: parsedData.type === 'income' ? 'expense' : 'income',
-      category: parsedData.type === 'income' ? 'Otros' : 'Ingreso' 
-    });
+    // Pass single or array depending on length (App.tsx handles both now)
+    if (finalTransactions.length === 1) {
+        onConfirm(finalTransactions[0]);
+    } else {
+        onConfirm(finalTransactions);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleAnalyze();
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleAnalyze();
+    }
   };
 
-  const conversionPreview = parsedData && selectedCurrency.code !== 'ARS' 
-    ? (parsedData.amount * (parseFloat(customRate) || selectedCurrency.rate)).toFixed(2) 
-    : null;
+  const removeParsedItem = (id: string) => {
+      const updated = parsedItems.filter(i => i.id !== id);
+      if (updated.length === 0) {
+          setAnalyzed(false);
+          setInputValue('');
+      } else {
+          setParsedItems(updated);
+      }
+  };
+
+  const updateParsedItem = (id: string, field: keyof ParsedItem, value: any) => {
+      setParsedItems(items => items.map(item => item.id === id ? { ...item, [field]: value } : item));
+  };
 
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen flex flex-col transition-colors duration-200">
@@ -493,133 +421,131 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
 
         <div className="w-full text-center mb-8 space-y-3">
           <h1 className="text-3xl md:text-5xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Nuevo Movimiento {selectedCurrency.code !== 'ARS' && <span className="text-primary">{selectedCurrency.code}</span>}
+            {parsedItems.length > 1 ? 'Revisión Masiva' : `Nuevo Movimiento ${selectedCurrency.code !== 'ARS' ? selectedCurrency.code : ''}`}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-lg md:text-xl font-normal max-w-2xl mx-auto">
-            {loading ? (loadingMessage || 'Analizando con IA...') : 'Escribe, escanea un ticket/video o pega un movimiento.'}
+            {loading ? (loadingMessage || 'Procesando...') : 
+             analyzed ? 'Revisa y confirma los datos detectados.' :
+             'Escribe uno o varios movimientos, o escanea un ticket.'}
           </p>
         </div>
 
-        {/* AI Scanner Button */}
+        {/* Input Section (Hidden if analyzed) */}
         {!analyzed && (
-            <div className="mb-8 w-full max-w-2xl flex justify-center">
-                <input 
-                    type="file" 
-                    accept="image/*,video/*" 
-                    ref={fileInputRef} 
-                    className="hidden"
-                    onChange={handleFileUpload} 
-                />
-                <button 
-                    onClick={triggerFileInput}
-                    disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-2xl p-4 shadow-xl flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-                >
-                    {loading && scanMode ? (
-                        <span className="material-symbols-outlined animate-spin text-2xl">autorenew</span>
-                    ) : (
-                        <span className="material-symbols-outlined text-2xl">document_scanner</span>
-                    )}
-                    <div className="text-left">
-                        <span className="block font-bold">Escanear Ticket / Video</span>
-                        <span className="text-xs opacity-80">Importar desde Uber, Didi, Prex, MercadoPago</span>
-                    </div>
-                </button>
-            </div>
-        )}
-
-        {/* Input Section */}
-        <div className="w-full max-w-2xl relative group/input mb-6">
-          <div className={`absolute inset-0 bg-primary/5 dark:bg-primary/10 rounded-full blur-xl transform scale-95 opacity-0 group-hover/input:opacity-100 transition-opacity duration-500 ${loading ? 'animate-pulse opacity-100' : ''}`}></div>
-          <div className="relative bg-surface-light dark:bg-surface-dark shadow-lg dark:shadow-slate-900/50 rounded-full p-2 flex items-center border border-slate-200 dark:border-slate-700 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 transition-all duration-300">
-            <span className="pl-6 text-xl font-bold text-slate-400">{selectedCurrency.symbol}</span>
-            <input 
-              ref={inputRef}
-              autoFocus 
-              type="text" 
-              placeholder={selectedCurrency.code === 'ARS' ? "O escribe: Super 25000" : "O escribe: Taxi 20"} 
-              className="flex-1 bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-400 text-xl px-2 py-4 focus:ring-0 rounded-full font-medium" 
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={loading}
-            />
-            <div className="flex items-center gap-2 pr-2">
-              <button 
-                onClick={handleAnalyze}
-                disabled={loading || !inputValue}
-                className="h-12 px-6 rounded-full bg-primary hover:bg-blue-600 text-white font-medium shadow-md shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95 hidden sm:flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {loading && !scanMode ? (
-                  <span className="material-symbols-outlined animate-spin text-sm">refresh</span>
-                ) : (
-                  <>
-                    <span>Procesar</span>
-                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-          
-          {selectedCurrency.code !== 'ARS' && (
-             <div className="mt-4 flex justify-center animate-[fadeIn_0.2s_ease-out]">
-                <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 flex items-center gap-2">
-                   <span className="text-xs text-slate-500 font-bold uppercase pl-2">Tipo de Cambio:</span>
-                   <input 
-                      type="number" 
-                      className="w-20 bg-white dark:bg-slate-700 rounded px-2 py-1 text-sm font-bold text-center outline-none focus:ring-2 focus:ring-primary"
-                      value={customRate}
-                      onChange={(e) => setCustomRate(e.target.value)}
-                   />
-                   <span className="text-xs text-slate-500 pr-2">ARS</span>
-                </div>
-             </div>
-          )}
-        </div>
-
-        {/* CUSTOM QUICK ACTIONS (EDITABLE) */}
-        {!analyzed && selectedCurrency.code === 'ARS' && (
-            <div className="w-full max-w-3xl animate-[fadeIn_0.4s_ease-out] relative">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tus Frecuentes</p>
+            <>
+                {/* AI Scanner Button */}
+                <div className="mb-8 w-full max-w-2xl flex justify-center">
+                    <input type="file" accept="image/*,video/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
                     <button 
-                        onClick={() => setIsEditingActions(!isEditingActions)}
-                        className={`size-6 rounded-full flex items-center justify-center transition-colors ${isEditingActions ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-slate-400 hover:text-primary'}`}
-                        title={isEditingActions ? "Salir de edición" : "Editar atajos"}
+                        onClick={triggerFileInput}
+                        disabled={loading}
+                        className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-2xl p-4 shadow-xl flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
                     >
-                        <span className="material-symbols-outlined text-[14px]">{isEditingActions ? 'close' : 'edit'}</span>
+                        {loading && scanMode ? (
+                            <span className="material-symbols-outlined animate-spin text-2xl">autorenew</span>
+                        ) : (
+                            <span className="material-symbols-outlined text-2xl">document_scanner</span>
+                        )}
+                        <div className="text-left">
+                            <span className="block font-bold">Escanear Ticket / Video</span>
+                            <span className="text-xs opacity-80">Apps de delivery, banco, etc.</span>
+                        </div>
                     </button>
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-3 pb-4 px-4">
-                    {quickActions.map((qa) => (
-                        <button
-                            key={qa.id}
-                            onClick={() => handleQuickActionClick(qa)}
-                            className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all hover:scale-105 active:scale-95 border ${
-                                isEditingActions 
-                                ? 'bg-white border-red-200 text-red-500 hover:bg-red-50 animate-pulse'
-                                : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm hover:border-primary/50'
-                            }`}
-                        >
-                            <span className="material-symbols-outlined text-[18px]">{qa.icon}</span>
-                            {qa.label}
-                            {qa.amount && !isEditingActions && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 rounded-md text-slate-500 ml-1">${qa.amount}</span>}
-                            {isEditingActions && <span className="material-symbols-outlined text-[14px] ml-1">delete</span>}
-                        </button>
-                    ))}
+                {/* Input Field */}
+                <div className="w-full max-w-2xl relative group/input mb-6">
+                    <div className={`absolute inset-0 bg-primary/5 dark:bg-primary/10 rounded-3xl blur-xl transform scale-95 opacity-0 group-hover/input:opacity-100 transition-opacity duration-500 ${loading ? 'animate-pulse opacity-100' : ''}`}></div>
+                    <div className="relative bg-surface-light dark:bg-surface-dark shadow-lg dark:shadow-slate-900/50 rounded-3xl p-4 border border-slate-200 dark:border-slate-700 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 transition-all duration-300 flex flex-col">
+                        <div className="flex w-full">
+                            <span className="pt-2 pl-2 text-xl font-bold text-slate-400 mr-2">{selectedCurrency.symbol}</span>
+                            <textarea 
+                                ref={inputRef}
+                                autoFocus 
+                                placeholder={selectedCurrency.code === 'ARS' ? "Ej:\nSuper 25000\nUber 4500" : "Ej:\nTaxi 20\nCena 50"} 
+                                className="flex-1 bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-400 text-xl p-2 focus:ring-0 font-medium resize-none min-h-[80px]" 
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                disabled={loading}
+                                rows={Math.max(3, inputValue.split('\n').length)}
+                            />
+                        </div>
+                        <div className="flex justify-end mt-2">
+                            <button 
+                                onClick={handleAnalyze}
+                                disabled={loading || !inputValue}
+                                className="h-12 px-6 rounded-full bg-primary hover:bg-blue-600 text-white font-medium shadow-md shadow-blue-500/20 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                {loading && !scanMode ? (
+                                <span className="material-symbols-outlined animate-spin text-sm">refresh</span>
+                                ) : (
+                                <>
+                                    <span>Procesar</span>
+                                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                                </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                     
-                    {/* Add Button */}
-                    <button
-                        onClick={() => setShowActionModal(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold bg-primary/5 hover:bg-primary/10 text-primary border border-dashed border-primary/30 transition-all"
-                    >
-                        <span className="material-symbols-outlined text-[18px]">add</span>
-                        Nuevo
-                    </button>
+                    {selectedCurrency.code !== 'ARS' && (
+                        <div className="mt-4 flex justify-center animate-[fadeIn_0.2s_ease-out]">
+                            <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-2 flex items-center gap-2">
+                            <span className="text-xs text-slate-500 font-bold uppercase pl-2">Tipo de Cambio:</span>
+                            <input 
+                                type="number" 
+                                className="w-20 bg-white dark:bg-slate-700 rounded px-2 py-1 text-sm font-bold text-center outline-none focus:ring-2 focus:ring-primary"
+                                value={customRate}
+                                onChange={(e) => setCustomRate(e.target.value)}
+                            />
+                            <span className="text-xs text-slate-500 pr-2">ARS</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            </div>
+
+                {/* CUSTOM QUICK ACTIONS */}
+                {selectedCurrency.code === 'ARS' && (
+                    <div className="w-full max-w-3xl animate-[fadeIn_0.4s_ease-out] relative">
+                        <div className="flex items-center justify-center gap-2 mb-2">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tus Frecuentes</p>
+                            <button 
+                                onClick={() => setIsEditingActions(!isEditingActions)}
+                                className={`size-6 rounded-full flex items-center justify-center transition-colors ${isEditingActions ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-slate-400 hover:text-primary'}`}
+                            >
+                                <span className="material-symbols-outlined text-[14px]">{isEditingActions ? 'close' : 'edit'}</span>
+                            </button>
+                        </div>
+
+                        <div className="flex flex-wrap justify-center gap-3 pb-4 px-4">
+                            {quickActions.map((qa) => (
+                                <button
+                                    key={qa.id}
+                                    onClick={() => handleQuickActionClick(qa)}
+                                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all hover:scale-105 active:scale-95 border ${
+                                        isEditingActions 
+                                        ? 'bg-white border-red-200 text-red-500 hover:bg-red-50 animate-pulse'
+                                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 shadow-sm hover:border-primary/50'
+                                    }`}
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">{qa.icon}</span>
+                                    {qa.label}
+                                    {qa.amount && !isEditingActions && <span className="text-[10px] bg-slate-100 dark:bg-slate-700 px-1.5 rounded-md text-slate-500 ml-1">${qa.amount}</span>}
+                                    {isEditingActions && <span className="material-symbols-outlined text-[14px] ml-1">delete</span>}
+                                </button>
+                            ))}
+                            <button
+                                onClick={() => setShowActionModal(true)}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold bg-primary/5 hover:bg-primary/10 text-primary border border-dashed border-primary/30 transition-all"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">add</span>
+                                Nuevo
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </>
         )}
 
         {/* Modal: Add New Quick Action */}
@@ -675,79 +601,93 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
             </div>
         )}
 
-        {/* Analysis Results */}
-        {analyzed && parsedData && (
+        {/* REVIEW LIST (Bulk or Single) */}
+        {analyzed && parsedItems.length > 0 && (
           <div className="w-full max-w-2xl mb-12 animate-[fadeIn_0.5s_ease-out]">
-            <div className="flex flex-wrap justify-center gap-4">
-              
-              <button 
-                onClick={handleTypeToggle}
-                className={`flex items-center gap-3 border rounded-full pl-3 pr-5 py-2 shadow-sm transition-all hover:scale-105 ${
-                    parsedData.type === 'income' 
-                    ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' 
-                    : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800'
-                }`}
-              >
-                <div className={`size-8 rounded-full flex items-center justify-center text-white ${parsedData.type === 'income' ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                  <span className="material-symbols-outlined text-[20px]">{parsedData.type === 'income' ? 'arrow_upward' : 'arrow_downward'}</span>
-                </div>
-                <div className="flex flex-col items-start">
-                  <span className="text-[10px] uppercase tracking-wider opacity-60 font-bold">Tipo</span>
-                  <span className={`text-sm font-bold ${parsedData.type === 'income' ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
-                    {parsedData.type === 'income' ? 'Ingreso' : 'Gasto'}
-                  </span>
-                </div>
-              </button>
+            
+            <div className="grid gap-3">
+                {parsedItems.map((item) => (
+                    <div key={item.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex flex-col sm:flex-row gap-4 items-center shadow-sm hover:shadow-md transition-all relative group">
+                        
+                        {/* Remove Button (visible on hover or always on mobile if needed) */}
+                        <button 
+                            onClick={() => removeParsedItem(item.id)}
+                            className="absolute -top-2 -right-2 size-6 bg-red-100 text-red-500 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200"
+                        >
+                            <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
 
-              <div className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full pl-3 pr-5 py-2 shadow-sm">
-                <div className="size-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
-                  <span className="material-symbols-outlined text-[20px]">storefront</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Descripción</span>
-                  <input 
-                    type="text" 
-                    value={parsedData.description}
-                    onChange={(e) => setParsedData({...parsedData, description: e.target.value})}
-                    className="text-sm font-semibold text-slate-900 dark:text-slate-100 bg-transparent outline-none max-w-[150px]"
-                  />
-                </div>
-              </div>
+                        <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                            
+                            {/* Desc */}
+                            <div className="sm:col-span-1">
+                                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Descripción</label>
+                                <input 
+                                    type="text" 
+                                    value={item.description} 
+                                    onChange={(e) => updateParsedItem(item.id, 'description', e.target.value)}
+                                    className="w-full bg-slate-50 dark:bg-slate-900 rounded-lg px-2 py-1 text-sm font-bold border-none outline-none focus:ring-1 focus:ring-primary"
+                                />
+                            </div>
 
-              <div className="flex items-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full pl-3 pr-5 py-2 shadow-sm ring-2 ring-primary/20">
-                <div className="size-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
-                  <span className="material-symbols-outlined text-[20px]">attach_money</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">
-                     Monto {conversionPreview ? '(Conv.)' : ''}
-                  </span>
-                  <div className="flex items-baseline gap-1">
-                     <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                        {conversionPreview ? `$${conversionPreview} ARS` : `$${parsedData.amount}`}
-                     </span>
-                     {conversionPreview && (
-                        <span className="text-[10px] text-slate-500">
-                           ({selectedCurrency.symbol}{parsedData.amount})
-                        </span>
-                     )}
-                  </div>
-                </div>
-              </div>
+                            {/* Amount */}
+                            <div className="sm:col-span-1">
+                                <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Monto ({selectedCurrency.code})</label>
+                                <div className="relative">
+                                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                                    <input 
+                                        type="number" 
+                                        value={item.amount} 
+                                        onChange={(e) => updateParsedItem(item.id, 'amount', parseFloat(e.target.value))}
+                                        className="w-full bg-slate-50 dark:bg-slate-900 rounded-lg pl-5 pr-2 py-1 text-sm font-bold border-none outline-none focus:ring-1 focus:ring-primary text-right"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Type/Cat */}
+                            <div className="sm:col-span-1 flex gap-2">
+                                <button 
+                                    onClick={() => updateParsedItem(item.id, 'type', item.type === 'expense' ? 'income' : 'expense')}
+                                    className={`size-8 rounded-full flex items-center justify-center transition-colors ${item.type === 'expense' ? 'bg-red-100 text-red-500' : 'bg-emerald-100 text-emerald-500'}`}
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">{item.type === 'expense' ? 'arrow_downward' : 'arrow_upward'}</span>
+                                </button>
+                                <div className="flex-1">
+                                    <input 
+                                        type="text" 
+                                        value={item.category} 
+                                        onChange={(e) => updateParsedItem(item.id, 'category', e.target.value)}
+                                        className="w-full h-8 bg-slate-50 dark:bg-slate-900 rounded-lg px-2 text-xs font-bold border-none outline-none focus:ring-1 focus:ring-primary"
+                                        placeholder="Categoría"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
             
+            {/* Total Summary */}
+            <div className="flex justify-end mt-4 text-sm font-bold text-slate-500">
+                <span>Total a Guardar: </span>
+                <span className="ml-2 text-slate-900 dark:text-white">
+                    {selectedCurrency.symbol}
+                    {parsedItems.reduce((acc, i) => acc + (i.type === 'expense' ? i.amount : -i.amount), 0).toLocaleString()}
+                </span>
+            </div>
+
             <div className="w-full flex flex-col items-center gap-4 mt-8 mb-4">
               <button 
                 onClick={handleConfirm}
                 className="group relative flex items-center justify-center gap-3 bg-primary hover:bg-blue-600 text-white rounded-full h-16 px-10 text-lg font-bold shadow-xl shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-1 hover:shadow-blue-500/40"
               >
                 <span className="material-symbols-outlined text-3xl group-hover:scale-110 transition-transform">check_circle</span>
-                <span>Confirmar Transacción</span>
+                <span>Confirmar {parsedItems.length > 1 ? `(${parsedItems.length})` : ''}</span>
                 <div className="absolute inset-0 rounded-full ring-2 ring-white/20 group-hover:ring-white/40 transition-all"></div>
               </button>
               
               <button 
-                onClick={() => { setAnalyzed(false); setScanMode(false); setInputValue(''); }}
+                onClick={() => { setAnalyzed(false); setScanMode(false); setInputValue(''); setParsedItems([]); }}
                 className="text-slate-400 text-sm hover:text-slate-600 dark:hover:text-slate-200 underline"
               >
                 Cancelar y volver a intentar
