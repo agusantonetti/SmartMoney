@@ -121,6 +121,7 @@ export interface FinancialProfile {
   monthlySalary?: number; 
   hourlyWage?: number; // Valor de la hora de trabajo
   events?: TravelEvent[]; // Lista de viajes/eventos
+  customDollarRate?: number; // NUEVO: Valor del dólar manual preferido
 }
 
 export interface FinancialMetrics {

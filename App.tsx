@@ -22,7 +22,9 @@ import CurrencyConverter from './components/CurrencyConverter'; // Import Conver
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import * as firestore from 'firebase/firestore';
+
+const { doc, setDoc, onSnapshot } = firestore;
 
 // Default Actions definition for init
 const DEFAULT_ACTIONS: QuickAction[] = [
@@ -331,6 +333,8 @@ const App: React.FC = () => {
       case ViewState.CURRENCY_CONVERTER:
           return (
               <CurrencyConverter 
+                  profile={financialProfile}
+                  onUpdateProfile={handleUpdateProfile}
                   onBack={() => setCurrentView(ViewState.DASHBOARD)}
               />
           );
