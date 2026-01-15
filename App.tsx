@@ -17,8 +17,9 @@ import FutureSimulator from './components/FutureSimulator';
 import LandingPage from './components/LandingPage';
 import BudgetAdjust from './components/BudgetAdjust';
 import SalaryCalculator from './components/SalaryCalculator';
-import FinancialAssistant from './components/FinancialAssistant'; // Import AI Chat
-import CurrencyConverter from './components/CurrencyConverter'; // Import Converter
+import FinancialAssistant from './components/FinancialAssistant'; 
+import CurrencyConverter from './components/CurrencyConverter'; 
+import WealthLevel from './components/WealthLevel'; // NUEVO COMPONENTE
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -315,6 +316,7 @@ const App: React.FC = () => {
             onOpenBudgetAdjust={() => setCurrentView(ViewState.BUDGET_ADJUST)} 
             onOpenSalaryCalculator={() => setCurrentView(ViewState.SALARY_CALCULATOR)}
             onOpenCurrencyConverter={() => setCurrentView(ViewState.CURRENCY_CONVERTER)}
+            onOpenWealthLevels={() => setCurrentView(ViewState.WEALTH_LEVELS)} // Handler para abrir niveles
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -325,6 +327,14 @@ const App: React.FC = () => {
             onTogglePrivacy={() => setPrivacyMode(!privacyMode)}
           />
         );
+      case ViewState.WEALTH_LEVELS:
+          return (
+              <WealthLevel 
+                  profile={financialProfile}
+                  metrics={metrics}
+                  onBack={() => setCurrentView(ViewState.DASHBOARD)}
+              />
+          );
       case ViewState.BUDGET_ADJUST:
           return (
               <BudgetAdjust
@@ -502,6 +512,7 @@ const App: React.FC = () => {
                          currentView !== ViewState.BUDGET_ADJUST &&
                          currentView !== ViewState.SALARY_CALCULATOR &&
                          currentView !== ViewState.CURRENCY_CONVERTER &&
+                         currentView !== ViewState.WEALTH_LEVELS &&
                          currentView !== ViewState.ASSISTANT &&
                          !authLoading;
 

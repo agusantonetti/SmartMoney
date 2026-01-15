@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile } from '../types';
 
 interface Props {
@@ -18,12 +18,12 @@ interface Props {
   onOpenBudgetAdjust?: () => void; 
   onOpenSalaryCalculator?: () => void;
   onOpenCurrencyConverter?: () => void;
+  onOpenWealthLevels?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
   privacyMode?: boolean;
   onTogglePrivacy?: () => void;
-  onUpdateProfile?: (profile: FinancialProfile) => void;
 }
 
 const Dashboard: React.FC<Props> = ({ 
@@ -42,30 +42,14 @@ const Dashboard: React.FC<Props> = ({
   onOpenBudgetAdjust,
   onOpenSalaryCalculator,
   onOpenCurrencyConverter,
+  onOpenWealthLevels,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
   privacyMode,
   onTogglePrivacy
 }) => {
-  const [isBudgetMenuOpen, setIsBudgetMenuOpen] = useState(false);
-  const [isToolsOpen, setIsToolsOpen] = useState(false); 
-  const menuRef = useRef<HTMLDivElement>(null);
-  const isEmpty = transactions.length === 0;
-
-  // Cerrar menú al hacer clic fuera
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsBudgetMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
+  
   // Formateador seguro ARS
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
@@ -86,7 +70,7 @@ const Dashboard: React.FC<Props> = ({
 
   const defaultAvatar = "https://lh3.googleusercontent.com/aida-public/AB6AXuD3W_-QV28bpv6tswBdb3gVXfvQ9Sd1qa2FIGrEXSr2QQhwgjBocZveQ_iZ7J4KEKay2_eW-X1e_D_YgmIkcA8CzxI9m9DrfSKITYEyZh1QbS_cU-ikAMnjc7jppiRpUtx2MU_e_8F4iEoxnnZDfqR5h0oOSuSVTm6ylZNFaJtmmBRyWTnZFGJLM0cmMDBGgzzyJBlAtbXeWNN-cYcN-zQt3qUI1cKXVPswGJB4Tmr449006R1-PDELmsW7e06pa1WY4URePcx_rEcX";
 
-  // --- CÁLCULOS COMPARATIVOS (MES ACTUAL vs ANTERIOR) ---
+  // --- CÁLCULOS COMPARATIVOS (MES ACTUAL) ---
   const stats = useMemo(() => {
       const now = new Date();
       const currentMonthKey = now.toISOString().slice(0, 7); // YYYY-MM
@@ -95,35 +79,38 @@ const Dashboard: React.FC<Props> = ({
         .filter(t => t.type === 'income' && t.date.startsWith(currentMonthKey))
         .reduce((acc, t) => acc + t.amount, 0);
       
-      // Gastos Variables
       const currentVariableExpenses = transactions
         .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
         .reduce((acc, t) => acc + t.amount, 0);
 
       const totalMonthlyOutflow = metrics.fixedExpenses + currentVariableExpenses;
       const totalMonthlyIncome = metrics.salaryPaid + currentIncome;
+      const netMonthly = totalMonthlyIncome - totalMonthlyOutflow;
 
       return {
           currentVariableExpenses,
           totalMonthlyOutflow,
           totalMonthlyIncome,
-          currentIncome
+          currentIncome,
+          netMonthly
       };
   }, [transactions, metrics.fixedExpenses, metrics.salaryPaid]);
 
   const activeEventsCount = profile.events?.filter(e => e.status === 'active').length || 0;
 
-  // Lógica de Niveles Patrimoniales (Wealth Tiers)
-  const getWealthLevel = (balance: number) => {
-      if (balance >= 50000000) return { label: 'Magnate', icon: 'diamond', color: 'text-cyan-300' };
-      if (balance >= 10000000) return { label: 'Inversionista', icon: 'auto_graph', color: 'text-purple-300' };
-      if (balance >= 1000000) return { label: 'Constructor', icon: 'foundation', color: 'text-emerald-300' };
-      if (balance >= 100000) return { label: 'Ahorrador', icon: 'savings', color: 'text-blue-300' };
-      return { label: 'Iniciando', icon: 'flag', color: 'text-slate-300' };
+  // Lógica de Niveles Patrimoniales
+  const getWealthLevel = (balance: number, rate: number) => {
+      const balanceUSD = balance / rate;
+      if (balanceUSD >= 1000000) return { label: 'Millonario', icon: 'diamond', color: 'text-cyan-300' };
+      if (balanceUSD >= 500000) return { label: 'Magnate', icon: 'auto_graph', color: 'text-purple-300' };
+      if (balanceUSD >= 100000) return { label: 'Inversionista', icon: 'foundation', color: 'text-emerald-300' };
+      if (balanceUSD >= 10000) return { label: 'Constructor', icon: 'savings', color: 'text-blue-300' };
+      if (balanceUSD >= 1000) return { label: 'Ahorrador', icon: 'account_balance', color: 'text-orange-300' };
+      return { label: 'Semilla', icon: 'spa', color: 'text-slate-300' };
   };
 
-  const wealthLevel = getWealthLevel(metrics.balance);
-  const dollarRate = profile.customDollarRate || 1130; // Cotización por defecto si no hay
+  const dollarRate = profile.customDollarRate || 1130; 
+  const wealthLevel = getWealthLevel(metrics.balance, dollarRate);
   const balanceUSD = metrics.balance / dollarRate;
 
   return (
@@ -160,46 +147,6 @@ const Dashboard: React.FC<Props> = ({
                 {isDarkMode ? 'light_mode' : 'dark_mode'}
               </span>
             </button>
-
-            {/* Menú Desplegable: Mi Presupuesto (SOLO DESKTOP) */}
-            <div className="relative hidden sm:block" ref={menuRef}>
-              <button 
-                onClick={() => setIsBudgetMenuOpen(!isBudgetMenuOpen)}
-                className={`flex items-center gap-2 rounded-full px-4 py-2 transition-all ${
-                  isBudgetMenuOpen 
-                  ? 'bg-primary text-white shadow-lg shadow-primary/30' 
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
-              >
-                <span className="text-xs font-semibold uppercase tracking-wider">Menú Rápido</span>
-                <span className={`material-symbols-outlined text-sm transition-transform duration-200 ${isBudgetMenuOpen ? 'rotate-180' : ''}`}>expand_more</span>
-              </button>
-
-              {/* Dropdown Content */}
-              {isBudgetMenuOpen && (
-                <div className="absolute top-full mt-2 right-0 w-60 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-[fadeIn_0.2s_ease-out] z-50">
-                  <div className="p-2 grid gap-1">
-                    <button onClick={() => { setIsBudgetMenuOpen(false); onOpenIncomeManager(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">payments</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Ingresos</p></div>
-                    </button>
-                    <button onClick={() => { setIsBudgetMenuOpen(false); onOpenSubscriptions(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">home_work</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Gastos Fijos</p></div>
-                    </button>
-                    <button onClick={() => { setIsBudgetMenuOpen(false); onOpenBudget(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">tune</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Límites</p></div>
-                    </button>
-                    <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
-                    <button onClick={() => { setIsBudgetMenuOpen(false); onOpenAnalytics(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors group">
-                      <div className="size-8 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors"><span className="material-symbols-outlined text-[18px]">bar_chart</span></div>
-                      <span className="text-sm font-bold text-slate-800 dark:text-white">Ver Analíticas</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Botón Perfil */}
             <button 
@@ -255,11 +202,15 @@ const Dashboard: React.FC<Props> = ({
                                   Líquido: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
                               </p>
                               
-                              {/* WEALTH LEVEL BADGE */}
-                              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
-                                  <span className={`material-symbols-outlined text-sm ${wealthLevel.color}`}>{wealthLevel.icon}</span>
+                              {/* WEALTH LEVEL BADGE - CLICKABLE */}
+                              <button 
+                                onClick={onOpenWealthLevels}
+                                className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 hover:bg-white/20 transition-all active:scale-95 group/level"
+                              >
+                                  <span className={`material-symbols-outlined text-sm ${wealthLevel.color} group-hover/level:scale-110 transition-transform`}>{wealthLevel.icon}</span>
                                   <span className={`text-xs font-bold uppercase ${wealthLevel.color}`}>Nivel: {wealthLevel.label}</span>
-                              </div>
+                                  <span className="material-symbols-outlined text-[12px] text-white/50">chevron_right</span>
+                              </button>
                           </div>
                       </div>
                   </div>
@@ -293,251 +244,171 @@ const Dashboard: React.FC<Props> = ({
                       </div>
 
                       <div 
-                        onClick={onOpenSubscriptions}
+                        onClick={onOpenAnalytics}
                         className="cursor-pointer group/stat hover:bg-white/5 rounded-xl p-2 transition-colors relative border-l border-white/10 pl-4"
                       >
                           <div className="flex items-center gap-2 mb-1 text-blue-400">
-                              <span className="material-symbols-outlined text-lg">home_work</span>
-                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 group-hover/stat:text-white">Fijos</span>
+                              <span className="material-symbols-outlined text-lg">account_balance_wallet</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 group-hover/stat:text-white">Neto (Mes)</span>
                           </div>
-                          <p className={`text-lg md:text-2xl font-bold truncate transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                             {formatMoney(metrics.fixedExpenses)}
+                          <p className={`text-lg md:text-2xl font-bold truncate transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''} ${stats.netMonthly < 0 ? 'text-red-400' : ''}`}>
+                             {formatMoney(stats.netMonthly)}
                           </p>
                       </div>
                   </div>
                </div>
           </section>
 
-          {/* 2. BARRA DE ACCIONES Y HERRAMIENTAS */}
-          <div className="flex flex-col gap-4">
-              <div className="flex gap-4">
-                  <button 
-                      onClick={onAddTransaction}
-                      className="flex-1 bg-primary text-white h-14 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95"
-                  >
-                      <span className="material-symbols-outlined">add_circle</span>
-                      Registrar Movimiento
-                  </button>
-                  <button 
-                      onClick={() => setIsToolsOpen(!isToolsOpen)}
-                      className={`h-14 px-6 rounded-2xl font-bold border transition-all flex items-center justify-center gap-2 ${
-                          isToolsOpen 
-                          ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-primary' 
-                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-                      }`}
-                  >
-                      <span className="material-symbols-outlined">{isToolsOpen ? 'expand_less' : 'construction'}</span>
-                      <span className="hidden sm:inline">Herramientas</span>
-                  </button>
-                  <button 
-                      onClick={onOpenBudgetAdjust}
-                      className="h-14 w-14 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                      title="Mover Dinero"
-                  >
-                      <span className="material-symbols-outlined">swap_horiz</span>
-                  </button>
-              </div>
-
-              {/* Collapsible Tools Grid */}
-              {isToolsOpen && (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-[fadeIn_0.3s_ease-out]">
-                    <ToolCard 
-                        label="Conversor Divisas" 
-                        icon="currency_exchange" 
-                        onClick={onOpenCurrencyConverter} 
-                        gradient="from-yellow-400 to-orange-500"
-                        desc="Calcula cambios a Dólar, Euro y más." 
-                    />
-                    <ToolCard 
-                        label="Costo de Vida" 
-                        icon="price_check" 
-                        onClick={onOpenSalaryCalculator} 
-                        gradient="from-emerald-400 to-teal-600"
-                        desc="Calcula el valor real de tu tiempo." 
-                    />
-                    <ToolCard 
-                        label="Simulador Futuro" 
-                        icon="timeline" 
-                        onClick={onOpenFuture} 
-                        gradient="from-violet-500 to-fuchsia-600"
-                        desc="Predice tu saldo a 30 días." 
-                    />
-                    <ToolCard 
-                        label="Analíticas" 
-                        icon="bar_chart" 
-                        onClick={onOpenAnalytics} 
-                        gradient="from-blue-500 to-indigo-600"
-                        desc="Gráficos detallados de tus gastos." 
-                    />
-                 </div>
-              )}
+          {/* 2. ACCIÓN PRINCIPAL */}
+          <div className="flex gap-4">
+              <button 
+                  onClick={onAddTransaction}
+                  className="flex-1 bg-primary text-white h-16 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-3 active:scale-95"
+              >
+                  <span className="material-symbols-outlined text-2xl">add_circle</span>
+                  <span className="text-lg">Registrar Movimiento</span>
+              </button>
+              <button 
+                  onClick={onOpenBudgetAdjust}
+                  className="h-16 w-16 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                  title="Mover Dinero"
+              >
+                  <span className="material-symbols-outlined text-2xl">swap_horiz</span>
+              </button>
           </div>
 
-          {/* 3. ESTADO Y PATRIMONIO (Cards Medianas) */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatusCard 
-                  title="Apartados" 
-                  value={formatMoney(metrics.totalReserved)} 
-                  icon="savings" 
-                  color="purple" 
-                  onClick={onOpenSavingsBuckets}
-                  privacyMode={privacyMode}
-                />
-                <StatusCard 
-                  title="Mis Eventos" 
-                  value={`${activeEventsCount} Activos`} 
-                  icon="flight_takeoff" 
-                  color="pink" 
-                  onClick={onOpenEvents}
-                />
-                <StatusCard 
-                  title="Deudas" 
-                  value={formatMoney(metrics.totalDebt)} 
-                  icon="gavel" 
-                  color="red" 
-                  onClick={onOpenDebts}
-                  privacyMode={privacyMode}
-                />
-          </section>
-
-          {/* 4. LISTA TRANSACCIONES */}
-          <div className="flex flex-col lg:flex-row gap-6">
-            <main className="flex-1 flex flex-col gap-6 min-w-0">
-               <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm transition-colors duration-300">
-                  <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
-                     <h3 className="font-bold text-slate-900 dark:text-white">Movimientos Recientes</h3>
-                     <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-500 px-2 py-1 rounded-md font-medium">Historial</span>
-                  </div>
+          {/* 3. APP LAUNCHER GRID (Prioridad Principal) */}
+          <div>
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 ml-1">Apps & Herramientas</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4">
+                  {/* Gestión Financiera */}
+                  <AppCard 
+                      title="Ingresos" 
+                      subtitle="Fuentes fijas" 
+                      icon="payments" 
+                      color="blue" 
+                      onClick={onOpenIncomeManager} 
+                  />
+                  <AppCard 
+                      title="Gastos Fijos" 
+                      subtitle={`Total: ${formatMoney(metrics.fixedExpenses)}`} 
+                      icon="home_work" 
+                      color="indigo" 
+                      onClick={onOpenSubscriptions} 
+                      privacyMode={privacyMode}
+                  />
+                  <AppCard 
+                      title="Límites" 
+                      subtitle="Presupuesto" 
+                      icon="tune" 
+                      color="teal" 
+                      onClick={onOpenBudget} 
+                  />
+                  <AppCard 
+                      title="Apartados" 
+                      subtitle={`${formatMoney(metrics.totalReserved)}`} 
+                      icon="savings" 
+                      color="purple" 
+                      onClick={onOpenSavingsBuckets}
+                      privacyMode={privacyMode}
+                  />
                   
-                  {isEmpty ? (
-                    <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-                       <div className="size-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4">
-                          <span className="material-symbols-outlined text-slate-400 text-3xl">savings</span>
-                       </div>
-                       <h4 className="text-slate-900 dark:text-white font-bold mb-1">Sin movimientos aún</h4>
-                       <p className="text-slate-500 text-sm max-w-xs mx-auto">Comienza añadiendo tus ingresos y gastos.</p>
-                       <button onClick={onAddTransaction} className="mt-4 text-primary font-bold text-sm hover:underline">
-                          + Agregar primer movimiento
-                       </button>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                      {transactions.map((tx, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors items-center">
-                           <div className="col-span-2 sm:col-span-1 flex justify-center">
-                              <div className={`size-10 rounded-full flex items-center justify-center ${tx.type === 'income' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
-                                 <span className="material-symbols-outlined text-[20px]">{tx.type === 'income' ? 'arrow_upward' : 'arrow_downward'}</span>
-                              </div>
-                           </div>
-                           <div className="col-span-6 sm:col-span-7 flex flex-col">
-                              <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{tx.description}</span>
-                              <div className="flex gap-2 items-center flex-wrap">
-                                <span className="text-xs text-slate-500">{tx.date}</span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium uppercase tracking-wide">{tx.category}</span>
-                                {tx.eventName && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300 font-bold flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[10px]">flight</span>
-                                        {tx.eventName}
-                                    </span>
-                                )}
-                              </div>
-                           </div>
-                           <div className="col-span-4 sm:col-span-4 text-right">
-                              <span className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                                 {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
-                              </span>
-                              {tx.originalCurrency && tx.originalCurrency !== 'ARS' && (
-                                <span className="block text-[10px] text-slate-400">
-                                  {tx.originalAmount} {tx.originalCurrency}
-                                </span>
-                              )}
-                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-               </div>
-            </main>
-
-            <aside className="hidden lg:flex w-80 flex-col gap-6 shrink-0">
-               <div className="sticky top-24 bg-surface-light dark:bg-surface-dark rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors duration-300">
-                  <h3 className="font-bold text-slate-900 dark:text-white mb-4 border-b border-slate-100 dark:border-slate-700 pb-2">Dinero Disponible</h3>
-                  <div className="space-y-4">
-                     <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-500">Saldo Libre</span>
-                        <span className={`font-bold text-emerald-500 ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                           {formatMoney(metrics.balance - metrics.totalReserved)}
-                        </span>
-                     </div>
-                     <div className="w-full bg-slate-100 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-primary h-full" style={{ width: `${Math.max(0, ((metrics.balance - metrics.totalReserved) / (metrics.balance || 1)) * 100)}%` }}></div>
-                     </div>
-                     <p className="text-xs text-slate-400 leading-relaxed">
-                        Este es tu dinero después de restar todos tus apartados activos.
-                     </p>
-                  </div>
-               </div>
-            </aside>
+                  {/* Seguimiento */}
+                  <AppCard 
+                      title="Eventos" 
+                      subtitle={`${activeEventsCount} Activos`} 
+                      icon="flight_takeoff" 
+                      color="pink" 
+                      onClick={onOpenEvents} 
+                  />
+                  <AppCard 
+                      title="Deudas" 
+                      subtitle={`${formatMoney(metrics.totalDebt)}`} 
+                      icon="gavel" 
+                      color="red" 
+                      onClick={onOpenDebts}
+                      privacyMode={privacyMode} 
+                  />
+                  
+                  {/* Herramientas de Cálculo */}
+                  <AppCard 
+                      title="Analíticas" 
+                      subtitle="Gráficos" 
+                      icon="bar_chart" 
+                      color="orange" 
+                      onClick={onOpenAnalytics} 
+                  />
+                  <AppCard 
+                      title="Conversor" 
+                      subtitle="Dólar & Divisas" 
+                      icon="currency_exchange" 
+                      color="yellow" 
+                      onClick={onOpenCurrencyConverter} 
+                  />
+                  <AppCard 
+                      title="Costo de Vida" 
+                      subtitle="Calculadora" 
+                      icon="price_check" 
+                      color="emerald" 
+                      onClick={onOpenSalaryCalculator} 
+                  />
+                  <AppCard 
+                      title="Simulador" 
+                      subtitle="Futuro a 30 días" 
+                      icon="timeline" 
+                      color="violet" 
+                      onClick={onOpenFuture} 
+                  />
+              </div>
           </div>
+
         </div>
       </div>
     </div>
   );
 };
 
-// Subcomponente para Herramientas
-const ToolCard: React.FC<{ 
-  label: string; 
+// Componente Unificado para Apps
+const AppCard: React.FC<{ 
+  title: string; 
+  subtitle: string; 
   icon: string; 
-  desc: string;
-  gradient: string;
-  onClick?: () => void;
-}> = ({ label, icon, desc, gradient, onClick }) => {
-    return (
-        <button 
-            onClick={onClick}
-            className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl p-5 text-left border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full flex flex-col items-start"
-        >
-            {/* Gradient Background Effect on Hover */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}></div>
-            
-            <div className={`mb-3 size-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                <span className="material-symbols-outlined text-[20px]">{icon}</span>
-            </div>
-            
-            <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1 group-hover:text-primary transition-colors">{label}</h3>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">{desc}</p>
-        </button>
-    );
-}
-
-// Subcomponente para Estado/Patrimonio
-const StatusCard: React.FC<{
-  title: string;
-  value: string;
-  icon: string;
   color: string;
   onClick: () => void;
   privacyMode?: boolean;
-}> = ({ title, value, icon, color, onClick, privacyMode }) => {
-    const colorStyles: {[key: string]: string} = {
+}> = ({ title, subtitle, icon, color, onClick, privacyMode }) => {
+    
+    // Map colors to tailwind classes safely
+    const colorClasses: Record<string, string> = {
+        blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
+        indigo: 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400',
+        teal: 'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400',
         purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
         pink: 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
-        red: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+        red: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
+        orange: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+        yellow: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
+        emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
+        violet: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400',
     };
 
     return (
-        <button onClick={onClick} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:shadow-md transition-all group">
-            <div className="flex items-center gap-4">
-                <div className={`size-10 rounded-full flex items-center justify-center ${colorStyles[color]}`}>
-                    <span className="material-symbols-outlined text-[20px]">{icon}</span>
-                </div>
-                <div className="text-left">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
-                    <p className={`font-bold text-slate-900 dark:text-white ${privacyMode ? 'blur-sm select-none' : ''}`}>{value}</p>
-                </div>
+        <button 
+            onClick={onClick}
+            className="flex flex-col items-start p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group h-28 justify-between relative overflow-hidden"
+        >
+            <div className={`size-10 rounded-xl flex items-center justify-center mb-2 ${colorClasses[color] || colorClasses['blue']}`}>
+                <span className="material-symbols-outlined text-[20px]">{icon}</span>
             </div>
-            <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">chevron_right</span>
+            <div className="text-left w-full relative z-10">
+                <h4 className="font-bold text-slate-900 dark:text-white text-sm group-hover:text-primary transition-colors leading-tight">{title}</h4>
+                <p className={`text-[10px] text-slate-500 font-medium truncate mt-0.5 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                    {subtitle}
+                </p>
+            </div>
+            
+            {/* Hover Decor */}
+            <div className="absolute -right-4 -bottom-4 size-16 bg-slate-100 dark:bg-slate-700/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
         </button>
     );
 }

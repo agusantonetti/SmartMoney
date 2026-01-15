@@ -8,6 +8,7 @@ export enum ViewState {
   BUDGET_ADJUST = 'BUDGET_ADJUST', // Nueva vista para mover dinero
   SALARY_CALCULATOR = 'SALARY_CALCULATOR', // Nueva calculadora de sueldo/ahorro
   CURRENCY_CONVERTER = 'CURRENCY_CONVERTER', // Nueva herramienta de conversión
+  WEALTH_LEVELS = 'WEALTH_LEVELS', // NUEVO: Mapa de Riqueza
   SUCCESS = 'SUCCESS',
   PROFILE = 'PROFILE',
   INCOME_MANAGER = 'INCOME_MANAGER',
