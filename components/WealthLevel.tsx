@@ -12,49 +12,98 @@ const WealthLevel: React.FC<Props> = ({ profile, metrics, onBack }) => {
   const dollarRate = profile.customDollarRate || 1130;
   const balanceUSD = metrics.balance / dollarRate;
 
+  // Sistema de 12 Niveles para gamificación constante
   const levels = [
     { 
         id: 1, 
         limit: 0, 
-        name: 'Semilla', 
-        desc: 'El comienzo de todo gran imperio.', 
-        icon: 'spa', 
-        color: 'from-slate-400 to-slate-600' 
+        name: 'Novato', 
+        desc: 'El punto de partida. Todo imperio comienza aquí.', 
+        icon: 'start', 
+        color: 'from-slate-500 to-slate-700' 
     },
     { 
         id: 2, 
-        limit: 1000, 
-        name: 'Ahorrador', 
-        desc: 'Primeros pasos de seguridad.', 
-        icon: 'account_balance', 
-        color: 'from-orange-400 to-orange-600' 
+        limit: 500, 
+        name: 'Explorador', 
+        desc: 'Descubriendo el valor del ahorro.', 
+        icon: 'hiking', 
+        color: 'from-stone-400 to-stone-600' 
     },
     { 
         id: 3, 
+        limit: 1000, 
+        name: 'Ahorrador', 
+        desc: 'Tu primer colchón de seguridad real.', 
+        icon: 'savings', 
+        color: 'from-orange-400 to-orange-600' 
+    },
+    { 
+        id: 4, 
+        limit: 5000, 
+        name: 'Escudero', 
+        desc: 'Protección sólida ante imprevistos.', 
+        icon: 'shield', 
+        color: 'from-amber-500 to-amber-700' 
+    },
+    { 
+        id: 5, 
         limit: 10000, 
         name: 'Constructor', 
-        desc: 'Cimentando bases sólidas.', 
+        desc: 'Cimentando las bases de tu patrimonio.', 
         icon: 'foundation', 
         color: 'from-blue-400 to-blue-600' 
     },
     { 
-        id: 4, 
+        id: 6, 
+        limit: 25000, 
+        name: 'Mercader', 
+        desc: 'Tu capital empieza a tener peso.', 
+        icon: 'storefront', 
+        color: 'from-cyan-500 to-cyan-700' 
+    },
+    { 
+        id: 7, 
+        limit: 50000, 
+        name: 'Capitán', 
+        desc: 'Dirigiendo tu propio destino financiero.', 
+        icon: 'sailing', 
+        color: 'from-indigo-500 to-indigo-700' 
+    },
+    { 
+        id: 8, 
         limit: 100000, 
         name: 'Inversionista', 
-        desc: 'El dinero trabaja para ti.', 
+        desc: 'El dinero trabaja duro para ti. (6 Cifras)', 
         icon: 'trending_up', 
-        color: 'from-emerald-400 to-emerald-600' 
+        color: 'from-emerald-500 to-emerald-700' 
     },
     { 
-        id: 5, 
+        id: 9, 
+        limit: 250000, 
+        name: 'Arquitecto', 
+        desc: 'Diseñando una vida de libertad.', 
+        icon: 'architecture', 
+        color: 'from-violet-500 to-violet-700' 
+    },
+    { 
+        id: 10, 
         limit: 500000, 
         name: 'Magnate', 
-        desc: 'Libertad financiera a la vista.', 
-        icon: 'auto_graph', 
-        color: 'from-purple-500 to-purple-700' 
+        desc: 'Medio millón. Poder financiero real.', 
+        icon: 'domain', 
+        color: 'from-fuchsia-600 to-purple-800' 
     },
     { 
-        id: 6, 
+        id: 11, 
+        limit: 750000, 
+        name: 'Soberano', 
+        desc: 'Dominio casi total del juego.', 
+        icon: 'crown', 
+        color: 'from-rose-500 to-red-700' 
+    },
+    { 
+        id: 12, 
         limit: 1000000, 
         name: 'Leyenda', 
         desc: 'El Club del Millón de Dólares.', 
@@ -95,7 +144,7 @@ const WealthLevel: React.FC<Props> = ({ profile, metrics, onBack }) => {
         </button>
         <div>
             <h2 className="text-lg font-bold">Mapa de Riqueza</h2>
-            <p className="text-xs text-slate-500">Tu camino al millón</p>
+            <p className="text-xs text-slate-500">Tu camino a la cima</p>
         </div>
       </div>
 
@@ -109,17 +158,18 @@ const WealthLevel: React.FC<Props> = ({ profile, metrics, onBack }) => {
                 <div className="size-20 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mb-4 border border-white/30 shadow-inner">
                     <span className="material-symbols-outlined text-4xl">{currentLevel.icon}</span>
                 </div>
-                <h1 className="text-4xl font-black mb-1">{currentLevel.name}</h1>
-                <p className="text-white/80 font-medium text-sm mb-6">{currentLevel.desc}</p>
+                <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Nivel Actual {currentLevel.id}</p>
+                <h1 className="text-4xl font-black mb-2">{currentLevel.name}</h1>
+                <p className="text-white/90 font-medium text-sm mb-6">{currentLevel.desc}</p>
                 
                 <div className="w-full bg-black/20 rounded-2xl p-4 backdrop-blur-sm border border-white/10">
-                    <p className="text-xs text-white/70 uppercase tracking-widest font-bold mb-1">Patrimonio Actual</p>
+                    <p className="text-xs text-white/70 uppercase tracking-widest font-bold mb-1">Patrimonio Neto</p>
                     <p className="text-3xl font-bold">{formatUSD(balanceUSD)}</p>
                 </div>
             </div>
         </div>
 
-        {/* Timeline */}
+        {/* Timeline Map */}
         <div className="relative pl-8 border-l-2 border-slate-200 dark:border-slate-800 space-y-12">
             {levels.map((lvl, idx) => {
                 const isCompleted = idx <= currentLevelIndex;
@@ -127,47 +177,54 @@ const WealthLevel: React.FC<Props> = ({ profile, metrics, onBack }) => {
                 const isNext = idx === currentLevelIndex + 1;
 
                 return (
-                    <div key={lvl.id} className={`relative group ${!isCompleted && !isNext ? 'opacity-50 blur-[1px]' : 'opacity-100'}`}>
-                        {/* Dot */}
-                        <div className={`absolute -left-[41px] top-0 size-5 rounded-full border-4 border-background-light dark:border-background-dark transition-all ${isCompleted ? `bg-gradient-to-r ${lvl.color}` : 'bg-slate-300 dark:bg-slate-700'}`}></div>
+                    <div key={lvl.id} className={`relative group transition-all duration-500 ${!isCompleted && !isNext ? 'opacity-40 grayscale blur-[0.5px]' : 'opacity-100'}`}>
+                        {/* Dot Indicator */}
+                        <div className={`absolute -left-[41px] top-0 size-5 rounded-full border-4 border-background-light dark:border-background-dark transition-all z-10 ${isCompleted ? `bg-gradient-to-r ${lvl.color} scale-110` : 'bg-slate-300 dark:bg-slate-700'}`}></div>
                         
-                        {/* Content */}
-                        <div className={`bg-surface-light dark:bg-surface-dark p-5 rounded-2xl border transition-all ${isCurrent ? 'border-primary shadow-lg ring-1 ring-primary/20' : 'border-slate-200 dark:border-slate-700'}`}>
+                        {/* Level Card */}
+                        <div className={`bg-surface-light dark:bg-surface-dark p-5 rounded-2xl border transition-all ${isCurrent ? 'border-primary shadow-lg ring-2 ring-primary/20 scale-[1.02]' : 'border-slate-200 dark:border-slate-700'}`}>
                             <div className="flex justify-between items-start mb-2">
                                 <div className="flex items-center gap-3">
-                                    <div className={`size-10 rounded-full flex items-center justify-center ${isCompleted ? `bg-gradient-to-br ${lvl.color} text-white` : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                                    <div className={`size-10 rounded-full flex items-center justify-center shadow-sm ${isCompleted ? `bg-gradient-to-br ${lvl.color} text-white` : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
                                         <span className="material-symbols-outlined text-[20px]">{lvl.icon}</span>
                                     </div>
                                     <div>
-                                        <h3 className="font-bold text-slate-900 dark:text-white">{lvl.name}</h3>
+                                        <h3 className={`font-bold text-sm ${isCurrent ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>{lvl.name}</h3>
                                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">{formatUSD(lvl.limit)}</p>
                                     </div>
                                 </div>
-                                {isCompleted && (
-                                    <span className="material-symbols-outlined text-emerald-500">check_circle</span>
+                                {isCompleted && !isCurrent && (
+                                    <span className="material-symbols-outlined text-emerald-500 text-lg">check_circle</span>
+                                )}
+                                {isCurrent && (
+                                    <span className="text-[10px] font-bold bg-primary/10 text-primary px-2 py-1 rounded-full border border-primary/20">ACTUAL</span>
                                 )}
                                 {!isCompleted && (
-                                    <span className="material-symbols-outlined text-slate-300">lock</span>
+                                    <span className="material-symbols-outlined text-slate-300 text-lg">lock</span>
                                 )}
                             </div>
                             
+                            {/* Progress bar for Next Level */}
                             {isNext && (
-                                <div className="mt-4">
+                                <div className="mt-4 animate-[fadeIn_0.5s_ease-out]">
                                     <div className="flex justify-between text-xs font-bold mb-1 text-slate-500">
-                                        <span>Progreso</span>
+                                        <span>Progreso al Nivel {lvl.id}</span>
                                         <span>{Math.round(progressPercent)}%</span>
                                     </div>
-                                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                        <div className="h-full bg-primary transition-all duration-1000" style={{ width: `${progressPercent}%` }}></div>
+                                    <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden shadow-inner">
+                                        <div className={`h-full bg-gradient-to-r ${lvl.color} transition-all duration-1000 relative`} style={{ width: `${progressPercent}%` }}>
+                                            <div className="absolute inset-0 bg-white/20 animate-[pulse_2s_infinite]"></div>
+                                        </div>
                                     </div>
                                     <p className="text-[10px] text-slate-400 mt-2 text-right">
-                                        Faltan {formatUSD(lvl.limit - balanceUSD)}
+                                        Faltan <span className="font-bold text-slate-600 dark:text-slate-300">{formatUSD(lvl.limit - balanceUSD)}</span> para desbloquear
                                     </p>
                                 </div>
                             )}
                             
-                            {!isNext && (
-                                <p className="text-xs text-slate-500 mt-2 italic">{lvl.desc}</p>
+                            {/* Description only for unlocked or next */}
+                            {(isCompleted || isNext) && (
+                                <p className="text-xs text-slate-500 mt-2 italic border-t border-slate-100 dark:border-slate-800 pt-2">{lvl.desc}</p>
                             )}
                         </div>
                     </div>

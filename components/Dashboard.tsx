@@ -44,7 +44,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenSalaryCalculator,
   onOpenCurrencyConverter,
   onOpenWealthLevels,
-  onOpenAchievements,
+  onOpenAchievements, // Deprecated but kept for type compatibility
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -98,15 +98,16 @@ const Dashboard: React.FC<Props> = ({
 
   const activeEventsCount = profile.events?.filter(e => e.status === 'active').length || 0;
 
-  // Lógica de Niveles Patrimoniales
+  // Lógica de Niveles Patrimoniales (Sincronizada con WealthLevel.tsx)
   const getWealthLevel = (balance: number, rate: number) => {
       const balanceUSD = balance / rate;
-      if (balanceUSD >= 1000000) return { label: 'Millonario', icon: 'diamond', color: 'text-cyan-300' };
-      if (balanceUSD >= 500000) return { label: 'Magnate', icon: 'auto_graph', color: 'text-purple-300' };
-      if (balanceUSD >= 100000) return { label: 'Inversionista', icon: 'foundation', color: 'text-emerald-300' };
-      if (balanceUSD >= 10000) return { label: 'Constructor', icon: 'savings', color: 'text-blue-300' };
-      if (balanceUSD >= 1000) return { label: 'Ahorrador', icon: 'account_balance', color: 'text-orange-300' };
-      return { label: 'Semilla', icon: 'spa', color: 'text-slate-300' };
+      if (balanceUSD >= 1000000) return { label: 'Leyenda', icon: 'diamond', color: 'text-yellow-400' };
+      if (balanceUSD >= 500000) return { label: 'Magnate', icon: 'domain', color: 'text-purple-400' };
+      if (balanceUSD >= 100000) return { label: 'Inversionista', icon: 'trending_up', color: 'text-emerald-400' };
+      if (balanceUSD >= 25000) return { label: 'Mercader', icon: 'storefront', color: 'text-cyan-400' };
+      if (balanceUSD >= 5000) return { label: 'Escudero', icon: 'shield', color: 'text-amber-400' };
+      if (balanceUSD >= 1000) return { label: 'Ahorrador', icon: 'savings', color: 'text-orange-400' };
+      return { label: 'Novato', icon: 'start', color: 'text-slate-400' };
   };
 
   const dollarRate = profile.customDollarRate || 1130; 
@@ -122,7 +123,6 @@ const Dashboard: React.FC<Props> = ({
             <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
               <span className="material-symbols-outlined text-[20px]">account_balance_wallet</span>
             </div>
-            {/* Ocultar nombre en móviles muy pequeños */}
             <h2 className="text-slate-900 dark:text-white text-lg font-bold tracking-tight hidden xs:block">Smart Money</h2>
           </div>
           <div className="flex items-center gap-2 md:gap-3">
@@ -185,7 +185,6 @@ const Dashboard: React.FC<Props> = ({
                           <p className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Patrimonio Neto (Manual)</p>
                       </div>
                       <div className={`transition-all duration-300 flex flex-col md:flex-row md:items-baseline gap-1 md:gap-4 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
-                          {/* Texto responsive para evitar saltos de línea feos */}
                           <h1 className="text-4xl xs:text-5xl md:text-7xl font-black tracking-tight leading-none">
                               {formatMoney(metrics.balance)}
                           </h1>
@@ -258,7 +257,7 @@ const Dashboard: React.FC<Props> = ({
                   <AppCard title="Deudas" subtitle={`${formatMoney(metrics.totalDebt)}`} icon="gavel" color="red" onClick={onOpenDebts} privacyMode={privacyMode} />
                   <AppCard title="Analíticas" subtitle="Gráficos" icon="bar_chart" color="orange" onClick={onOpenAnalytics} />
                   <AppCard title="Conversor" subtitle="Dólar & Divisas" icon="currency_exchange" color="yellow" onClick={onOpenCurrencyConverter} />
-                  <AppCard title="Trofeos" subtitle="Tus Logros" icon="emoji_events" color="amber" onClick={onOpenAchievements} />
+                  {/* Trofeos removido por solicitud del usuario */}
                   <AppCard title="Simulador" subtitle="Futuro a 30 días" icon="timeline" color="violet" onClick={onOpenFuture} />
                   <AppCard title="Costo Vida" subtitle="Calculadora" icon="price_check" color="emerald" onClick={onOpenSalaryCalculator} />
               </div>
