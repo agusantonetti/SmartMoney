@@ -72,31 +72,74 @@ const Dashboard: React.FC<Props> = ({
 
   const defaultAvatar = "https://lh3.googleusercontent.com/aida-public/AB6AXuD3W_-QV28bpv6tswBdb3gVXfvQ9Sd1qa2FIGrEXSr2QQhwgjBocZveQ_iZ7J4KEKay2_eW-X1e_D_YgmIkcA8CzxI9m9DrfSKITYEyZh1QbS_cU-ikAMnjc7jppiRpUtx2MU_e_8F4iEoxnnZDfqR5h0oOSuSVTm6ylZNFaJtmmBRyWTnZFGJLM0cmMDBGgzzyJBlAtbXeWNN-cYcN-zQt3qUI1cKXVPswGJB4Tmr449006R1-PDELmsW7e06pa1WY4URePcx_rEcX";
 
-  // --- CÁLCULOS COMPARATIVOS (MES ACTUAL) ---
+  // --- CÁLCULOS COMPARATIVOS (MES ACTUAL VS ANTERIOR) ---
   const stats = useMemo(() => {
       const now = new Date();
       const currentMonthKey = now.toISOString().slice(0, 7); // YYYY-MM
       
-      const currentIncome = transactions
-        .filter(t => t.type === 'income' && t.date.startsWith(currentMonthKey))
-        .reduce((acc, t) => acc + t.amount, 0);
-      
-      const currentVariableExpenses = transactions
-        .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
-        .reduce((acc, t) => acc + t.amount, 0);
+      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevMonthKey = prevDate.toISOString().slice(0, 7);
 
-      const totalMonthlyOutflow = metrics.fixedExpenses + currentVariableExpenses;
-      const totalMonthlyIncome = metrics.salaryPaid + currentIncome;
-      const netMonthly = totalMonthlyIncome - totalMonthlyOutflow;
+      // 1. Clasificar transacciones por periodo
+      let currentIncomeVar = 0;
+      let currentExpenseVar = 0;
+      let prevIncomeVar = 0;
+      let prevExpenseVar = 0;
+      
+      let pastIncomeTotal = 0;
+      let pastExpenseTotal = 0;
+
+      transactions.forEach(t => {
+          const tDate = t.date;
+          if (tDate.startsWith(currentMonthKey)) {
+              if (t.type === 'income') currentIncomeVar += t.amount;
+              else currentExpenseVar += t.amount;
+          } else if (tDate.startsWith(prevMonthKey)) {
+              if (t.type === 'income') prevIncomeVar += t.amount;
+              else prevExpenseVar += t.amount;
+              // Acumular para el balance histórico (cierre del mes pasado)
+              pastIncomeTotal += (t.type === 'income' ? t.amount : 0);
+              pastExpenseTotal += (t.type === 'expense' ? t.amount : 0);
+          } else if (tDate < currentMonthKey) {
+              // Más antiguos
+              pastIncomeTotal += (t.type === 'income' ? t.amount : 0);
+              pastExpenseTotal += (t.type === 'expense' ? t.amount : 0);
+          }
+      });
+
+      // 2. Totales Mensuales (Sueldo Fijo + Variables)
+      const totalCurrentIncome = metrics.salaryPaid + currentIncomeVar;
+      const totalCurrentExpense = metrics.fixedExpenses + currentExpenseVar;
+      const totalNetMonthly = totalCurrentIncome - totalCurrentExpense;
+
+      // Asumimos sueldo y fijos constantes para la comparativa simple, a menos que haya historial real
+      const totalPrevIncome = metrics.salaryPaid + prevIncomeVar;
+      const totalPrevExpense = metrics.fixedExpenses + prevExpenseVar;
+
+      // 3. Balance Historico (Al cierre del mes anterior)
+      const prevBalance = (profile.initialBalance || 0) + pastIncomeTotal - pastExpenseTotal;
+
+      // 4. Cálculo de Porcentajes
+      const calcPct = (curr: number, prev: number) => {
+          if (prev === 0) return curr === 0 ? 0 : 100;
+          return ((curr - prev) / prev) * 100;
+      };
 
       return {
-          currentVariableExpenses,
-          totalMonthlyOutflow,
-          totalMonthlyIncome,
-          currentIncome,
-          netMonthly
+          currentVariableExpenses: currentExpenseVar,
+          totalMonthlyOutflow: totalCurrentExpense,
+          totalMonthlyIncome: totalCurrentIncome,
+          currentIncome: currentIncomeVar,
+          netMonthly: totalNetMonthly,
+          // Comparativas
+          prevBalance,
+          balancePct: calcPct(metrics.balance, prevBalance),
+          prevIncome: totalPrevIncome,
+          incomePct: calcPct(totalCurrentIncome, totalPrevIncome),
+          prevExpense: totalPrevExpense,
+          expensePct: calcPct(totalCurrentExpense, totalPrevExpense)
       };
-  }, [transactions, metrics.fixedExpenses, metrics.salaryPaid]);
+  }, [transactions, metrics, profile.initialBalance]);
 
   // --- ALERTAS DE SUSCRIPCIÓN ---
   const subscriptionAlerts = useMemo(() => {
@@ -120,7 +163,6 @@ const Dashboard: React.FC<Props> = ({
           const diffTime = targetDate.getTime() - now.getTime();
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-          // Alerta si faltan 3 días o menos (y no es negativo, o negativo pequeño si se pasó hoy)
           if (diffDays >= 0 && diffDays <= 3) {
               alerts.push({ sub, daysLeft: diffDays });
           }
@@ -130,7 +172,6 @@ const Dashboard: React.FC<Props> = ({
 
   const activeEventsCount = profile.events?.filter(e => e.status === 'active').length || 0;
 
-  // Lógica de Niveles Patrimoniales (Sincronizada con WealthLevel.tsx)
   const getWealthLevel = (balance: number, rate: number) => {
       const balanceUSD = balance / rate;
       if (balanceUSD >= 1000000) return { label: 'Leyenda', icon: 'diamond', color: 'text-yellow-400' };
@@ -145,6 +186,25 @@ const Dashboard: React.FC<Props> = ({
   const dollarRate = profile.customDollarRate || 1130; 
   const wealthLevel = getWealthLevel(metrics.balance, dollarRate);
   const balanceUSD = metrics.balance / dollarRate;
+
+  // --- TOOLTIP COMPONENT ---
+  const TooltipContent = ({ label, amount, percent, inverse = false }: { label: string, amount: number, percent: number, inverse?: boolean }) => {
+      const isPositiveGood = !inverse;
+      const colorClass = percent === 0 ? 'text-slate-400' : (percent > 0 ? (isPositiveGood ? 'text-emerald-400' : 'text-red-400') : (isPositiveGood ? 'text-red-400' : 'text-emerald-400'));
+      
+      return (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 bg-slate-900/95 backdrop-blur-xl text-white p-3 rounded-xl shadow-xl border border-white/10 z-50 w-max opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none scale-95 group-hover:scale-100 origin-top">
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900/95 border-l border-t border-white/10 rotate-45"></div>
+            <p className="text-slate-400 mb-1 font-bold uppercase text-[9px] tracking-wider">{label}</p>
+            <div className="flex items-center gap-3">
+                <span className="font-bold text-sm">{formatMoney(amount)}</span>
+                <span className={`text-xs font-bold bg-white/5 px-1.5 py-0.5 rounded ${colorClass}`}>
+                    {percent > 0 ? '+' : ''}{percent.toFixed(1)}%
+                </span>
+            </div>
+        </div>
+      );
+  };
 
   return (
     <div className="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-x-hidden transition-colors duration-300">
@@ -263,13 +323,13 @@ const Dashboard: React.FC<Props> = ({
                
                <div className="relative z-10 flex flex-col gap-6">
                   {/* Balance Principal */}
-                  <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2 mb-1 opacity-80">
+                  <div className="flex flex-col gap-1 group relative w-fit">
+                      <div className="flex items-center gap-2 mb-1 opacity-80 cursor-help">
                           <span className="material-symbols-outlined text-sm">account_balance</span>
-                          <p className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Patrimonio Neto (Manual)</p>
+                          <p className="text-[10px] md:text-xs font-bold uppercase tracking-widest">Patrimonio Neto</p>
                       </div>
                       <div className={`transition-all duration-300 flex flex-col md:flex-row md:items-baseline gap-1 md:gap-4 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
-                          <h1 className="text-4xl xs:text-5xl md:text-7xl font-black tracking-tight leading-none">
+                          <h1 className="text-4xl xs:text-5xl md:text-7xl font-black tracking-tight leading-none cursor-default">
                               {formatMoney(metrics.balance)}
                           </h1>
                           <span className="text-lg md:text-2xl font-bold text-slate-400">
@@ -277,6 +337,9 @@ const Dashboard: React.FC<Props> = ({
                           </span>
                       </div>
                       
+                      {/* TOOLTIP BALANCE */}
+                      {!privacyMode && <TooltipContent label="Mes Anterior" amount={stats.prevBalance} percent={stats.balancePct} />}
+
                       <div className="flex flex-wrap items-center gap-3 mt-2">
                           <p className="text-xs md:text-sm text-slate-300 font-medium bg-white/10 px-3 py-1 rounded-full backdrop-blur-sm">
                               Líquido: <span className={`text-white font-bold ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
@@ -293,15 +356,17 @@ const Dashboard: React.FC<Props> = ({
                       </div>
                   </div>
 
-                  {/* Fila Inferior: Métricas Mensuales (Compactas en móvil) */}
+                  {/* Fila Inferior: Métricas Mensuales */}
                   <div className="grid grid-cols-3 gap-2 md:gap-4 bg-white/5 backdrop-blur-md rounded-2xl p-3 md:p-4 border border-white/10">
-                      <div onClick={onOpenIncomeManager} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors text-center md:text-left">
+                      <div onClick={onOpenIncomeManager} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors text-center md:text-left group relative">
                           <p className="text-[10px] uppercase font-bold text-emerald-400 mb-0.5">Ganado</p>
                           <p className={`text-sm md:text-xl font-bold truncate ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.totalMonthlyIncome)}</p>
+                          {!privacyMode && <TooltipContent label="Mes Anterior" amount={stats.prevIncome} percent={stats.incomePct} />}
                       </div>
-                      <div onClick={onOpenBudget} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors border-l border-white/10 text-center md:text-left">
+                      <div onClick={onOpenBudget} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors border-l border-white/10 text-center md:text-left group relative">
                           <p className="text-[10px] uppercase font-bold text-red-400 mb-0.5">Gastado</p>
                           <p className={`text-sm md:text-xl font-bold truncate ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.totalMonthlyOutflow)}</p>
+                          {!privacyMode && <TooltipContent label="Mes Anterior" amount={stats.prevExpense} percent={stats.expensePct} inverse={true} />}
                       </div>
                       <div onClick={onOpenAnalytics} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors border-l border-white/10 text-center md:text-left">
                           <p className="text-[10px] uppercase font-bold text-blue-400 mb-0.5">Neto</p>
@@ -334,14 +399,39 @@ const Dashboard: React.FC<Props> = ({
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Apps & Herramientas</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   <AppCard title="Ingresos" subtitle="Fuentes fijas" icon="payments" color="blue" onClick={onOpenIncomeManager} />
-                  <AppCard title="Gastos Fijos" subtitle={`Total: ${formatMoney(metrics.fixedExpenses)}`} icon="home_work" color="indigo" onClick={onOpenSubscriptions} privacyMode={privacyMode} />
+                  
+                  <AppCard 
+                    title="Gastos Fijos" 
+                    subtitle={`Total: ${formatMoney(metrics.fixedExpenses)}`} 
+                    icon="home_work" 
+                    color="indigo" 
+                    onClick={onOpenSubscriptions} 
+                    privacyMode={privacyMode} 
+                    tooltip={<TooltipContent label="Sin Cambios" amount={metrics.fixedExpenses} percent={0} inverse={true} />} 
+                  />
+                  
                   <AppCard title="Límites" subtitle="Presupuesto" icon="tune" color="teal" onClick={onOpenBudget} />
-                  <AppCard title="Apartados" subtitle={`${formatMoney(metrics.totalReserved)}`} icon="savings" color="purple" onClick={onOpenSavingsBuckets} privacyMode={privacyMode} />
+                  
+                  <AppCard 
+                    title="Apartados" 
+                    subtitle={`${formatMoney(metrics.totalReserved)}`} 
+                    icon="savings" 
+                    color="purple" 
+                    onClick={onOpenSavingsBuckets} 
+                    privacyMode={privacyMode} 
+                    tooltip={
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 bg-slate-900/95 backdrop-blur-xl text-white p-3 rounded-xl shadow-xl border border-white/10 z-50 w-max opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none scale-95 group-hover:scale-100 origin-top">
+                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900/95 border-l border-t border-white/10 rotate-45"></div>
+                            <p className="text-slate-400 mb-1 font-bold uppercase text-[9px]">Disponible Real</p>
+                            <span className="font-bold text-sm">{formatMoney(metrics.balance - metrics.totalReserved)}</span>
+                        </div>
+                    }
+                  />
+                  
                   <AppCard title="Eventos" subtitle={`${activeEventsCount} Activos`} icon="flight_takeoff" color="pink" onClick={onOpenEvents} />
                   <AppCard title="Deudas" subtitle={`${formatMoney(metrics.totalDebt)}`} icon="gavel" color="red" onClick={onOpenDebts} privacyMode={privacyMode} />
                   <AppCard title="Analíticas" subtitle="Gráficos" icon="bar_chart" color="orange" onClick={onOpenAnalytics} />
                   <AppCard title="Conversor" subtitle="Dólar & Divisas" icon="currency_exchange" color="yellow" onClick={onOpenCurrencyConverter} />
-                  {/* Trofeos removido por solicitud del usuario */}
                   <AppCard title="Simulador" subtitle="Futuro a 30 días" icon="timeline" color="violet" onClick={onOpenFuture} />
                   <AppCard title="Costo Vida" subtitle="Calculadora" icon="price_check" color="emerald" onClick={onOpenSalaryCalculator} />
               </div>
@@ -361,7 +451,8 @@ const AppCard: React.FC<{
   color: string;
   onClick: () => void;
   privacyMode?: boolean;
-}> = ({ title, subtitle, icon, color, onClick, privacyMode }) => {
+  tooltip?: React.ReactNode;
+}> = ({ title, subtitle, icon, color, onClick, privacyMode, tooltip }) => {
     
     const colorClasses: Record<string, string> = {
         blue: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
@@ -380,7 +471,7 @@ const AppCard: React.FC<{
     return (
         <button 
             onClick={onClick}
-            className="flex flex-col items-start p-3 md:p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 h-24 md:h-28 justify-between relative overflow-hidden"
+            className="flex flex-col items-start p-3 md:p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 h-24 md:h-28 justify-between relative overflow-visible group"
         >
             <div className={`size-8 md:size-10 rounded-xl flex items-center justify-center mb-1 ${colorClasses[color] || colorClasses['blue']}`}>
                 <span className="material-symbols-outlined text-[18px] md:text-[20px]">{icon}</span>
@@ -391,6 +482,8 @@ const AppCard: React.FC<{
                     {subtitle}
                 </p>
             </div>
+            {/* Render Tooltip if provided and not in privacy mode (unless forced) */}
+            {!privacyMode && tooltip}
         </button>
     );
 }

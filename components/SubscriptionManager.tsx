@@ -1,11 +1,10 @@
 
 import React, { useState } from 'react';
-import { FinancialProfile, Subscription, SubscriptionPayment, Transaction } from '../types';
+import { FinancialProfile, Subscription, SubscriptionPayment } from '../types';
 
 interface Props {
   profile: FinancialProfile;
-  transactions: Transaction[]; // NEEDED FOR SYNC
-  onGlobalUpdate: (profile: FinancialProfile, transactions: Transaction[]) => void; // UPDATED PROP
+  onUpdateProfile: (profile: FinancialProfile) => void;
   onBack: () => void;
   privacyMode?: boolean;
 }
@@ -17,7 +16,7 @@ const CATEGORIES = [
   { id: 'education', label: 'Educación', icon: 'school', color: 'blue' },
 ];
 
-const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalUpdate, onBack, privacyMode }) => {
+const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(profile.subscriptions || []);
   
   // View State
@@ -71,14 +70,6 @@ const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalU
       return diffDays;
   };
 
-  const mapSubCategoryToTxCategory = (catId: string): string => {
-      if (catId === 'housing') return 'Hogar';
-      if (catId === 'services') return 'Servicios';
-      if (catId === 'digital') return 'Entretenimiento';
-      if (catId === 'education') return 'Educación';
-      return 'Otros';
-  };
-
   // --- LOGIC: CRUD ---
   const handleAdd = () => {
     if (!name || !amount) return;
@@ -117,7 +108,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalU
 
     const updated = [...subscriptions, newSub];
     setSubscriptions(updated);
-    onGlobalUpdate({ ...profile, subscriptions: updated }, transactions);
+    onUpdateProfile({ ...profile, subscriptions: updated });
     
     setName('');
     setAmount('');
@@ -131,11 +122,11 @@ const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalU
     e.stopPropagation(); // Prevent opening detail view
     const updated = subscriptions.filter(s => s.id !== id);
     setSubscriptions(updated);
-    onGlobalUpdate({ ...profile, subscriptions: updated }, transactions);
+    onUpdateProfile({ ...profile, subscriptions: updated });
     if (selectedSubId === id) setSelectedSubId(null);
   };
 
-  // --- LOGIC: PAYMENTS (HISTORY & TRANSACTION SYNC) ---
+  // --- LOGIC: PAYMENTS (VISUAL CHECKLIST ONLY) ---
   const handleUpdatePayment = (subId: string, updatedPayment: SubscriptionPayment) => {
     const subIndex = subscriptions.findIndex(s => s.id === subId);
     if (subIndex === -1) return;
@@ -145,53 +136,12 @@ const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalU
     const existingPaymentIndex = history.findIndex(p => p.month === updatedPayment.month);
     
     let newHistory = [...history];
-    let currentTransactionId = existingPaymentIndex >= 0 ? history[existingPaymentIndex].transactionId : undefined;
-    let newTransactions = [...transactions];
 
-    // LOGIC: Create or Delete Transaction based on isPaid
-    if (updatedPayment.isPaid) {
-        // CASE: PAYING (Create Transaction if not exists)
-        if (!currentTransactionId) {
-            const txId = Date.now().toString();
-            // Calculate date from monthKey (YYYY-MM) + billingDay
-            const [y, m] = updatedPayment.month.split('-');
-            const txDate = `${y}-${m}-${String(sub.billingDay).padStart(2, '0')}`;
-
-            const newTx: Transaction = {
-                id: txId,
-                amount: updatedPayment.realAmount,
-                description: `${sub.name} (Pago Mensual)`,
-                category: mapSubCategoryToTxCategory(sub.category),
-                type: 'expense',
-                date: txDate,
-                originalAmount: updatedPayment.realAmount,
-                originalCurrency: 'ARS', // Assuming ARS base for simplicity here
-                exchangeRate: 1
-            };
-            newTransactions.unshift(newTx);
-            currentTransactionId = txId; // Store link
-        }
-    } else {
-        // CASE: UNPAYING (Delete Transaction if exists)
-        if (currentTransactionId) {
-            newTransactions = newTransactions.filter(t => t.id !== currentTransactionId);
-            currentTransactionId = undefined; // Remove link
-        }
-    }
-
-    // Update the payment record with the transaction link
-    const finalPaymentRecord = { ...updatedPayment, transactionId: currentTransactionId };
-
+    // Only update visual state in Profile, DO NOT create Transactions
     if (existingPaymentIndex >= 0) {
-      newHistory[existingPaymentIndex] = finalPaymentRecord;
+      newHistory[existingPaymentIndex] = { ...newHistory[existingPaymentIndex], ...updatedPayment };
     } else {
-      newHistory.push(finalPaymentRecord);
-    }
-
-    // Auto-advance next date logic (simple version)
-    if (updatedPayment.isPaid) {
-        const currentNext = new Date(sub.nextPaymentDate || new Date());
-        // Simple logic: If we pay the current month, verify logic elsewhere, keeping it simple here
+      newHistory.push(updatedPayment);
     }
 
     const updatedSub = { ...sub, history: newHistory };
@@ -199,9 +149,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalU
     newSubs[subIndex] = updatedSub;
     
     setSubscriptions(newSubs);
-    
-    // ATOMIC UPDATE: Profile (Subs) + Transactions
-    onGlobalUpdate({ ...profile, subscriptions: newSubs }, newTransactions);
+    onUpdateProfile({ ...profile, subscriptions: newSubs });
   };
 
   // --- RENDER ---
@@ -233,12 +181,22 @@ const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalU
              </button>
              <div>
                 <h2 className="text-lg font-bold leading-none">{selectedSub.name}</h2>
-                <p className="text-xs text-slate-500">Historial de Pagos</p>
+                <p className="text-xs text-slate-500">Checklist de Pagos</p>
              </div>
            </div>
         </div>
 
         <div className="flex-1 w-full max-w-3xl mx-auto p-4 md:p-6 space-y-6 pb-24 animate-[fadeIn_0.2s_ease-out]">
+            
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800/50 text-sm text-blue-800 dark:text-blue-300">
+                <p className="flex items-start gap-2">
+                    <span className="material-symbols-outlined text-lg">info</span>
+                    <span>
+                        Marcar como "Pagado" aquí solo sirve de recordatorio visual. No afectará tu saldo ni tus gráficos de gastos.
+                    </span>
+                </p>
+            </div>
+
             {/* Year Selector */}
             <div className="flex items-center justify-center gap-6 bg-surface-light dark:bg-surface-dark p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                  <button onClick={() => changeYear(-1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
@@ -291,23 +249,11 @@ const SubscriptionManager: React.FC<Props> = ({ profile, transactions, onGlobalU
                               </div>
                            </div>
 
-                           {/* Amount Input (Editable because electricity/gas varies) */}
-                           <div className="md:col-span-4">
-                              <div className="relative">
-                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">$</span>
-                                 <input 
-                                    type="number" 
-                                    className={`w-full bg-slate-50 dark:bg-slate-900/50 rounded-xl pl-6 pr-3 py-2 outline-none focus:ring-2 focus:ring-primary/50 font-bold text-right transition-all duration-300 ${currentAmount > 0 ? 'text-slate-900 dark:text-white' : 'text-slate-400'} ${privacyMode ? 'blur-sm select-none' : ''}`}
-                                    placeholder="0"
-                                    value={currentAmount}
-                                    onChange={(e) => handleUpdatePayment(selectedSub.id, {
-                                        month: monthKey,
-                                        realAmount: parseFloat(e.target.value),
-                                        isPaid: isPaid
-                                     })}
-                                 />
-                              </div>
-                              <p className="text-[10px] text-slate-400 text-right mt-1">Monto Real</p>
+                           {/* Amount Info (Static Display) */}
+                           <div className="md:col-span-4 flex md:justify-center items-center">
+                              <p className={`font-bold ${isPaid ? 'text-slate-900 dark:text-white' : 'text-slate-400'} ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                                  {formatMoney(currentAmount)}
+                              </p>
                            </div>
 
                            {/* Toggle Paid */}

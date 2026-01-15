@@ -29,6 +29,33 @@ import * as firestore from 'firebase/firestore';
 
 const { doc, setDoc, onSnapshot } = firestore;
 
+// Helper para traducir errores de Firebase a mensajes amigables
+const getFriendlyErrorMessage = (error: any): string => {
+  const code = error?.code || '';
+  const message = error?.message || '';
+
+  if (code.includes('unavailable') || message.includes('offline')) {
+      return "Sin conexión. Los cambios se guardarán al recuperar internet.";
+  }
+  if (code.includes('permission-denied')) {
+      return "No tienes permisos para realizar esta acción.";
+  }
+  if (code.includes('resource-exhausted')) {
+      return "Límite de cuota excedido. Intenta más tarde.";
+  }
+  if (code.includes('cancelled')) {
+      return "La operación fue cancelada.";
+  }
+  if (code.includes('unauthenticated')) {
+      return "Tu sesión ha expirado. Por favor ingresa nuevamente.";
+  }
+  if (code.includes('network-request-failed')) {
+      return "Error de red. Verifica tu conexión.";
+  }
+  
+  return "Ocurrió un error inesperado. Intenta nuevamente.";
+};
+
 // Default Actions definition for init
 const DEFAULT_ACTIONS: QuickAction[] = [
     { id: 'def1', label: 'Café', amount: 2500, icon: 'coffee' },
@@ -92,7 +119,8 @@ const App: React.FC = () => {
 
   // 1. AUTH LISTENER
   useEffect(() => {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const unsubscribe = onAuthStateChanged(auth, 
+        (user) => {
           setCurrentUser(user);
           if (user) {
               if (currentView === ViewState.LANDING) {
@@ -105,7 +133,14 @@ const App: React.FC = () => {
               setFinancialProfile(DEFAULT_PROFILE);
           }
           setAuthLoading(false);
-      });
+        }, 
+        (error) => {
+          console.error("Auth Error:", error);
+          setAuthLoading(false);
+          const msg = getFriendlyErrorMessage(error);
+          triggerToast(`Error de sesión: ${msg}`, 'error');
+        }
+      );
       return () => unsubscribe();
   }, []);
 
@@ -123,6 +158,7 @@ const App: React.FC = () => {
                   setFinancialProfile({ ...DEFAULT_PROFILE, ...data.profile });
               }
           } else {
+              // Crear perfil inicial si no existe
               const initialProfile = { 
                   ...DEFAULT_PROFILE, 
                   name: currentUser.email?.split('@')[0] || 'Viajero' 
@@ -130,13 +166,17 @@ const App: React.FC = () => {
               setDoc(userDocRef, {
                   profile: initialProfile,
                   transactions: []
-              }).catch(err => console.error("Error creando perfil inicial:", err));
+              }).catch(err => {
+                  console.error("Error creando perfil inicial:", err);
+                  triggerToast(`Fallo al iniciar base de datos: ${getFriendlyErrorMessage(err)}`, 'error');
+              });
               
               setFinancialProfile(initialProfile);
           }
       }, (error) => {
-          console.error("Error escuchando cambios:", error);
-          triggerToast("Error de sincronización", 'error');
+          console.error("Snapshot Error:", error);
+          const msg = getFriendlyErrorMessage(error);
+          triggerToast(`Sincronización pausada: ${msg}`, 'error');
       });
 
       return () => unsubscribeSnapshot();
@@ -145,7 +185,10 @@ const App: React.FC = () => {
   // --- DATA HELPERS ---
   
   const saveToFirestore = async (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
-      if (!currentUser) return;
+      if (!currentUser) {
+          triggerToast("Debes iniciar sesión para guardar cambios", 'error');
+          return;
+      }
       
       // Actualización optimista local
       setFinancialProfile(newProfile);
@@ -154,7 +197,7 @@ const App: React.FC = () => {
       try {
           const userDocRef = doc(db, 'users', currentUser.uid);
           
-          // SANITIZACIÓN: Eliminar valores 'undefined' que causan error en Firestore (especialmente en arrays)
+          // SANITIZACIÓN: Eliminar valores 'undefined' que causan error en Firestore
           const sanitize = (data: any) => JSON.parse(JSON.stringify(data));
 
           await setDoc(userDocRef, {
@@ -163,7 +206,9 @@ const App: React.FC = () => {
           }, { merge: true });
       } catch (e: any) {
           console.error("Error guardando en nube:", e);
-          triggerToast(`Error al guardar: ${e.message || 'Verifica tu conexión'}`, 'error');
+          const friendlyMsg = getFriendlyErrorMessage(e);
+          triggerToast(`No se pudo guardar: ${friendlyMsg}`, 'error');
+          // Nota: En un sistema más complejo, aquí revertiríamos el estado local (rollback).
       }
   };
 
@@ -206,7 +251,7 @@ const App: React.FC = () => {
        triggerToast("Datos restaurados y sincronizados", 'success');
        setCurrentView(ViewState.DASHBOARD);
     } else {
-       triggerToast("Archivo de respaldo inválido", 'error');
+       triggerToast("Archivo de respaldo inválido o corrupto", 'error');
     }
   };
 
@@ -225,7 +270,7 @@ const App: React.FC = () => {
 
   const triggerToast = (message: string, type: 'success' | 'error') => {
     setShowToast({ message, type });
-    setTimeout(() => setShowToast(null), 3000);
+    setTimeout(() => setShowToast(null), 4000); // Un poco más de tiempo para leer errores
   };
 
   // --- APP LOGIC ---
@@ -241,7 +286,9 @@ const App: React.FC = () => {
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => acc + safeNum(t.amount), 0);
 
-    const balance = safeNum(financialProfile.initialBalance || 0);
+    // Calcular Balance: Inicial + Ingresos - Gastos
+    const calculatedBalance = safeNum(financialProfile.initialBalance || 0) + income - expense;
+
     const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => sum + src.amount, 0);
     const totalReserved = (financialProfile.savingsBuckets || []).reduce((sum, bucket) => sum + bucket.currentAmount, 0);
     const fixedExpenses = (financialProfile.subscriptions || []).reduce((sum, sub) => sum + sub.amount, 0);
@@ -250,7 +297,7 @@ const App: React.FC = () => {
     const uniqueMonths = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : ''))).size || 1;
     const avgMonthlyExpense = (expense / Math.max(1, uniqueMonths)) + fixedExpenses;
     
-    const liquidAssets = balance - totalReserved;
+    const liquidAssets = calculatedBalance - totalReserved;
     
     let runway = 0;
     if (avgMonthlyExpense > 0) {
@@ -276,7 +323,7 @@ const App: React.FC = () => {
     return {
       income: safeNum(income),
       expense: safeNum(expense),
-      balance: balance, 
+      balance: calculatedBalance, 
       salaryPaid: safeNum(salaryPaid),
       totalReserved: safeNum(totalReserved),
       fixedExpenses: safeNum(fixedExpenses),
@@ -480,8 +527,7 @@ const App: React.FC = () => {
         return (
           <SubscriptionManager 
             profile={financialProfile}
-            transactions={transactions}
-            onGlobalUpdate={handleGlobalUpdate}
+            onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
             privacyMode={privacyMode}
           />
