@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile } from '../types';
 
@@ -16,7 +17,7 @@ interface Props {
   onOpenFuture: () => void;
   onOpenBudgetAdjust?: () => void; 
   onOpenSalaryCalculator?: () => void;
-  onOpenCurrencyConverter?: () => void; // NUEVO
+  onOpenCurrencyConverter?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -81,50 +82,38 @@ const Dashboard: React.FC<Props> = ({
       const now = new Date();
       const currentMonthKey = now.toISOString().slice(0, 7); // YYYY-MM
       
-      // Calcular clave mes anterior
-      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const prevMonthKey = prevDate.toISOString().slice(0, 7);
-
-      // 1. Ingresos Variables (Transacciones tipo income)
-      // Nota: metrics.salaryPaid es lo fijo. Aquí comparamos lo variable/registrado.
       const currentIncome = transactions
         .filter(t => t.type === 'income' && t.date.startsWith(currentMonthKey))
         .reduce((acc, t) => acc + t.amount, 0);
       
-      const prevIncome = transactions
-        .filter(t => t.type === 'income' && t.date.startsWith(prevMonthKey))
-        .reduce((acc, t) => acc + t.amount, 0);
-
-      // 2. Gastos Variables
+      // Gastos Variables
       const currentVariableExpenses = transactions
         .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
         .reduce((acc, t) => acc + t.amount, 0);
 
-      const prevVariableExpenses = transactions
-        .filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey))
-        .reduce((acc, t) => acc + t.amount, 0);
-
       const totalMonthlyOutflow = metrics.fixedExpenses + currentVariableExpenses;
-      
-      // Asumimos gastos fijos constantes para la comparación simple, o solo comparamos variable
-      const prevTotalOutflow = metrics.fixedExpenses + prevVariableExpenses;
-
-      const incomeTrend = prevIncome > 0 ? ((currentIncome - prevIncome) / prevIncome) * 100 : 0;
-      const expenseTrend = prevTotalOutflow > 0 ? ((totalMonthlyOutflow - prevTotalOutflow) / prevTotalOutflow) * 100 : 0;
+      const totalMonthlyIncome = metrics.salaryPaid + currentIncome;
 
       return {
           currentVariableExpenses,
           totalMonthlyOutflow,
-          prevTotalOutflow,
-          currentIncome,
-          prevIncome,
-          incomeTrend,
-          expenseTrend
+          totalMonthlyIncome,
+          currentIncome
       };
-  }, [transactions, metrics.fixedExpenses]);
+  }, [transactions, metrics.fixedExpenses, metrics.salaryPaid]);
 
-  // Contar eventos activos para mostrar en el badge
   const activeEventsCount = profile.events?.filter(e => e.status === 'active').length || 0;
+
+  // Lógica de Niveles Patrimoniales (Wealth Tiers)
+  const getWealthLevel = (balance: number) => {
+      if (balance >= 50000000) return { label: 'Magnate', icon: 'diamond', color: 'text-cyan-300' };
+      if (balance >= 10000000) return { label: 'Inversionista', icon: 'auto_graph', color: 'text-purple-300' };
+      if (balance >= 1000000) return { label: 'Constructor', icon: 'foundation', color: 'text-emerald-300' };
+      if (balance >= 100000) return { label: 'Ahorrador', icon: 'savings', color: 'text-blue-300' };
+      return { label: 'Iniciando', icon: 'flag', color: 'text-slate-300' };
+  };
+
+  const wealthLevel = getWealthLevel(metrics.balance);
 
   return (
     <div className="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-x-hidden transition-colors duration-300">
@@ -171,46 +160,26 @@ const Dashboard: React.FC<Props> = ({
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                <span className="text-xs font-semibold uppercase tracking-wider">Mi Presupuesto</span>
+                <span className="text-xs font-semibold uppercase tracking-wider">Menú Rápido</span>
                 <span className={`material-symbols-outlined text-sm transition-transform duration-200 ${isBudgetMenuOpen ? 'rotate-180' : ''}`}>expand_more</span>
               </button>
 
               {/* Dropdown Content */}
               {isBudgetMenuOpen && (
-                <div className="absolute top-full mt-2 right-0 w-60 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-[fadeIn_0.2s_ease-out]">
+                <div className="absolute top-full mt-2 right-0 w-60 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-[fadeIn_0.2s_ease-out] z-50">
                   <div className="p-2 grid gap-1">
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenIncomeManager(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
                       <div className="size-8 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">payments</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Ingresos</p><p className="text-[10px] text-slate-400">Gestionar sueldos</p></div>
+                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Ingresos</p></div>
                     </button>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenSubscriptions(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
                       <div className="size-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">home_work</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Gastos Fijos</p><p className="text-[10px] text-slate-400">Alquiler y Servicios</p></div>
-                    </button>
-                    <button onClick={() => { setIsBudgetMenuOpen(false); onOpenSavingsBuckets(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">savings</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Apartados</p><p className="text-[10px] text-slate-400">Metas de ahorro</p></div>
+                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Gastos Fijos</p></div>
                     </button>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenBudget(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
                       <div className="size-8 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">tune</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Límites</p><p className="text-[10px] text-slate-400">Control mensual</p></div>
+                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Límites</p></div>
                     </button>
-                    <button onClick={() => { setIsBudgetMenuOpen(false); onOpenDebts(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">gavel</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Deudas</p><p className="text-[10px] text-slate-400">Impuestos y créditos</p></div>
-                    </button>
-                    
-                    <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
-                    
-                    <button onClick={() => { setIsBudgetMenuOpen(false); if(onOpenSalaryCalculator) onOpenSalaryCalculator(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">calculate</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Costo de Vida</p><p className="text-[10px] text-slate-400">Análisis Real</p></div>
-                    </button>
-                    <button onClick={() => { setIsBudgetMenuOpen(false); onOpenFuture(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors">
-                      <div className="size-8 rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">crystal_ball</span></div>
-                      <div><p className="text-sm font-bold text-slate-800 dark:text-white">Simulador</p><p className="text-[10px] text-slate-400">Futuro</p></div>
-                    </button>
-                    
                     <div className="h-px bg-slate-100 dark:bg-slate-700 my-1"></div>
                     <button onClick={() => { setIsBudgetMenuOpen(false); onOpenAnalytics(); }} className="flex items-center gap-3 w-full px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl text-left transition-colors group">
                       <div className="size-8 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors"><span className="material-symbols-outlined text-[18px]">bar_chart</span></div>
@@ -239,7 +208,7 @@ const Dashboard: React.FC<Props> = ({
 
       {/* Main Content Layout */}
       <div className="flex-1 flex justify-center py-6 px-4 md:px-8 pb-24">
-        <div className="w-full max-w-[1440px] flex flex-col gap-8">
+        <div className="w-full max-w-[1440px] flex flex-col gap-6">
           
           {/* Header de Bienvenida */}
           <div className="flex flex-col">
@@ -248,121 +217,114 @@ const Dashboard: React.FC<Props> = ({
              </h1>
           </div>
 
-          {/* 1. SECCIÓN PRINCIPAL: BALANCE Y OPERATIVA (Agrupada) */}
-          <section className="flex flex-col gap-4">
-              {/* BALANCE HERO */}
-              <div 
-                className="w-full bg-gradient-to-r from-slate-900 to-slate-800 dark:from-blue-900 dark:to-slate-900 rounded-[2.5rem] p-8 md:p-12 text-white shadow-2xl shadow-slate-200 dark:shadow-none relative overflow-hidden group"
-                title={`Valor exacto: $${metrics.balance}`}
-              >
-                 {/* Decorative Background Elements */}
-                 <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-500"></div>
-                 <div className="absolute bottom-0 left-0 w-64 h-64 bg-primary/20 rounded-full blur-3xl translate-y-1/3 -translate-x-1/3"></div>
+          {/* 1. SECCIÓN HERO: BALANCE Y MÉTRICAS PRINCIPALES */}
+          <section className="w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-blue-950 dark:via-slate-900 dark:to-slate-950 rounded-[2.5rem] p-8 md:p-10 text-white shadow-2xl shadow-slate-300 dark:shadow-none relative overflow-hidden group">
+               {/* Decorative Background Elements */}
+               <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-700"></div>
+               <div className="absolute bottom-0 left-0 w-80 h-80 bg-primary/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4"></div>
 
-                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                    <div>
-                       <div className="flex items-center gap-2 mb-2 opacity-80">
-                          <span className="material-symbols-outlined text-sm">account_balance</span>
-                          <p className="text-sm font-bold uppercase tracking-widest">Balance Total</p>
-                       </div>
-                       <h1 className={`text-5xl md:text-7xl font-black tracking-tight mb-2 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
-                          {formatMoney(metrics.balance)}
-                       </h1>
-                       <p className="text-sm md:text-base text-slate-300 font-medium flex items-center gap-1">
-                          Disponible Real: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
-                       </p>
-                    </div>
-                    
-                    <button 
-                      onClick={onOpenBudgetAdjust}
-                      className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-full font-bold text-sm transition-all flex items-center gap-2"
-                    >
-                       <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-                       Mover Dinero
-                    </button>
-                 </div>
-              </div>
+               <div className="relative z-10 flex flex-col gap-8">
+                  {/* Fila Superior: Balance */}
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                      <div>
+                          <div className="flex items-center gap-2 mb-3 opacity-80">
+                              <span className="material-symbols-outlined text-sm">account_balance</span>
+                              <p className="text-xs font-bold uppercase tracking-widest">Patrimonio Neto</p>
+                          </div>
+                          <h1 className={`text-5xl md:text-7xl font-black tracking-tight mb-2 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
+                              {formatMoney(metrics.balance)}
+                          </h1>
+                          <div className="flex items-center gap-4">
+                              <p className="text-sm md:text-base text-slate-300 font-medium">
+                                  Disponible: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
+                              </p>
+                              
+                              {/* WEALTH LEVEL BADGE */}
+                              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
+                                  <span className={`material-symbols-outlined text-sm ${wealthLevel.color}`}>{wealthLevel.icon}</span>
+                                  <span className={`text-xs font-bold uppercase ${wealthLevel.color}`}>Nivel: {wealthLevel.label}</span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
 
-              {/* GRID OPERATIVO (4 Columnas) */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Ingresos (Comparar Ingresos Totales de mes actual vs anterior) */}
-                <MetricCard 
-                  label="Ingresos" 
-                  amount={formatMoney(metrics.salaryPaid + stats.currentIncome)} // Base Salarial + Variables del mes
-                  color="blue" 
-                  icon="payments" 
-                  onClick={onOpenIncomeManager}
-                  helperText="Gestionar Sueldos"
-                  isBlurred={privacyMode}
-                  trend={stats.incomeTrend}
-                  trendPositiveIsGood={true}
-                  prevAmount={`Ant: ${formatMoney(metrics.salaryPaid + stats.prevIncome)}`} // Estimado
-                />
+                  {/* Fila Inferior: Métricas Mensuales (Incrustadas) */}
+                  <div className="grid grid-cols-3 gap-4 bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10">
+                      <div 
+                        onClick={onOpenIncomeManager} 
+                        className="cursor-pointer group/stat hover:bg-white/5 rounded-xl p-2 transition-colors"
+                      >
+                          <div className="flex items-center gap-2 mb-1 text-emerald-400">
+                              <span className="material-symbols-outlined text-lg">arrow_upward</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 group-hover/stat:text-white">Ganado (Mes)</span>
+                          </div>
+                          <p className={`text-lg md:text-2xl font-bold truncate transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                             {formatMoney(stats.totalMonthlyIncome)}
+                          </p>
+                      </div>
 
-                {/* Gastos Mes */}
-                <MetricCard 
-                  label="Gastos Mes" 
-                  amount={formatMoney(stats.totalMonthlyOutflow)} 
-                  color="indigo" 
-                  icon="calendar_today" 
-                  onClick={onOpenBudget}
-                  helperText="Ver Límites"
-                  isBlurred={privacyMode}
-                  trend={stats.expenseTrend}
-                  trendPositiveIsGood={false}
-                  prevAmount={`Ant: ${formatMoney(stats.prevTotalOutflow)}`}
-                />
+                      <div 
+                        onClick={onOpenBudget}
+                        className="cursor-pointer group/stat hover:bg-white/5 rounded-xl p-2 transition-colors relative border-l border-white/10 pl-4"
+                      >
+                          <div className="flex items-center gap-2 mb-1 text-red-400">
+                              <span className="material-symbols-outlined text-lg">arrow_downward</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 group-hover/stat:text-white">Gastos (Mes)</span>
+                          </div>
+                          <p className={`text-lg md:text-2xl font-bold truncate transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                             {formatMoney(stats.totalMonthlyOutflow)}
+                          </p>
+                      </div>
 
-                {/* Gastos Fijos (Solo mostramos monto, sin tendencia compleja calculada aquí, o 0) */}
-                <MetricCard 
-                  label="Fijos" 
-                  amount={formatMoney(metrics.fixedExpenses)} 
-                  color="indigo" 
-                  icon="home_work" 
-                  onClick={onOpenSubscriptions}
-                  helperText="Alquiler y Servicios"
-                  isBlurred={privacyMode}
-                />
-
-                {/* Botón Acción Principal: NUEVO */}
-                <button 
-                    onClick={onAddTransaction}
-                    className="col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-4 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 hover:-translate-y-1 active:scale-95 transition-all flex flex-col justify-between group h-full min-h-[140px]"
-                >
-                    <div className="flex justify-between items-start w-full">
-                        <div className="bg-white/20 rounded-full p-2">
-                            <span className="material-symbols-outlined text-2xl">add</span>
-                        </div>
-                        <span className="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
-                    </div>
-                    <div className="text-left">
-                        <p className="font-bold text-lg leading-tight">Nuevo<br/>Movimiento</p>
-                        <p className="text-[10px] opacity-80 mt-1">Registrar Gasto o Ingreso</p>
-                    </div>
-                </button>
-              </div>
+                      <div 
+                        onClick={onOpenSubscriptions}
+                        className="cursor-pointer group/stat hover:bg-white/5 rounded-xl p-2 transition-colors relative border-l border-white/10 pl-4"
+                      >
+                          <div className="flex items-center gap-2 mb-1 text-blue-400">
+                              <span className="material-symbols-outlined text-lg">home_work</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider opacity-80 group-hover/stat:text-white">Fijos</span>
+                          </div>
+                          <p className={`text-lg md:text-2xl font-bold truncate transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                             {formatMoney(metrics.fixedExpenses)}
+                          </p>
+                      </div>
+                  </div>
+               </div>
           </section>
 
-          {/* 2. HERRAMIENTAS (Colapsable/Acordeón) */}
-          <div className="w-full">
-             <button 
-                onClick={() => setIsToolsOpen(!isToolsOpen)}
-                className="w-full flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all group"
-             >
-                <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 group-hover:text-primary transition-colors">
-                        <span className="material-symbols-outlined">construction</span>
-                    </div>
-                    <div className="text-left">
-                        <h3 className="font-bold text-slate-900 dark:text-white text-sm">Herramientas Avanzadas</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Simuladores, Calculadoras y Analíticas</p>
-                    </div>
-                </div>
-                <span className={`material-symbols-outlined text-slate-400 transition-transform duration-300 ${isToolsOpen ? 'rotate-180' : ''}`}>expand_more</span>
-             </button>
-             
-             {isToolsOpen && (
-                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-[fadeIn_0.3s_ease-out]">
+          {/* 2. BARRA DE ACCIONES Y HERRAMIENTAS */}
+          <div className="flex flex-col gap-4">
+              <div className="flex gap-4">
+                  <button 
+                      onClick={onAddTransaction}
+                      className="flex-1 bg-primary text-white h-14 rounded-2xl font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center justify-center gap-2 active:scale-95"
+                  >
+                      <span className="material-symbols-outlined">add_circle</span>
+                      Registrar Movimiento
+                  </button>
+                  <button 
+                      onClick={() => setIsToolsOpen(!isToolsOpen)}
+                      className={`h-14 px-6 rounded-2xl font-bold border transition-all flex items-center justify-center gap-2 ${
+                          isToolsOpen 
+                          ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-primary' 
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                      }`}
+                  >
+                      <span className="material-symbols-outlined">{isToolsOpen ? 'expand_less' : 'construction'}</span>
+                      <span className="hidden sm:inline">Herramientas</span>
+                  </button>
+                  <button 
+                      onClick={onOpenBudgetAdjust}
+                      className="h-14 w-14 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                      title="Mover Dinero"
+                  >
+                      <span className="material-symbols-outlined">swap_horiz</span>
+                  </button>
+              </div>
+
+              {/* Collapsible Tools Grid */}
+              {isToolsOpen && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-[fadeIn_0.3s_ease-out]">
                     <ToolCard 
                         label="Conversor Divisas" 
                         icon="currency_exchange" 
@@ -375,92 +337,51 @@ const Dashboard: React.FC<Props> = ({
                         icon="price_check" 
                         onClick={onOpenSalaryCalculator} 
                         gradient="from-emerald-400 to-teal-600"
-                        desc="¿Cuánto vale tu tiempo? Calcula el impacto real." 
+                        desc="Calcula el valor real de tu tiempo." 
                     />
                     <ToolCard 
                         label="Simulador Futuro" 
                         icon="timeline" 
                         onClick={onOpenFuture} 
                         gradient="from-violet-500 to-fuchsia-600"
-                        desc="Predice tu saldo a fin de mes según tus hábitos." 
+                        desc="Predice tu saldo a 30 días." 
                     />
                     <ToolCard 
-                        label="Gestor de Deudas" 
-                        icon="credit_score" 
-                        onClick={onOpenDebts} 
-                        gradient="from-rose-500 to-orange-500"
-                        desc="Organiza tus pendientes y elimina intereses." 
+                        label="Analíticas" 
+                        icon="bar_chart" 
+                        onClick={onOpenAnalytics} 
+                        gradient="from-blue-500 to-indigo-600"
+                        desc="Gráficos detallados de tus gastos." 
                     />
                  </div>
-             )}
+              )}
           </div>
 
-          {/* 3. PATRIMONIO Y SALUD (Metas + Métricas Globales) */}
-          <section className="flex flex-col gap-4">
-             <div className="flex items-center gap-2 px-1">
-                <span className="material-symbols-outlined text-slate-400 text-sm">monitor_heart</span>
-                <h3 className="font-bold text-slate-900 dark:text-white text-sm uppercase tracking-wider opacity-80">
-                    Estado General
-                </h3>
-             </div>
-
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                 {/* Left Column: Assets */}
-                 <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Apartados */}
-                    <MetricCard 
-                      label="Apartados" 
-                      amount={formatMoney(metrics.totalReserved)} 
-                      color="purple" 
-                      icon="savings" 
-                      onClick={onOpenSavingsBuckets}
-                      helperText="Dinero Reservado"
-                      isBlurred={privacyMode}
-                    />
-
-                    {/* Mis Viajes */}
-                    <MetricCard 
-                      label="Mis Viajes" 
-                      amount={activeEventsCount > 0 ? `${activeEventsCount} Activos` : 'Planificar'} 
-                      color="pink" 
-                      icon="flight_takeoff" 
-                      onClick={onOpenEvents}
-                      helperText="Presupuestos Especiales"
-                    />
-
-                    {/* Health Score Card (Span full width of this sub-grid on mobile, or just another tile) */}
-                    <div className="sm:col-span-2 bg-surface-light dark:bg-surface-dark rounded-2xl p-5 shadow-sm border border-slate-200 dark:border-slate-700 relative overflow-hidden flex items-center justify-between">
-                       <div>
-                          <h3 className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Health Score</h3>
-                          <h2 className="text-3xl font-black text-slate-900 dark:text-white flex items-end gap-2">
-                            {metrics.healthScore}
-                            <span className="text-sm font-medium text-slate-400 mb-1 pb-1">/100</span>
-                          </h2>
-                       </div>
-                       <div className={`p-3 rounded-full ${metrics.healthScore > 70 ? 'bg-emerald-100 text-emerald-600' : metrics.healthScore > 40 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
-                          <span className="material-symbols-outlined text-2xl">
-                            {metrics.healthScore > 70 ? 'ecg_heart' : metrics.healthScore > 40 ? 'monitor_heart' : 'heart_broken'}
-                          </span>
-                       </div>
-                       {/* Progress Bar Background */}
-                       <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-100 dark:bg-slate-700">
-                           <div 
-                              className={`h-full transition-all duration-1000 ease-out ${metrics.healthScore > 70 ? 'bg-emerald-500' : metrics.healthScore > 40 ? 'bg-yellow-400' : 'bg-red-500'}`} 
-                              style={{ width: `${metrics.healthScore}%` }}
-                           ></div>
-                       </div>
-                    </div>
-                 </div>
-
-                 {/* Right Column: Runway (Vertical Card) */}
-                 <div className="bg-primary text-white rounded-3xl p-6 shadow-lg shadow-primary/20 relative overflow-hidden flex flex-col justify-center items-center text-center">
-                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% -20%, white 0%, transparent 20%)' }}></div>
-                    <h3 className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-2 z-10">Vida Útil (Runway)</h3>
-                    <span className="text-5xl font-black z-10">{metrics.runway}</span>
-                    <span className="text-sm font-medium text-blue-100 z-10">Meses de libertad</span>
-                    <p className="text-[10px] text-blue-200 mt-2 z-10 opacity-80">Saldo disponible / Gastos promedio.</p>
-                 </div>
-             </div>
+          {/* 3. ESTADO Y PATRIMONIO (Cards Medianas) */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatusCard 
+                  title="Apartados" 
+                  value={formatMoney(metrics.totalReserved)} 
+                  icon="savings" 
+                  color="purple" 
+                  onClick={onOpenSavingsBuckets}
+                  privacyMode={privacyMode}
+                />
+                <StatusCard 
+                  title="Mis Eventos" 
+                  value={`${activeEventsCount} Activos`} 
+                  icon="flight_takeoff" 
+                  color="pink" 
+                  onClick={onOpenEvents}
+                />
+                <StatusCard 
+                  title="Deudas" 
+                  value={formatMoney(metrics.totalDebt)} 
+                  icon="gavel" 
+                  color="red" 
+                  onClick={onOpenDebts}
+                  privacyMode={privacyMode}
+                />
           </section>
 
           {/* 4. LISTA TRANSACCIONES */}
@@ -509,7 +430,6 @@ const Dashboard: React.FC<Props> = ({
                               <span className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'} ${privacyMode ? 'blur-sm select-none' : ''}`}>
                                  {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount)}
                               </span>
-                              {/* Show original currency if different */}
                               {tx.originalCurrency && tx.originalCurrency !== 'ARS' && (
                                 <span className="block text-[10px] text-slate-400">
                                   {tx.originalAmount} {tx.originalCurrency}
@@ -549,6 +469,7 @@ const Dashboard: React.FC<Props> = ({
   );
 };
 
+// Subcomponente para Herramientas
 const ToolCard: React.FC<{ 
   label: string; 
   icon: string; 
@@ -559,106 +480,50 @@ const ToolCard: React.FC<{
     return (
         <button 
             onClick={onClick}
-            className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-[1.5rem] p-5 text-left border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full flex flex-col items-start"
+            className="relative overflow-hidden bg-white dark:bg-slate-800 rounded-2xl p-5 text-left border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group h-full flex flex-col items-start"
         >
             {/* Gradient Background Effect on Hover */}
             <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}></div>
             
-            {/* Icon Container */}
-            <div className={`relative mb-4`}>
-                <div className={`size-12 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300`}>
-                    <span className="material-symbols-outlined text-[24px]">{icon}</span>
-                </div>
-                {/* Decorative Blur behind icon */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} blur-xl opacity-40 -z-10 scale-150`}></div>
+            <div className={`mb-3 size-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-md group-hover:scale-110 transition-transform duration-300`}>
+                <span className="material-symbols-outlined text-[20px]">{icon}</span>
             </div>
             
-            <h3 className="font-bold text-slate-900 dark:text-white text-base mb-2 leading-tight group-hover:text-primary transition-colors">{label}</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed font-medium mb-4 flex-1">{desc}</p>
-            
-            <div className="w-full flex items-center justify-between mt-auto pt-2 border-t border-slate-100 dark:border-slate-700/50">
-               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors">Abrir Herramienta</span>
-               <div className="size-6 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
-                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-               </div>
-            </div>
+            <h3 className="font-bold text-slate-900 dark:text-white text-sm mb-1 group-hover:text-primary transition-colors">{label}</h3>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">{desc}</p>
         </button>
     );
 }
 
-const MetricCard: React.FC<{ 
-  label: string; 
-  amount: string; 
-  color: string; 
-  icon: string; 
-  onClick?: () => void;
-  helperText?: string;
-  isBlurred?: boolean;
-  trend?: number; // % change
-  trendPositiveIsGood?: boolean;
-  prevAmount?: string;
-}> = ({ label, amount, color, icon, onClick, helperText, isBlurred, trend, trendPositiveIsGood, prevAmount }) => {
-  const colorStyles: {[key: string]: string} = {
-     emerald: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400',
-     red: 'text-red-600 bg-red-100 dark:bg-red-900/20 dark:text-red-400',
-     blue: 'text-blue-600 bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400',
-     purple: 'text-purple-600 bg-purple-100 dark:bg-purple-900/20 dark:text-purple-400',
-     indigo: 'text-indigo-600 bg-indigo-100 dark:bg-indigo-900/20 dark:text-indigo-400',
-     orange: 'text-orange-600 bg-orange-100 dark:bg-orange-900/20 dark:text-orange-400',
-     pink: 'text-pink-600 bg-pink-100 dark:bg-pink-900/20 dark:text-pink-400',
-  };
+// Subcomponente para Estado/Patrimonio
+const StatusCard: React.FC<{
+  title: string;
+  value: string;
+  icon: string;
+  color: string;
+  onClick: () => void;
+  privacyMode?: boolean;
+}> = ({ title, value, icon, color, onClick, privacyMode }) => {
+    const colorStyles: {[key: string]: string} = {
+        purple: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+        pink: 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',
+        red: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+    };
 
-  // Determine trend color
-  let trendColor = 'text-slate-400';
-  let trendIcon = 'remove';
-  if (trend !== undefined && Math.abs(trend) > 0) {
-      if (trend > 0) {
-          trendIcon = 'trending_up';
-          trendColor = trendPositiveIsGood ? 'text-emerald-500' : 'text-red-500';
-      } else {
-          trendIcon = 'trending_down';
-          trendColor = trendPositiveIsGood ? 'text-red-500' : 'text-emerald-500';
-      }
-  }
-
-  return (
-     <button 
-        onClick={onClick}
-        className="text-left bg-surface-light dark:bg-surface-dark p-4 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-md active:scale-95 cursor-pointer group w-full min-h-[140px] relative overflow-hidden"
-     >
-        {/* Hover Details Overlay */}
-        <div className="absolute inset-0 bg-white/90 dark:bg-slate-800/95 backdrop-blur-sm z-10 flex flex-col justify-center items-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-center p-2">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-            <p className={`text-lg font-black text-slate-900 dark:text-white mb-2 ${isBlurred ? 'blur-sm select-none' : ''}`}>{amount}</p>
-            {trend !== undefined && (
-                <div className={`flex items-center gap-1 text-xs font-bold ${trendColor} bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-full`}>
-                    <span className="material-symbols-outlined text-[14px]">{trendIcon}</span>
-                    <span>{Math.abs(trend).toFixed(1)}%</span>
+    return (
+        <button onClick={onClick} className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-between hover:shadow-md transition-all group">
+            <div className="flex items-center gap-4">
+                <div className={`size-10 rounded-full flex items-center justify-center ${colorStyles[color]}`}>
+                    <span className="material-symbols-outlined text-[20px]">{icon}</span>
                 </div>
-            )}
-            {prevAmount && <p className="text-[10px] text-slate-400 mt-2">{prevAmount}</p>}
-        </div>
-
-        <div className="flex items-center justify-between w-full mb-4">
-           <div className={`size-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110 ${colorStyles[color] || colorStyles.blue}`}>
-              <span className="material-symbols-outlined text-[20px]">{icon}</span>
-           </div>
-           {/* Mini Trend Indicator (Always Visible) */}
-           {trend !== undefined && Math.abs(trend) > 1 && (
-               <div className={`flex items-center text-[10px] font-bold ${trendColor}`}>
-                   <span className="material-symbols-outlined text-[14px]">{trendIcon}</span>
-                   {Math.abs(trend).toFixed(0)}%
-               </div>
-           )}
-        </div>
-        
-        <div>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">{label}</span>
-            <p className={`text-xl font-bold truncate text-slate-900 dark:text-white leading-tight ${isBlurred ? 'blur-sm select-none' : ''}`}>{amount}</p>
-            {helperText && <p className="text-[10px] text-slate-400 mt-1">{helperText}</p>}
-        </div>
-     </button>
-  );
+                <div className="text-left">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
+                    <p className={`font-bold text-slate-900 dark:text-white ${privacyMode ? 'blur-sm select-none' : ''}`}>{value}</p>
+                </div>
+            </div>
+            <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">chevron_right</span>
+        </button>
+    );
 }
 
 export default Dashboard;

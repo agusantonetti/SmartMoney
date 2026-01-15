@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ViewState, Transaction, FinancialMetrics, FinancialProfile, QuickAction } from './types';
 import Dashboard from './components/Dashboard';
@@ -401,7 +402,12 @@ const App: React.FC = () => {
           />
         );
       case ViewState.SUCCESS:
-        return <SuccessScreen onBack={() => setCurrentView(ViewState.DASHBOARD)} />;
+        return (
+            <SuccessScreen 
+                onBack={() => setCurrentView(ViewState.DASHBOARD)} 
+                metrics={metrics} 
+            />
+        );
       case ViewState.PROFILE:
         return (
           <ProfileSetup 
