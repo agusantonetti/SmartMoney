@@ -18,6 +18,7 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
   
   // --- STATE: SIMULADOR ---
   const [simRent, setSimRent] = useState<string>('');
+  const [simExpenses, setSimExpenses] = useState<string>(''); // NUEVO: Expensas
   const [simCurrency, setSimCurrency] = useState<'ARS' | 'USD'>('ARS');
   const [targetRentPercentage, setTargetRentPercentage] = useState<number>(30); // Regla del 30% por defecto
 
@@ -25,10 +26,6 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
   useEffect(() => {
     const salary = (profile.incomeSources || []).reduce((acc, src) => acc + src.amount, 0) || (profile.monthlySalary || 0);
     const totalFixed = (profile.subscriptions || []).reduce((acc, sub) => acc + sub.amount, 0);
-    
-    // Estimación básica: Asumimos que el gasto fijo más alto podría ser alquiler, si no, usuario ajusta.
-    // O simplemente ponemos 0 y dejamos que el usuario rellene.
-    // Para UX, cargamos totalFixed en "OtherFixed" y dejamos Rent en 0 para que el usuario divida.
     
     // Calcular variables promedio (último mes)
     const now = new Date();
@@ -46,6 +43,7 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
   // --- CALCULOS ---
   
   const currentDollarRate = profile.customDollarRate || 1130;
+  const currentNetWorth = profile.initialBalance || 0; // Patrimonio Neto
 
   const valIncome = parseFloat(income) || 0;
   const valRent = parseFloat(rent) || 0;
@@ -54,25 +52,29 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
 
   const currentTotalExpenses = valRent + valOtherFixed + valVariable;
   const currentNet = valIncome - currentTotalExpenses;
-  const currentRentPct = valIncome > 0 ? (valRent / valIncome) * 100 : 0;
 
   // SIMULACION
-  const valSimRentRaw = parseFloat(simRent) || 0;
-  const valSimRentARS = simCurrency === 'USD' ? valSimRentRaw * currentDollarRate : valSimRentRaw;
+  const valSimBaseRent = parseFloat(simRent) || 0;
+  const valSimExpenses = parseFloat(simExpenses) || 0;
+  const valSimTotalHousingRaw = valSimBaseRent + valSimExpenses;
   
-  // Nuevo costo de vida asumiendo que "Other Fixed" y "Variable" se mantienen iguales
-  const simTotalExpenses = valSimRentARS + valOtherFixed + valVariable;
+  // Convertir a ARS para cálculos de sueldo en pesos
+  const valSimHousingARS = simCurrency === 'USD' ? valSimTotalHousingRaw * currentDollarRate : valSimTotalHousingRaw;
   
-  // ¿Cuánto debería ganar para que este alquiler sea el X% de mi sueldo?
-  // Formula: Rent = Salary * (Pct/100)  =>  Salary = Rent / (Pct/100)
-  const requiredSalaryForRent = targetRentPercentage > 0 ? valSimRentARS / (targetRentPercentage / 100) : 0;
+  // Nuevo costo de vida total
+  const simTotalExpenses = valSimHousingARS + valOtherFixed + valVariable;
   
-  // Alternativa: ¿Cuánto necesito ganar para cubrir TODOS los gastos y que me sobre un 20% (regla 50/30/20 simplificada)?
-  // CostoVida = 80% del sueldo => Sueldo = CostoVida / 0.8
+  // 1. Sueldo necesario basado en porcentaje de vivienda
+  const requiredSalaryForRent = targetRentPercentage > 0 ? valSimHousingARS / (targetRentPercentage / 100) : 0;
+  
+  // 2. Sueldo necesario para vida cómoda (Regla 50/30/20 simplificada: Costos = 80%)
   const requiredSalaryForLife = simTotalExpenses / 0.8;
 
-  // Fondo de emergencia (6 meses de gastos simulados)
+  // 3. Fondo de emergencia (6 meses de gastos simulados)
   const requiredEmergencyFund = simTotalExpenses * 6;
+
+  // 4. NUEVO: Meses cubiertos por patrimonio (Runway de Alquiler)
+  const patrimonyRentRunway = valSimHousingARS > 0 ? currentNetWorth / valSimHousingARS : 0;
 
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
@@ -120,7 +122,7 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                     
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-blue-500 block mb-1">Alquiler / Vivienda</label>
+                            <label className="text-xs font-bold text-blue-500 block mb-1">Alquiler Actual</label>
                             <input type="number" value={rent} onChange={e => setRent(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 p-2 rounded-lg outline-none font-bold text-sm" placeholder="0" />
                         </div>
                         <div>
@@ -153,32 +155,51 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                     <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
                     
                     <div className="space-y-5 relative z-10">
-                        <div>
-                            <label className="text-xs font-bold text-primary block mb-2">¿Si mi nuevo alquiler fuera...?</label>
-                            <div className="flex gap-2">
-                                <div className="flex-1 flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+                        {/* Selector de Moneda */}
+                        <div className="flex justify-end">
+                             <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg">
+                                <button onClick={() => setSimCurrency('ARS')} className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${simCurrency === 'ARS' ? 'bg-white dark:bg-slate-600 shadow text-slate-900 dark:text-white' : 'text-slate-500'}`}>ARS</button>
+                                <button onClick={() => setSimCurrency('USD')} className={`px-3 py-1 rounded-md text-[10px] font-bold transition-colors ${simCurrency === 'USD' ? 'bg-emerald-500 shadow text-white' : 'text-slate-500'}`}>USD</button>
+                             </div>
+                        </div>
+
+                        {/* Inputs Vivienda */}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-xs font-bold text-primary block mb-2">Nuevo Alquiler</label>
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 focus-within:border-primary transition-all">
                                     <span className="font-bold text-slate-400">{simCurrency === 'ARS' ? '$' : 'US$'}</span>
                                     <input 
                                         type="number" 
                                         value={simRent} 
                                         onChange={e => setSimRent(e.target.value)} 
-                                        className="bg-transparent w-full outline-none font-black text-xl text-slate-900 dark:text-white" 
+                                        className="bg-transparent w-full outline-none font-black text-lg text-slate-900 dark:text-white" 
                                         placeholder="0" 
                                     />
                                 </div>
-                                <div className="flex flex-col gap-1">
-                                    <button onClick={() => setSimCurrency('ARS')} className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-colors ${simCurrency === 'ARS' ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>ARS</button>
-                                    <button onClick={() => setSimCurrency('USD')} className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-colors ${simCurrency === 'USD' ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>USD</button>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-400 block mb-2">Expensas (Opcional)</label>
+                                <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-700 focus-within:border-primary transition-all">
+                                    <span className="font-bold text-slate-400">{simCurrency === 'ARS' ? '$' : 'US$'}</span>
+                                    <input 
+                                        type="number" 
+                                        value={simExpenses} 
+                                        onChange={e => setSimExpenses(e.target.value)} 
+                                        className="bg-transparent w-full outline-none font-bold text-lg text-slate-900 dark:text-white" 
+                                        placeholder="0" 
+                                    />
                                 </div>
                             </div>
-                            {simCurrency === 'USD' && (
-                                <p className="text-[10px] text-slate-400 mt-1 ml-1">Cotización usada: ${currentDollarRate}</p>
-                            )}
                         </div>
+                        
+                        {simCurrency === 'USD' && (
+                            <p className="text-[10px] text-slate-400 text-right">Cotización usada: ${currentDollarRate}</p>
+                        )}
 
                         <div>
                             <label className="text-xs font-bold text-slate-400 block mb-2">
-                                Regla Financiera: El alquiler no debe superar el <span className="text-slate-900 dark:text-white">{targetRentPercentage}%</span> de tu ingreso.
+                                Regla Financiera: Vivienda (Alquiler + Expensas) máx el <span className="text-slate-900 dark:text-white">{targetRentPercentage}%</span> de tu ingreso.
                             </label>
                             <input 
                                 type="range" 
@@ -196,14 +217,14 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                 </div>
 
                 {/* RESULTADOS DE LA SIMULACION */}
-                {valSimRentRaw > 0 && (
+                {valSimHousingARS > 0 && (
                     <div className="space-y-3 animate-[fadeIn_0.3s_ease-out]">
                         
                         {/* SUELDO NECESARIO */}
                         <div className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white p-5 rounded-2xl shadow-lg">
                             <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Sueldo Mínimo Sugerido</p>
                             <h2 className="text-3xl font-black mb-1">{formatMoney(requiredSalaryForRent)}</h2>
-                            <p className="text-xs opacity-80 mb-3">Para que este alquiler represente solo el {targetRentPercentage}% de tus ingresos.</p>
+                            <p className="text-xs opacity-80 mb-3">Para cubrir Alquiler + Expensas con el {targetRentPercentage}% de tus ingresos.</p>
                             
                             <div className="bg-black/20 rounded-lg p-2 text-xs flex justify-between items-center">
                                 <span>Tu sueldo actual:</span>
@@ -213,15 +234,27 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                             </div>
                         </div>
 
+                        {/* PODER DE FUEGO (Patrimonio vs Alquiler) */}
+                        <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white p-4 rounded-2xl shadow-md flex items-center justify-between">
+                            <div>
+                                <p className="text-amber-100 text-[10px] font-bold uppercase tracking-widest mb-1">Poder de Fuego (Patrimonio)</p>
+                                <p className="text-xl font-black leading-tight">{patrimonyRentRunway.toFixed(1)} Meses</p>
+                                <p className="text-[10px] opacity-90 mt-0.5">Podrías pagar este alquiler solo con tus ahorros actuales.</p>
+                            </div>
+                            <div className="bg-white/20 p-2 rounded-xl">
+                                <span className="material-symbols-outlined text-2xl">savings</span>
+                            </div>
+                        </div>
+
                         {/* COSTO DE VIDA */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                                 <div className="flex items-center gap-2 mb-2">
                                     <span className="material-symbols-outlined text-orange-500">payments</span>
-                                    <p className="text-xs font-bold text-slate-500 uppercase">Nuevo Costo de Vida</p>
+                                    <p className="text-xs font-bold text-slate-500 uppercase">Costo Vivienda Total</p>
                                 </div>
-                                <p className="text-xl font-black text-slate-900 dark:text-white">{formatMoney(simTotalExpenses)}</p>
-                                <p className="text-[10px] text-slate-400 mt-1">Suma de Alquiler Simulado + Otros Fijos + Variables.</p>
+                                <p className="text-xl font-black text-slate-900 dark:text-white">{formatMoney(valSimHousingARS)}</p>
+                                <p className="text-[10px] text-slate-400 mt-1">Alquiler + Expensas (en Pesos)</p>
                             </div>
 
                             <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -230,7 +263,7 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                                     <p className="text-xs font-bold text-slate-500 uppercase">Reserva (6 Meses)</p>
                                 </div>
                                 <p className="text-xl font-black text-slate-900 dark:text-white">{formatMoney(requiredEmergencyFund)}</p>
-                                <p className="text-[10px] text-slate-400 mt-1">Fondo de paz mental necesario para este estilo de vida.</p>
+                                <p className="text-[10px] text-slate-400 mt-1">Fondo de paz mental necesario.</p>
                             </div>
                         </div>
 
@@ -238,7 +271,7 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                             <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed flex gap-2">
                                 <span className="material-symbols-outlined shrink-0">lightbulb</span>
                                 <span>
-                                    Para llevar este estilo de vida cómodamente, te recomendamos un ingreso de <strong>{formatMoney(requiredSalaryForLife)}</strong> (Regla del 50/30/20) y tener ahorrados al menos <strong>{formatMoney(requiredEmergencyFund)}</strong> antes de mudarte.
+                                    Para llevar este estilo de vida (Nuevo Costo Total: <strong>{formatMoney(simTotalExpenses)}</strong>), te recomendamos un ingreso de <strong>{formatMoney(requiredSalaryForLife)}</strong> (Regla 50/30/20).
                                 </span>
                             </p>
                         </div>
