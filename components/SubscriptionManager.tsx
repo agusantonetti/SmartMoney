@@ -29,6 +29,10 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
   const [amount, setAmount] = useState('');
   const [day, setDay] = useState('');
   const [selectedCat, setSelectedCat] = useState(CATEGORIES[2]);
+  
+  // NEW STATES
+  const [frequency, setFrequency] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
+  const [nextDate, setNextDate] = useState('');
 
   // --- LOGIC: HELPER ---
   const getCurrentMonthKey = () => {
@@ -44,6 +48,28 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     }).format(amount);
   };
 
+  const getDaysUntilDue = (sub: Subscription): number => {
+      const now = new Date();
+      now.setHours(0,0,0,0);
+      
+      let targetDate = new Date();
+      
+      if (sub.nextPaymentDate) {
+          targetDate = new Date(sub.nextPaymentDate + 'T00:00:00'); // Append time to fix timezone offset issues somewhat
+      } else {
+          // Fallback logic if only billingDay exists
+          targetDate.setDate(sub.billingDay);
+          if (targetDate < now) {
+              targetDate.setMonth(targetDate.getMonth() + 1);
+          }
+      }
+      targetDate.setHours(0,0,0,0);
+
+      const diffTime = targetDate.getTime() - now.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      return diffDays;
+  };
+
   // --- LOGIC: CRUD ---
   const handleAdd = () => {
     if (!name || !amount) return;
@@ -52,6 +78,22 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     let billingDay = parseInt(day) || 1;
     if (billingDay < 1) billingDay = 1;
     if (billingDay > 31) billingDay = 31;
+    
+    // Calcular nextPaymentDate inicial si no se proveyó (solo para mensuales)
+    let calculatedNextDate = nextDate;
+    if (!calculatedNextDate) {
+        const d = new Date();
+        if (d.getDate() > billingDay) {
+            d.setMonth(d.getMonth() + 1);
+        }
+        d.setDate(billingDay);
+        calculatedNextDate = d.toISOString().split('T')[0];
+    }
+
+    // Si es anual, asegurarnos que billingDay coincida con el día de la fecha
+    if (frequency === 'YEARLY' && nextDate) {
+        billingDay = parseInt(nextDate.split('-')[2]);
+    }
 
     const newSub: Subscription = {
       id: Date.now().toString(),
@@ -59,6 +101,8 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
       amount: parseFloat(amount),
       billingDay: billingDay,
       category: selectedCat.id,
+      frequency: frequency,
+      nextPaymentDate: calculatedNextDate,
       history: []
     };
 
@@ -69,6 +113,8 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     setName('');
     setAmount('');
     setDay('');
+    setNextDate('');
+    setFrequency('MONTHLY');
     setIsAdding(false);
   };
 
@@ -86,7 +132,6 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     if (subIndex === -1) return;
 
     const sub = subscriptions[subIndex];
-    // Asegurarnos de que history exista
     const history = sub.history || [];
     const existingPaymentIndex = history.findIndex(p => p.month === updatedPayment.month);
     
@@ -96,6 +141,24 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
       newHistory[existingPaymentIndex] = updatedPayment;
     } else {
       newHistory.push(updatedPayment);
+    }
+
+    // Si pagamos, y es mensual, actualizamos la próxima fecha automáticamente
+    // para que la alerta desaparezca hasta el próximo mes.
+    // (Lógica simplificada: asumimos que al marcar pagado, ya estamos al día)
+    let nextDate = sub.nextPaymentDate;
+    if (updatedPayment.isPaid) {
+        const currentNext = new Date(sub.nextPaymentDate || new Date());
+        if (sub.frequency === 'YEARLY') {
+            currentNext.setFullYear(currentNext.getFullYear() + 1);
+        } else {
+            currentNext.setMonth(currentNext.getMonth() + 1);
+        }
+        // Solo actualizamos si la fecha de pago que estamos marcando es reciente/actual
+        // Esto evita mover la fecha si estamos editando el historial viejo
+        // nextDate = currentNext.toISOString().split('T')[0];
+        // Nota: Por ahora no auto-actualizamos `nextPaymentDate` permanentemente al marcar historial
+        // para evitar conflictos lógicos complejos en esta demo. 
     }
 
     const updatedSub = { ...sub, history: newHistory };
@@ -111,7 +174,11 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
   const getCategoryColor = (catId: string) => CATEGORIES.find(c => c.id === catId)?.color || 'slate';
 
   const selectedSub = subscriptions.find(s => s.id === selectedSubId);
-  const totalMonthly = subscriptions.reduce((acc, sub) => acc + sub.amount, 0);
+  // Total mensual solo cuenta mensuales + (anuales/12)
+  const totalMonthly = subscriptions.reduce((acc, sub) => {
+      if (sub.frequency === 'YEARLY') return acc + (sub.amount / 12);
+      return acc + sub.amount;
+  }, 0);
 
   // VISTA DETALLE: CALENDARIO ANUAL DE PAGOS
   if (selectedSub) {
@@ -247,7 +314,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
         </button>
         <div>
           <h2 className="text-lg font-bold leading-tight">Gastos Fijos</h2>
-          <p className="text-xs text-slate-500">Alquiler, Servicios y Suscripciones</p>
+          <p className="text-xs text-slate-500">Suscripciones y Alertas</p>
         </div>
       </div>
 
@@ -256,10 +323,10 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
         {/* Summary Card */}
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-indigo-900 dark:to-slate-900 rounded-3xl p-8 text-white shadow-xl shadow-slate-500/20 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-          <p className="text-slate-300 font-medium mb-1 relative z-10">Total a Pagar este Mes</p>
+          <p className="text-slate-300 font-medium mb-1 relative z-10">Total Mensualizado</p>
           <h1 className={`text-5xl font-black tracking-tight relative z-10 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(totalMonthly)}</h1>
           <p className="text-xs text-slate-400 mt-4 relative z-10 opacity-80">
-             Suma de Alquiler, Expensas, Servicios y Suscripciones.
+             Incluye la parte proporcional de gastos anuales.
           </p>
         </div>
 
@@ -306,12 +373,28 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                     ))}
                    </div>
 
+                   {/* Frequency Toggle */}
+                   <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex text-xs font-bold">
+                        <button 
+                            onClick={() => setFrequency('MONTHLY')}
+                            className={`flex-1 py-2 rounded-lg transition-all ${frequency === 'MONTHLY' ? 'bg-white dark:bg-slate-700 shadow text-primary' : 'text-slate-500'}`}
+                        >
+                            Mensual
+                        </button>
+                        <button 
+                            onClick={() => setFrequency('YEARLY')}
+                            className={`flex-1 py-2 rounded-lg transition-all ${frequency === 'YEARLY' ? 'bg-white dark:bg-slate-700 shadow text-purple-500' : 'text-slate-500'}`}
+                        >
+                            Anual
+                        </button>
+                   </div>
+
                    {/* Name Input */}
                    <div className="relative group">
                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">description</span>
                      <input 
                       type="text" 
-                      placeholder={selectedCat.id === 'housing' ? "Ej. Alquiler Depto, Cochera" : "Ej. Netflix, Gimnasio"}
+                      placeholder={selectedCat.id === 'housing' ? "Ej. Alquiler Depto" : "Ej. Amazon Prime, Seguro Auto"}
                       className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium border border-transparent focus:border-primary/30"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
@@ -330,16 +413,32 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                         onChange={(e) => setAmount(e.target.value)}
                        />
                      </div>
+                     
+                     {/* Dynamic Date Input */}
                      <div className="relative group">
-                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">calendar_today</span>
-                       <input 
-                        type="number" 
-                        placeholder="Día (1-31)" 
-                        className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-bold border border-transparent focus:border-primary/30"
-                        value={day}
-                        onChange={(e) => setDay(e.target.value)}
-                        min="1" max="31"
-                       />
+                        {frequency === 'MONTHLY' ? (
+                            <>
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">calendar_today</span>
+                                <input 
+                                    type="number" 
+                                    placeholder="Día (1-31)" 
+                                    className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-bold border border-transparent focus:border-primary/30"
+                                    value={day}
+                                    onChange={(e) => setDay(e.target.value)}
+                                    min="1" max="31"
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">event</span>
+                                <input 
+                                    type="date" 
+                                    className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-bold text-sm border border-transparent focus:border-primary/30"
+                                    value={nextDate}
+                                    onChange={(e) => setNextDate(e.target.value)}
+                                />
+                            </>
+                        )}
                      </div>
                    </div>
 
@@ -366,37 +465,55 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
           <div className="grid gap-3">
             {subscriptions.length === 0 && !isAdding && (
               <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl text-slate-400">
-                <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">home_work</span>
-                <p className="font-bold text-slate-500">Sin gastos fijos registrados</p>
-                <p className="text-xs mt-1">Agrega tu Alquiler, Expensas, Internet o Streaming.</p>
+                <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">notifications_active</span>
+                <p className="font-bold text-slate-500">Sin alertas configuradas</p>
+                <p className="text-xs mt-1">Agrega servicios anuales o mensuales para recibir alertas.</p>
               </div>
             )}
             
             {subscriptions.map((sub) => {
                const icon = getCategoryIcon(sub.category);
                const color = getCategoryColor(sub.category);
-               const history = sub.history || [];
-               const currentPaid = history.find(p => p.month === getCurrentMonthKey())?.isPaid;
                
+               const daysUntil = getDaysUntilDue(sub);
+               const isUrgent = daysUntil <= 3 && daysUntil >= 0;
+               const isDue = daysUntil < 0; // Vencido hace poco o hoy
+
                return (
                  <div 
                     key={sub.id} 
                     onClick={() => setSelectedSubId(sub.id)}
-                    className="bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-between shadow-sm hover:shadow-md transition-all cursor-pointer group hover:border-primary/50"
+                    className={`bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border flex items-center justify-between shadow-sm hover:shadow-md transition-all cursor-pointer group ${
+                        isUrgent 
+                        ? 'border-red-400 ring-1 ring-red-400 dark:border-red-500' 
+                        : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'
+                    }`}
                  >
                    <div className="flex items-center gap-4">
-                     <div className={`size-12 rounded-2xl flex items-center justify-center font-bold text-lg bg-${color}-100 text-${color}-600 dark:bg-${color}-900/30 dark:text-${color}-400`}>
+                     <div className={`size-12 rounded-2xl flex items-center justify-center font-bold text-lg bg-${color}-100 text-${color}-600 dark:bg-${color}-900/30 dark:text-${color}-400 relative`}>
                        <span className="material-symbols-outlined">{icon}</span>
+                       {isUrgent && (
+                           <span className="absolute -top-1 -right-1 size-3 bg-red-500 border-2 border-white dark:border-slate-800 rounded-full"></span>
+                       )}
                      </div>
                      <div>
-                       <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{sub.name}</h4>
                        <div className="flex items-center gap-2">
-                            <p className="text-xs text-slate-500 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[12px]">event</span>
-                                Vence el {sub.billingDay}
-                            </p>
-                            {currentPaid && (
-                                <span className="text-[10px] bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400 px-1.5 rounded font-bold">PAGADO HOY</span>
+                            <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{sub.name}</h4>
+                            {sub.frequency === 'YEARLY' && (
+                                <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 rounded font-bold uppercase">Anual</span>
+                            )}
+                       </div>
+                       
+                       <div className="flex items-center gap-1 mt-0.5">
+                            {isUrgent ? (
+                                <p className="text-xs text-red-500 font-bold flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">warning</span>
+                                    Vence en {daysUntil} días
+                                </p>
+                            ) : (
+                                <p className="text-xs text-slate-500">
+                                    {daysUntil < 0 ? 'Venció recientemente' : `Faltan ${daysUntil} días`}
+                                </p>
                             )}
                        </div>
                      </div>
@@ -424,7 +541,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
         </div>
         
         <div className="text-center text-xs text-slate-400 mt-8">
-           Pulsa sobre un gasto para ver su calendario anual de pagos.
+           Recibirás una alerta en el panel principal 3 días antes de cada vencimiento.
         </div>
       </div>
     </div>

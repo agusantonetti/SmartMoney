@@ -1,15 +1,15 @@
 
 export enum ViewState {
-  LANDING = 'LANDING', // Nueva vista inicial
+  LANDING = 'LANDING',
   DASHBOARD = 'DASHBOARD',
   TRANSACTION = 'TRANSACTION',
   ACTIVITY = 'ACTIVITY', 
   BUDGET_CONTROL = 'BUDGET_CONTROL',
-  BUDGET_ADJUST = 'BUDGET_ADJUST', // Nueva vista para mover dinero
-  SALARY_CALCULATOR = 'SALARY_CALCULATOR', // Nueva calculadora de sueldo/ahorro
-  CURRENCY_CONVERTER = 'CURRENCY_CONVERTER', // Nueva herramienta de conversión
-  WEALTH_LEVELS = 'WEALTH_LEVELS', // Mapa de Riqueza (Patrimonio)
-  ACHIEVEMENTS = 'ACHIEVEMENTS', // NUEVO: Sala de Trofeos (Hábitos)
+  BUDGET_ADJUST = 'BUDGET_ADJUST',
+  SALARY_CALCULATOR = 'SALARY_CALCULATOR',
+  CURRENCY_CONVERTER = 'CURRENCY_CONVERTER',
+  WEALTH_LEVELS = 'WEALTH_LEVELS',
+  ACHIEVEMENTS = 'ACHIEVEMENTS',
   SUCCESS = 'SUCCESS',
   PROFILE = 'PROFILE',
   INCOME_MANAGER = 'INCOME_MANAGER',
@@ -19,7 +19,7 @@ export enum ViewState {
   ANALYTICS = 'ANALYTICS',
   EVENTS = 'EVENTS',
   FUTURE_SIMULATOR = 'FUTURE_SIMULATOR',
-  ASSISTANT = 'ASSISTANT', // Nuevo Asistente IA
+  ASSISTANT = 'ASSISTANT',
 }
 
 export interface Transaction {
@@ -29,39 +29,48 @@ export interface Transaction {
   category: string;
   type: 'income' | 'expense';
   date: string;
-  originalCurrency?: string; // Ej: 'USD'
-  originalAmount?: number;   // Ej: 15.50
-  exchangeRate?: number;     // Ej: 18.50
-  eventId?: string;          // ID del evento asociado
-  eventName?: string;        // Nombre snapshot del evento
+  originalCurrency?: string;
+  originalAmount?: number;
+  exchangeRate?: number;
+  eventId?: string;
+  eventName?: string;
 }
 
 export interface IncomePayment {
   month: string; // Formato "YYYY-MM"
   realAmount: number;
   isPaid: boolean;
-  isInvoiceSent?: boolean; // NUEVO: Para saber si ya enviamos la factura
-  notes?: string; // NUEVO: Nota opcional (ej: Nro Factura)
+  isInvoiceSent?: boolean;
+  notes?: string;
 }
 
 export type MediaType = 'TV' | 'RADIO' | 'STREAM' | 'REDACCION' | 'EVENTO' | 'OTRO';
-export type IncomeType = 'FIXED' | 'MEDIA' | 'SPORADIC'; // NUEVO: Tipos de ingreso
+// IncomeType simplificado para la nueva lógica, mantenemos compatibilidad
+export type IncomeType = 'FIXED' | 'MEDIA' | 'SPORADIC'; 
+
+export type PaymentFrequency = 'MONTHLY' | 'BIWEEKLY' | 'ONE_TIME';
 
 export interface IncomeSource {
   id: string;
   name: string;
-  amount: number; // Monto base estimado (Sueldo Mensual) o 0 si es eventual
-  payments: IncomePayment[]; // Historial de cobros
-  type?: IncomeType; // Clasificación del ingreso
+  amount: number; // Monto base estimado por PERIODO (ej: si es quincenal, es monto por quincena)
+  payments: IncomePayment[];
+  type?: IncomeType;
   
-  // ESPECIFICO PARA MEDIOS
+  // NUEVOS CAMPOS PARA CONTRATOS
+  frequency?: PaymentFrequency; // Mensual, Quincenal, Único
+  startDate?: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD (Opcional, si es null es indefinido)
+  isActive?: boolean; // Toggle manual para archivar
+
+  // ESPECIFICO PARA MEDIOS (Legacy support, pero útil)
   medium?: MediaType;
   hoursPerDay?: number;
   daysPerWeek?: number;
 }
 
 export interface SubscriptionPayment {
-  month: string; // Formato "YYYY-MM"
+  month: string;
   realAmount: number;
   isPaid: boolean;
   datePaid?: string;
@@ -71,17 +80,19 @@ export interface Subscription {
   id: string;
   name: string;
   amount: number;
-  billingDay: number; // Día del mes (1-31)
-  category: string; // streaming, services, gym, etc.
-  history?: SubscriptionPayment[]; // Historial de pagos
+  billingDay: number;
+  category: string;
+  history?: SubscriptionPayment[];
+  frequency?: 'MONTHLY' | 'YEARLY'; 
+  nextPaymentDate?: string;
 }
 
 export interface Debt {
   id: string;
   name: string;
-  totalAmount: number; // Monto total de la deuda/impuesto
-  currentAmount: number; // Monto pagado o reservado hasta ahora
-  dueDate?: string; // Fecha límite opcional
+  totalAmount: number;
+  currentAmount: number;
+  dueDate?: string;
 }
 
 export interface SavingsBucket {
@@ -92,38 +103,36 @@ export interface SavingsBucket {
   icon?: string;
 }
 
-// NUEVO: Definición de Evento/Viaje
 export interface TravelEvent {
   id: string;
-  name: string; // Ej: "Taiwán 2025"
-  budget?: number; // Presupuesto total del viaje
+  name: string;
+  budget?: number;
   startDate: string;
   status: 'active' | 'completed';
-  coverImage?: string; // Opcional para estética
+  coverImage?: string;
 }
 
-// NUEVO: Atajos personalizados
 export interface QuickAction {
   id: string;
-  label: string; // Ej: "Uber"
-  amount?: number; // Opcional. Si es 0 o null, el usuario ingresa el monto
-  icon: string; // Icono de Material Symbols
+  label: string;
+  amount?: number;
+  icon: string;
 }
 
 export interface FinancialProfile {
-  initialBalance: number; // Ahorros totales al inicio
-  incomeSources: IncomeSource[]; // Lista de sueldos fijos
-  savingsBuckets: SavingsBucket[]; // Apartados/Sobres de ahorro
-  subscriptions: Subscription[]; // Gastos fijos recurrentes
-  debts: Debt[]; // Deudas o Impuestos pendientes
-  budgetLimits?: Record<string, number>; // Límites por categoría
-  quickActions?: QuickAction[]; // Lista de atajos personalizados
+  initialBalance: number;
+  incomeSources: IncomeSource[];
+  savingsBuckets: SavingsBucket[];
+  subscriptions: Subscription[];
+  debts: Debt[];
+  budgetLimits?: Record<string, number>;
+  quickActions?: QuickAction[];
   name?: string;
-  avatar?: string; // URL del avatar seleccionado
+  avatar?: string;
   monthlySalary?: number; 
-  hourlyWage?: number; // Valor de la hora de trabajo
-  events?: TravelEvent[]; // Lista de viajes/eventos
-  customDollarRate?: number; // NUEVO: Valor del dólar manual preferido
+  hourlyWage?: number;
+  events?: TravelEvent[];
+  customDollarRate?: number;
 }
 
 export interface FinancialMetrics {

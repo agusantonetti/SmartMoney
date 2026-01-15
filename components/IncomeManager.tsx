@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { FinancialProfile, IncomeSource, IncomePayment, MediaType, IncomeType } from '../types';
+import { FinancialProfile, IncomeSource, IncomePayment, PaymentFrequency } from '../types';
 
 interface Props {
   profile: FinancialProfile;
@@ -13,25 +13,20 @@ interface Props {
 const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
   const [sources, setSources] = useState<IncomeSource[]>(profile.incomeSources || []);
   
-  // View State
+  // States for adding/editing
+  const [isAdding, setIsAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [frequency, setFrequency] = useState<PaymentFrequency>('MONTHLY');
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(''); // Empty string = Indefinite
+  const [isEndDateEnabled, setIsEndDateEnabled] = useState(false);
+
+  // States for viewing details
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
-  
-  // Adding State
-  const [isAdding, setIsAdding] = useState(false);
-  const [activeTab, setActiveTab] = useState<IncomeType>('FIXED'); // 'FIXED', 'MEDIA', 'SPORADIC'
-
-  // Form Fields
-  const [newSourceName, setNewSourceName] = useState('');
-  const [newSourceAmount, setNewSourceAmount] = useState('');
-  
-  // Media Specific State
-  const [newMedium, setNewMedium] = useState<MediaType>('TV');
-  const [newHours, setNewHours] = useState('');
-  const [newDays, setNewDays] = useState('');
 
   // --- HELPERS ---
-
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
       style: 'currency', 
@@ -40,474 +35,444 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     }).format(amount);
   };
 
-  const calculateRates = (salary: number, hoursPerDay: number, daysPerWeek: number) => {
-      // Promedio semanas por mes: 4.33
-      if (!hoursPerDay || !daysPerWeek) return { hourly: 0, perProgram: 0 };
+  const isContractActive = (src: IncomeSource, targetDate: Date = new Date()) => {
+      // Si está archivado manualmente
+      if (src.isActive === false) return false;
+
+      const start = src.startDate ? new Date(src.startDate) : new Date(0); // Si no hay fecha, asumimos siempre activo desde inicio
+      const end = src.endDate ? new Date(src.endDate) : null;
       
-      const monthlyDays = daysPerWeek * 4.33;
-      const monthlyHours = monthlyDays * hoursPerDay;
-      
-      return {
-          hourly: monthlyHours > 0 ? salary / monthlyHours : 0,
-          perProgram: monthlyDays > 0 ? salary / monthlyDays : 0
-      };
+      // Normalizar horas
+      targetDate.setHours(0,0,0,0);
+      start.setHours(0,0,0,0);
+      if (end) end.setHours(23,59,59,999);
+
+      if (targetDate < start) return false; // Aún no empieza
+      if (end && targetDate > end) return false; // Ya terminó
+
+      return true;
   };
 
-  const getMediumConfig = (medium: MediaType = 'OTRO') => {
-      switch (medium) {
-          case 'TV': return { icon: 'tv', color: 'blue', label: 'TV' };
-          case 'RADIO': return { icon: 'mic', color: 'orange', label: 'Radio' };
-          case 'STREAM': return { icon: 'podcasts', color: 'purple', label: 'Stream' };
-          case 'REDACCION': return { icon: 'article', color: 'slate', label: 'Redacción' };
-          case 'EVENTO': return { icon: 'confirmation_number', color: 'pink', label: 'Evento' };
-          default: return { icon: 'work', color: 'emerald', label: 'Trabajo' };
-      }
+  // Calcular el ingreso MENSUAL proyectado de una fuente (normalizando quincenal, etc)
+  const getMonthlyProjection = (src: IncomeSource) => {
+      if (!isContractActive(src)) return 0;
+
+      if (src.frequency === 'BIWEEKLY') return src.amount * 2;
+      if (src.frequency === 'ONE_TIME') return 0; // No suma al flujo mensual regular, es un bono
+      return src.amount; // MONTHLY
   };
 
-  // --- LOGIC: MAIN LIST ---
-
-  const totalFixedIncome = sources
-    .filter(s => s.type !== 'SPORADIC') // Solo sumamos lo fijo/mensual al total proyectado
-    .reduce((acc, src) => acc + src.amount, 0);
-  
-  // Calculo de valor hora promedio global (Solo para MEDIOS)
-  const globalStats = useMemo(() => {
-      let totalSalary = 0;
-      let totalHours = 0;
-      
-      sources.filter(s => s.type === 'MEDIA').forEach(src => {
-          totalSalary += src.amount;
-          if (src.hoursPerDay && src.daysPerWeek) {
-              totalHours += (src.hoursPerDay * src.daysPerWeek * 4.33);
-          }
-      });
-
-      return {
-          avgHourly: totalHours > 0 ? totalSalary / totalHours : 0,
-          totalHoursMonth: totalHours
-      };
+  const totalMonthlyProjected = useMemo(() => {
+      return sources.reduce((acc, src) => acc + getMonthlyProjection(src), 0);
   }, [sources]);
 
-  const handleAddSource = () => {
-    if (!newSourceName) return;
-    
-    // Para Sporadic el monto es opcional (puede ser 0)
-    const amountVal = parseFloat(newSourceAmount) || 0;
-    if (activeTab !== 'SPORADIC' && amountVal <= 0) return; 
+  // --- CRUD LOGIC ---
+  const handleSaveSource = () => {
+      if (!name || !amount) return;
 
-    const newSource: IncomeSource = {
-      id: Date.now().toString(),
-      name: newSourceName,
-      amount: amountVal,
-      payments: [],
-      type: activeTab,
-      // Solo si es Media
-      medium: activeTab === 'MEDIA' ? newMedium : undefined,
-      hoursPerDay: activeTab === 'MEDIA' ? parseFloat(newHours) || 0 : undefined,
-      daysPerWeek: activeTab === 'MEDIA' ? parseFloat(newDays) || 0 : undefined
-    };
+      const newSource: IncomeSource = {
+          id: Date.now().toString(),
+          name,
+          amount: parseFloat(amount),
+          frequency,
+          startDate,
+          endDate: isEndDateEnabled ? endDate : undefined,
+          isActive: true,
+          payments: [],
+          type: 'FIXED' // Default type for compatibility
+      };
 
-    const updatedSources = [...sources, newSource];
-    setSources(updatedSources);
-    onUpdateProfile({ ...profile, incomeSources: updatedSources });
-    
-    // Reset
-    setNewSourceName('');
-    setNewSourceAmount('');
-    setNewHours('');
-    setNewDays('');
-    setIsAdding(false);
+      const updated = [...sources, newSource];
+      setSources(updated);
+      onUpdateProfile({ ...profile, incomeSources: updated });
+      
+      resetForm();
   };
 
-  const handleDeleteSource = (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
-      if(window.confirm("¿Eliminar este ingreso y su historial?")) {
+  const resetForm = () => {
+      setName('');
+      setAmount('');
+      setFrequency('MONTHLY');
+      setStartDate(new Date().toISOString().split('T')[0]);
+      setEndDate('');
+      setIsEndDateEnabled(false);
+      setIsAdding(false);
+  };
+
+  const handleDelete = (id: string) => {
+      if (confirm('¿Eliminar este contrato? Se perderá el historial de cobros.')) {
           const updated = sources.filter(s => s.id !== id);
           setSources(updated);
           onUpdateProfile({ ...profile, incomeSources: updated });
-          if(selectedSourceId === id) setSelectedSourceId(null);
+          if (selectedSourceId === id) setSelectedSourceId(null);
       }
-  }
-
-  // --- LOGIC: DETAIL VIEW ---
-  
-  const handleUpdatePayment = (sourceId: string, updatedPayment: IncomePayment) => {
-    const sourceIndex = sources.findIndex(s => s.id === sourceId);
-    if (sourceIndex === -1) return;
-
-    const source = sources[sourceIndex];
-    const existingPaymentIndex = source.payments.findIndex(p => p.month === updatedPayment.month);
-    
-    let newPayments = [...source.payments];
-    if (existingPaymentIndex >= 0) {
-      newPayments[existingPaymentIndex] = updatedPayment;
-    } else {
-      newPayments.push(updatedPayment);
-    }
-
-    const updatedSource = { ...source, payments: newPayments };
-    const newSources = [...sources];
-    newSources[sourceIndex] = updatedSource;
-    setSources(newSources);
-    onUpdateProfile({ ...profile, incomeSources: newSources });
   };
 
+  const handleUpdatePayment = (sourceId: string, payment: IncomePayment) => {
+      const srcIdx = sources.findIndex(s => s.id === sourceId);
+      if (srcIdx === -1) return;
+      
+      const src = sources[srcIdx];
+      const newPayments = [...src.payments];
+      const existIdx = newPayments.findIndex(p => p.month === payment.month);
+
+      if (existIdx >= 0) {
+          newPayments[existIdx] = payment;
+      } else {
+          newPayments.push(payment);
+      }
+
+      const updatedSrc = { ...src, payments: newPayments };
+      const updatedSources = [...sources];
+      updatedSources[srcIdx] = updatedSrc;
+      
+      setSources(updatedSources);
+      onUpdateProfile({ ...profile, incomeSources: updatedSources });
+  };
+
+  // --- RENDER DETAIL VIEW ---
   const selectedSource = sources.find(s => s.id === selectedSourceId);
-  const monthsList = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-
-  // --- RENDER ---
-
+  
   if (selectedSource) {
-     // VISTA DETALLE: HISTORIAL DE PAGOS
-     return (
+      const monthsList = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      
+      return (
         <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
-           <div className="sticky top-0 z-20 bg-surface-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-4">
-                <button onClick={() => setSelectedSourceId(null)} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                   <span className="material-symbols-outlined">arrow_back</span>
-                </button>
-                <div>
-                   <h2 className="text-lg font-bold leading-none">{selectedSource.name}</h2>
-                   <p className="text-xs text-slate-500">
-                       {selectedSource.type === 'SPORADIC' ? 'Facturaciones Eventuales' : 'Historial de Pagos'}
-                   </p>
+            <div className="sticky top-0 z-20 bg-surface-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => setSelectedSourceId(null)} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        <span className="material-symbols-outlined">arrow_back</span>
+                    </button>
+                    <div>
+                        <h2 className="text-lg font-bold leading-none">{selectedSource.name}</h2>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                                selectedSource.frequency === 'BIWEEKLY' ? 'bg-purple-100 text-purple-600' :
+                                selectedSource.frequency === 'ONE_TIME' ? 'bg-orange-100 text-orange-600' :
+                                'bg-blue-100 text-blue-600'
+                            }`}>
+                                {selectedSource.frequency === 'BIWEEKLY' ? 'Quincenal' : selectedSource.frequency === 'ONE_TIME' ? 'Proyecto Único' : 'Mensual'}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                                {selectedSource.endDate ? `Hasta: ${selectedSource.endDate}` : 'Indefinido'}
+                            </span>
+                        </div>
+                    </div>
                 </div>
-              </div>
-           </div>
-           
-           <div className="flex-1 w-full max-w-3xl mx-auto p-4 md:p-6 space-y-6 pb-24">
-              
-              {selectedSource.type === 'MEDIA' && (
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-                      <h3 className="text-blue-800 dark:text-blue-300 font-bold text-sm mb-2 flex items-center gap-2">
-                          <span className="material-symbols-outlined">info</span>
-                          Métricas del Contrato
-                      </h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                              <p className="text-slate-500">Valor Hora</p>
-                              <p className={`font-bold text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                                  {formatMoney(calculateRates(selectedSource.amount, selectedSource.hoursPerDay || 0, selectedSource.daysPerWeek || 0).hourly)}
-                              </p>
-                          </div>
-                          <div>
-                              <p className="text-slate-500">Por Programa</p>
-                              <p className={`font-bold text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                                  {formatMoney(calculateRates(selectedSource.amount, selectedSource.hoursPerDay || 0, selectedSource.daysPerWeek || 0).perProgram)}
-                              </p>
-                          </div>
-                      </div>
-                  </div>
-              )}
+                <button onClick={() => handleDelete(selectedSource.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-full">
+                    <span className="material-symbols-outlined">delete</span>
+                </button>
+            </div>
 
-              {/* Year Selector */}
-              <div className="flex items-center justify-center gap-6 bg-surface-light dark:bg-surface-dark p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                 <button onClick={() => setViewYear(viewYear - 1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_left</span></button>
-                 <span className="text-xl font-black">{viewYear}</span>
-                 <button onClick={() => setViewYear(viewYear + 1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_right</span></button>
-              </div>
+            <div className="flex-1 w-full max-w-3xl mx-auto p-4 md:p-6 space-y-6 pb-24">
+                {/* Year Selector */}
+                <div className="flex items-center justify-center gap-6 bg-surface-light dark:bg-surface-dark p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <button onClick={() => setViewYear(viewYear - 1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_left</span></button>
+                    <span className="text-xl font-black">{viewYear}</span>
+                    <button onClick={() => setViewYear(viewYear + 1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_right</span></button>
+                </div>
 
-              <div className="space-y-3">
-                 {monthsList.map((monthName, index) => {
-                    const monthKey = `${viewYear}-${String(index + 1).padStart(2, '0')}`;
-                    const payment = selectedSource.payments.find(p => p.month === monthKey);
-                    const currentAmount = payment?.realAmount ?? 0;
-                    
-                    // Si es esporádico, placeholder es 0, si es fijo, es el sueldo base
-                    const placeholder = selectedSource.type === 'SPORADIC' ? "0" : selectedSource.amount.toString();
-                    
-                    return (
-                       <div key={monthName} className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${payment?.realAmount && payment.realAmount > 0 ? 'bg-surface-light dark:bg-surface-dark border-primary/30' : 'bg-surface-light dark:bg-surface-dark border-slate-200 dark:border-slate-700 opacity-80'}`}>
-                          <div className="flex items-center gap-3">
-                             <div className={`size-10 rounded-full flex items-center justify-center font-bold text-xs ${payment?.realAmount && payment.realAmount > 0 ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-                                 {monthName.substring(0, 3)}
-                             </div>
-                             <div>
-                                 <span className="font-bold">{monthName}</span>
-                                 {selectedSource.type === 'SPORADIC' && payment?.notes && (
-                                     <span className="block text-[10px] text-slate-500 truncate max-w-[100px]">{payment.notes}</span>
-                                 )}
-                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                             <input 
-                                type="number" 
-                                className={`w-24 bg-slate-50 dark:bg-slate-900 rounded-lg px-2 py-1 text-right font-bold outline-none transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}
-                                placeholder={placeholder}
-                                value={currentAmount || ''}
-                                onChange={(e) => handleUpdatePayment(selectedSource.id, {
-                                    month: monthKey, realAmount: parseFloat(e.target.value), isPaid: payment?.isPaid || false, isInvoiceSent: payment?.isInvoiceSent || false, notes: payment?.notes
-                                })}
-                             />
-                             <div className="flex gap-1">
-                                <button 
-                                    onClick={() => handleUpdatePayment(selectedSource.id, { month: monthKey, realAmount: currentAmount || selectedSource.amount, isPaid: !(payment?.isPaid), isInvoiceSent: payment?.isInvoiceSent || false, notes: payment?.notes })} 
-                                    className={`size-8 rounded-full flex items-center justify-center transition-colors ${payment?.isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}
-                                    title="Cobrado"
-                                >
-                                    <span className="material-symbols-outlined text-lg">attach_money</span>
-                                </button>
-                                {selectedSource.type === 'SPORADIC' && (
-                                    <button 
-                                        onClick={() => handleUpdatePayment(selectedSource.id, { month: monthKey, realAmount: currentAmount, isPaid: payment?.isPaid || false, isInvoiceSent: !(payment?.isInvoiceSent), notes: payment?.notes })} 
-                                        className={`size-8 rounded-full flex items-center justify-center transition-colors ${payment?.isInvoiceSent ? 'bg-purple-100 text-purple-600' : 'bg-slate-100 text-slate-400'}`}
-                                        title="Factura Enviada"
-                                    >
-                                        <span className="material-symbols-outlined text-lg">receipt_long</span>
-                                    </button>
+                <div className="space-y-3">
+                    {monthsList.map((monthName, idx) => {
+                        const monthKey = `${viewYear}-${String(idx + 1).padStart(2, '0')}`;
+                        const payment = selectedSource.payments.find(p => p.month === monthKey);
+                        
+                        // Check if active in this month
+                        const checkDate = new Date(viewYear, idx, 15); // Middle of month
+                        const isActive = isContractActive(selectedSource, checkDate);
+
+                        const currentVal = payment?.realAmount ?? 0;
+                        const isPaid = payment?.isPaid || false;
+
+                        // Calculate expected total for this month based on frequency
+                        const expected = selectedSource.frequency === 'BIWEEKLY' ? selectedSource.amount * 2 : selectedSource.amount;
+
+                        return (
+                            <div key={monthName} className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${
+                                !isActive ? 'opacity-40 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900' :
+                                isPaid ? 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800' :
+                                'bg-surface-light dark:bg-surface-dark border-slate-200 dark:border-slate-700'
+                            }`}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`size-10 rounded-full flex items-center justify-center font-bold text-xs ${isActive ? 'bg-slate-200 dark:bg-slate-700' : 'bg-slate-100 text-slate-300'}`}>
+                                        {monthName.substring(0, 3)}
+                                    </div>
+                                    <div>
+                                        <span className="font-bold block">{monthName}</span>
+                                        {!isActive && <span className="text-[10px] text-slate-400">Fuera de contrato</span>}
+                                        {isActive && selectedSource.frequency === 'BIWEEKLY' && <span className="text-[10px] text-purple-500 font-bold">2 Pagos de {formatMoney(selectedSource.amount)}</span>}
+                                    </div>
+                                </div>
+
+                                {isActive && (
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-right">
+                                            <p className="text-[10px] text-slate-400 uppercase font-bold">Recibido</p>
+                                            <input 
+                                                type="number" 
+                                                className={`w-24 bg-transparent text-right font-bold outline-none border-b border-dashed border-slate-300 focus:border-primary ${privacyMode ? 'blur-sm' : ''}`}
+                                                placeholder={expected.toString()}
+                                                value={currentVal || ''}
+                                                onChange={(e) => handleUpdatePayment(selectedSource.id, {
+                                                    month: monthKey, realAmount: parseFloat(e.target.value), isPaid
+                                                })}
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={() => handleUpdatePayment(selectedSource.id, { 
+                                                month: monthKey, 
+                                                realAmount: currentVal || expected, 
+                                                isPaid: !isPaid 
+                                            })} 
+                                            className={`size-10 rounded-full flex items-center justify-center transition-all ${isPaid ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
+                                        >
+                                            <span className="material-symbols-outlined">{isPaid ? 'check' : 'attach_money'}</span>
+                                        </button>
+                                    </div>
                                 )}
-                             </div>
-                          </div>
-                       </div>
-                    );
-                 })}
-              </div>
-           </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
-     );
+      );
   }
 
-  // VISTA PRINCIPAL
+  // --- RENDER MAIN LIST ---
   return (
     <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
       <div className="sticky top-0 z-10 bg-surface-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center gap-4">
         <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h2 className="text-lg font-bold">Mis Ingresos</h2>
+        <h2 className="text-lg font-bold">Gestión de Contratos</h2>
       </div>
 
-      <div className="flex-1 w-full max-w-2xl mx-auto p-6 space-y-8 pb-24">
+      <div className="flex-1 w-full max-w-4xl mx-auto p-6 space-y-8 pb-24">
         
-        {/* Metric Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
-                <div className="absolute top-0 right-0 size-32 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                <div className="relative z-10">
-                    <div className="flex items-center gap-2 mb-2 opacity-80">
-                        <span className="material-symbols-outlined text-sm">payments</span>
-                        <span className="text-xs font-bold uppercase tracking-widest">Fijo Mensual Est.</span>
-                    </div>
-                    <h2 className={`text-4xl font-black tracking-tight transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(totalFixedIncome)}</h2>
-                </div>
-            </div>
-
-            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-between">
+        {/* TOTAL PROJECTION CARD */}
+        <div className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+            <div className="relative z-10 flex justify-between items-end">
                 <div>
-                    <div className="flex items-center gap-2 mb-2 text-slate-500">
-                        <span className="material-symbols-outlined text-sm">timelapse</span>
-                        <span className="text-xs font-bold uppercase tracking-widest">Valor Hora (Medios)</span>
+                    <div className="flex items-center gap-2 mb-1 opacity-80">
+                        <span className="material-symbols-outlined text-sm">calendar_today</span>
+                        <span className="text-xs font-bold uppercase tracking-widest">Proyección Este Mes</span>
                     </div>
-                    <h2 className="text-3xl font-black text-slate-900 dark:text-white">
-                        <span className={`transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(globalStats.avgHourly)}</span><span className="text-sm font-medium text-slate-400">/hr</span>
-                    </h2>
+                    <h1 className={`text-4xl font-black tracking-tight ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
+                        {formatMoney(totalMonthlyProjected)}
+                    </h1>
                 </div>
+                <button 
+                    onClick={() => setIsAdding(true)} 
+                    className="bg-white/20 dark:bg-black/10 hover:bg-white/30 p-3 rounded-full backdrop-blur-md transition-all"
+                >
+                    <span className="material-symbols-outlined">add</span>
+                </button>
             </div>
         </div>
 
-        {/* Action Button */}
-        {!isAdding && (
-            <button 
-                onClick={() => setIsAdding(true)}
-                className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold p-4 rounded-2xl shadow-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
-            >
-                <span className="material-symbols-outlined">add_circle</span>
-                Agregar Ingreso
-            </button>
+        {/* TIMELINE VISUALIZATION (GANTT) */}
+        {sources.length > 0 && (
+            <div className="space-y-3">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Línea de Tiempo (Activos)</h3>
+                <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-700 p-4 overflow-x-auto scrollbar-hide shadow-sm">
+                    <div className="min-w-[600px]">
+                        {/* Month Headers */}
+                        <div className="flex mb-4">
+                            <div className="w-32 shrink-0"></div>
+                            {Array.from({length: 6}).map((_, i) => {
+                                const d = new Date();
+                                d.setMonth(d.getMonth() + i);
+                                return (
+                                    <div key={i} className="flex-1 text-center text-[10px] font-bold text-slate-400 uppercase">
+                                        {d.toLocaleDateString('es-ES', { month: 'short' })}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        
+                        {/* Contracts */}
+                        <div className="space-y-3">
+                            {sources.filter(s => isContractActive(s)).map(src => {
+                                // Calculate visualization
+                                // This is a simplified visualizer for the next 6 months
+                                return (
+                                    <div key={src.id} className="flex items-center group">
+                                        <div className="w-32 shrink-0 pr-4">
+                                            <p className="font-bold text-xs truncate">{src.name}</p>
+                                            <p className="text-[10px] text-slate-500">{src.frequency === 'BIWEEKLY' ? 'Quincenal' : 'Mensual'}</p>
+                                        </div>
+                                        <div className="flex-1 flex gap-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative">
+                                            {/* Bar logic: Check active status for next 6 months */}
+                                            {Array.from({length: 6}).map((_, i) => {
+                                                const d = new Date();
+                                                d.setDate(15); // check middle of month
+                                                d.setMonth(d.getMonth() + i);
+                                                const active = isContractActive(src, d);
+                                                
+                                                let colorClass = 'bg-slate-100 dark:bg-slate-800';
+                                                if (active) {
+                                                    if (src.frequency === 'BIWEEKLY') colorClass = 'bg-purple-400';
+                                                    else if (src.frequency === 'ONE_TIME') colorClass = 'bg-orange-400';
+                                                    else colorClass = 'bg-blue-500';
+                                                }
+
+                                                return (
+                                                    <div key={i} className={`flex-1 ${colorClass} transition-colors opacity-80`}></div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            </div>
         )}
 
-        {/* Add Form */}
+        {/* ADD NEW SOURCE FORM */}
         {isAdding && (
-             <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl animate-[fadeIn_0.2s_ease-out]">
-                <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary">edit_document</span>
-                    Nuevo Ingreso
-                </h4>
-
-                {/* TABS */}
-                <div className="flex bg-slate-100 dark:bg-slate-900/50 p-1 rounded-xl mb-6">
-                    <button 
-                        onClick={() => setActiveTab('FIXED')}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'FIXED' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' : 'text-slate-500'}`}
-                    >
-                        Sueldo Fijo
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('MEDIA')}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'MEDIA' ? 'bg-white dark:bg-slate-700 shadow-sm text-primary' : 'text-slate-500'}`}
-                    >
-                        Medios/TV
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('SPORADIC')}
-                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${activeTab === 'SPORADIC' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-500' : 'text-slate-500'}`}
-                    >
-                        Facturación
-                    </button>
-                </div>
+            <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl animate-[fadeIn_0.2s_ease-out]">
+                <h3 className="font-bold text-lg mb-4">Nuevo Contrato / Ingreso</h3>
                 
-                <div className="space-y-5">
-                    
-                    {activeTab === 'MEDIA' && (
+                <div className="grid gap-4">
+                    {/* Name & Amount */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Tipo de Medio</label>
-                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                                {(['TV', 'RADIO', 'STREAM', 'REDACCION', 'EVENTO'] as MediaType[]).map(m => {
-                                    const conf = getMediumConfig(m);
-                                    return (
-                                        <button 
-                                            key={m}
-                                            onClick={() => setNewMedium(m)}
-                                            className={`flex flex-col items-center gap-1 p-3 rounded-xl border min-w-[80px] transition-all ${newMedium === m ? `bg-${conf.color}-50 border-${conf.color}-500 text-${conf.color}-700 dark:bg-${conf.color}-900/30 dark:text-${conf.color}-300 ring-1 ring-${conf.color}-500` : 'bg-slate-50 dark:bg-slate-900 border-transparent opacity-60 hover:opacity-100'}`}
-                                        >
-                                            <span className="material-symbols-outlined">{conf.icon}</span>
-                                            <span className="text-[10px] font-bold">{conf.label}</span>
-                                        </button>
-                                    )
-                                })}
-                            </div>
+                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Nombre / Cliente</label>
+                            <input 
+                                type="text" 
+                                className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm"
+                                placeholder="Ej. Startup X"
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                            />
                         </div>
-                    )}
-
-                    <div className="relative">
-                        <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">
-                            {activeTab === 'MEDIA' ? 'Nombre del Programa' : activeTab === 'FIXED' ? 'Empresa / Empleador' : 'Cliente / Concepto'}
-                        </label>
-                        <input 
-                            type="text" 
-                            className="w-full bg-slate-50 dark:bg-slate-900 p-3 rounded-xl outline-none focus:ring-2 focus:ring-primary font-bold"
-                            placeholder={activeTab === 'MEDIA' ? "Ej. Mañanísima" : "Ej. Trabajo Oficina"}
-                            value={newSourceName}
-                            onChange={(e) => setNewSourceName(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="relative">
-                        <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">
-                             {activeTab === 'SPORADIC' ? 'Monto Estimado (Opcional)' : 'Monto Mensual'}
-                        </label>
-                        <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Monto (Por pago)</label>
                             <input 
                                 type="number" 
-                                className="w-full bg-slate-50 dark:bg-slate-900 p-3 pl-8 rounded-xl outline-none focus:ring-2 focus:ring-primary font-bold text-lg"
+                                className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm"
                                 placeholder="0"
-                                value={newSourceAmount}
-                                onChange={(e) => setNewSourceAmount(e.target.value)}
+                                value={amount}
+                                onChange={e => setAmount(e.target.value)}
                             />
                         </div>
                     </div>
 
-                    {activeTab === 'MEDIA' && (
-                        <div className="grid grid-cols-2 gap-4 animate-[fadeIn_0.2s_ease-out]">
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Horas x Día</label>
-                                <input 
-                                    type="number" 
-                                    className="w-full bg-slate-50 dark:bg-slate-900 p-3 rounded-xl outline-none focus:ring-2 focus:ring-primary font-bold"
-                                    placeholder="Ej. 2"
-                                    value={newHours}
-                                    onChange={(e) => setNewHours(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Días x Semana</label>
-                                <input 
-                                    type="number" 
-                                    className="w-full bg-slate-50 dark:bg-slate-900 p-3 rounded-xl outline-none focus:ring-2 focus:ring-primary font-bold"
-                                    placeholder="Ej. 5"
-                                    value={newDays}
-                                    onChange={(e) => setNewDays(e.target.value)}
-                                />
-                            </div>
+                    {/* Frequency */}
+                    <div>
+                        <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Frecuencia de Pago</label>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => setFrequency('MONTHLY')} 
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${frequency === 'MONTHLY' ? 'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                            >
+                                Mensual (Fijo)
+                            </button>
+                            <button 
+                                onClick={() => setFrequency('BIWEEKLY')} 
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${frequency === 'BIWEEKLY' ? 'bg-purple-50 border-purple-500 text-purple-600 dark:bg-purple-900/30 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                            >
+                                Quincenal (X/Tw)
+                            </button>
+                            <button 
+                                onClick={() => setFrequency('ONE_TIME')} 
+                                className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-all ${frequency === 'ONE_TIME' ? 'bg-orange-50 border-orange-500 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                            >
+                                Único (Proyecto)
+                            </button>
                         </div>
-                    )}
+                    </div>
 
-                    <div className="flex gap-3 pt-4">
-                        <button onClick={handleAddSource} className="flex-1 bg-primary text-white font-bold py-3 rounded-xl shadow-lg shadow-primary/20">Guardar</button>
-                        <button onClick={() => setIsAdding(false)} className="px-6 py-3 font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 rounded-xl">Cancelar</button>
+                    {/* Dates */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Inicio Contrato</label>
+                            <input 
+                                type="date" 
+                                className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm"
+                                value={startDate}
+                                onChange={e => setStartDate(e.target.value)}
+                            />
+                        </div>
+                        <div>
+                            <div className="flex justify-between mb-1">
+                                <label className="text-[10px] uppercase font-bold text-slate-400 block">Fin Contrato</label>
+                                <div className="flex items-center gap-1">
+                                    <input type="checkbox" checked={isEndDateEnabled} onChange={e => setIsEndDateEnabled(e.target.checked)} className="size-3 accent-primary" />
+                                    <span className="text-[10px] text-slate-500">Definir</span>
+                                </div>
+                            </div>
+                            <input 
+                                type="date" 
+                                disabled={!isEndDateEnabled}
+                                className={`w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm transition-opacity ${!isEndDateEnabled ? 'opacity-30 cursor-not-allowed' : ''}`}
+                                value={endDate}
+                                onChange={e => setEndDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="flex gap-3 pt-2">
+                        <button onClick={handleSaveSource} disabled={!name || !amount} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">Guardar Contrato</button>
+                        <button onClick={() => setIsAdding(false)} className="px-6 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancelar</button>
                     </div>
                 </div>
-             </div>
+            </div>
         )}
 
-        {/* Source List */}
+        {/* LIST OF SOURCES */}
         <div className="space-y-4">
             {sources.map(src => {
-                // Determine display type (Legacy fallback to FIXED)
-                const type = src.type || (src.medium ? 'MEDIA' : 'FIXED');
+                const isActive = isContractActive(src);
+                const isBiweekly = src.frequency === 'BIWEEKLY';
                 
-                const conf = type === 'MEDIA' ? getMediumConfig(src.medium) : 
-                             type === 'SPORADIC' ? { icon: 'receipt_long', color: 'purple', label: 'Facturación' } : 
-                             { icon: 'work', color: 'emerald', label: 'Fijo' };
-
-                const rates = type === 'MEDIA' ? calculateRates(src.amount, src.hoursPerDay || 0, src.daysPerWeek || 0) : null;
-
                 return (
                     <div 
-                        key={src.id}
+                        key={src.id} 
                         onClick={() => setSelectedSourceId(src.id)}
-                        className="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-all cursor-pointer group relative"
+                        className={`p-5 rounded-2xl border transition-all cursor-pointer hover:shadow-md relative overflow-hidden group ${
+                            isActive 
+                            ? 'bg-surface-light dark:bg-surface-dark border-slate-200 dark:border-slate-700' 
+                            : 'bg-slate-50 dark:bg-slate-900/50 border-transparent opacity-60 hover:opacity-100'
+                        }`}
                     >
-                        <button 
-                            onClick={(e) => handleDeleteSource(e, src.id)}
-                            className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition-colors"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">delete</span>
-                        </button>
+                        {/* Status Stripe */}
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
 
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className={`size-12 rounded-xl flex items-center justify-center bg-${conf.color}-100 dark:bg-${conf.color}-900/30 text-${conf.color}-600 dark:text-${conf.color}-400`}>
-                                    <span className="material-symbols-outlined">{conf.icon}</span>
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-lg leading-tight group-hover:text-primary transition-colors">{src.name}</h4>
-                                    <span className={`text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-500`}>
-                                        {conf.label}
+                        <div className="flex justify-between items-start pl-3">
+                            <div>
+                                <h4 className="font-bold text-lg text-slate-900 dark:text-white">{src.name}</h4>
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                                        src.frequency === 'BIWEEKLY' ? 'bg-purple-100 text-purple-600' : 
+                                        src.frequency === 'ONE_TIME' ? 'bg-orange-100 text-orange-600' : 
+                                        'bg-blue-100 text-blue-600'
+                                    }`}>
+                                        {src.frequency === 'BIWEEKLY' ? 'Quincenal' : src.frequency === 'ONE_TIME' ? 'Proyecto' : 'Mensual'}
                                     </span>
+                                    {!isActive && <span className="text-[10px] px-2 py-0.5 rounded bg-slate-200 text-slate-600 font-bold uppercase">Inactivo</span>}
+                                    {isActive && src.endDate && (
+                                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[10px]">event_busy</span>
+                                            Fin: {src.endDate}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
-                            {type !== 'SPORADIC' && (
-                                <div className="text-right pr-8">
-                                    <p className={`font-black text-lg transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(src.amount)}</p>
-                                    <p className="text-xs text-slate-400">Mensual</p>
-                                </div>
-                            )}
-                            {type === 'SPORADIC' && (
-                                <div className="text-right pr-8">
-                                    <p className="font-bold text-lg text-purple-500">Eventual</p>
-                                    <p className="text-xs text-slate-400">Facturación</p>
-                                </div>
-                            )}
+                            <div className="text-right">
+                                <p className={`font-black text-lg text-slate-900 dark:text-white transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                                    {formatMoney(src.amount)}
+                                </p>
+                                {isBiweekly && isActive && (
+                                    <p className="text-[10px] text-slate-400">Total Mes: {formatMoney(src.amount * 2)}</p>
+                                )}
+                            </div>
                         </div>
-
-                        {/* Rate Grid only for Media */}
-                        {type === 'MEDIA' && rates && (
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Por Programa</p>
-                                    <p className={`font-bold text-slate-700 dark:text-slate-200 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(rates.perProgram)}</p>
-                                </div>
-                                <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Por Hora</p>
-                                    <p className={`font-bold text-emerald-600 dark:text-emerald-400 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(rates.hourly)}</p>
-                                </div>
-                            </div>
-                        )}
-                        
-                        {type === 'MEDIA' && (
-                            <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-                                <span className="material-symbols-outlined text-sm">schedule</span>
-                                <span>{src.hoursPerDay}h diarias • {src.daysPerWeek} días/sem</span>
-                            </div>
-                        )}
-
-                        {type === 'SPORADIC' && (
-                             <div className="mt-2 text-xs text-slate-500 bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg">
-                                 Ingresa aquí para registrar facturas de meses específicos.
-                             </div>
-                        )}
                     </div>
                 );
             })}

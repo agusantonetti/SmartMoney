@@ -1,6 +1,6 @@
 
-import React, { useMemo } from 'react';
-import { FinancialMetrics, Transaction, FinancialProfile } from '../types';
+import React, { useMemo, useState } from 'react';
+import { FinancialMetrics, Transaction, FinancialProfile, Subscription } from '../types';
 
 interface Props {
   metrics: FinancialMetrics;
@@ -44,7 +44,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenSalaryCalculator,
   onOpenCurrencyConverter,
   onOpenWealthLevels,
-  onOpenAchievements, // Deprecated but kept for type compatibility
+  onOpenAchievements,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -52,6 +52,8 @@ const Dashboard: React.FC<Props> = ({
   onTogglePrivacy
 }) => {
   
+  const [showNotifications, setShowNotifications] = useState(false);
+
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
       style: 'currency', 
@@ -96,6 +98,36 @@ const Dashboard: React.FC<Props> = ({
       };
   }, [transactions, metrics.fixedExpenses, metrics.salaryPaid]);
 
+  // --- ALERTAS DE SUSCRIPCIÓN ---
+  const subscriptionAlerts = useMemo(() => {
+      const alerts: { sub: Subscription, daysLeft: number }[] = [];
+      const now = new Date();
+      now.setHours(0,0,0,0);
+
+      (profile.subscriptions || []).forEach(sub => {
+          let targetDate = new Date();
+          
+          if (sub.nextPaymentDate) {
+              targetDate = new Date(sub.nextPaymentDate + 'T00:00:00');
+          } else {
+              targetDate.setDate(sub.billingDay);
+              if (targetDate < now) {
+                  targetDate.setMonth(targetDate.getMonth() + 1);
+              }
+          }
+          targetDate.setHours(0,0,0,0);
+
+          const diffTime = targetDate.getTime() - now.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          // Alerta si faltan 3 días o menos (y no es negativo, o negativo pequeño si se pasó hoy)
+          if (diffDays >= 0 && diffDays <= 3) {
+              alerts.push({ sub, daysLeft: diffDays });
+          }
+      });
+      return alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [profile.subscriptions]);
+
   const activeEventsCount = profile.events?.filter(e => e.status === 'active').length || 0;
 
   // Lógica de Niveles Patrimoniales (Sincronizada con WealthLevel.tsx)
@@ -127,6 +159,58 @@ const Dashboard: React.FC<Props> = ({
           </div>
           <div className="flex items-center gap-2 md:gap-3">
             
+            {/* NOTIFICATION BELL */}
+            <div className="relative">
+                <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="size-9 md:size-10 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95"
+                >
+                    <span className="material-symbols-outlined text-[22px]">notifications</span>
+                    {subscriptionAlerts.length > 0 && (
+                        <span className="absolute top-2 right-2 size-2.5 bg-red-500 border-2 border-white dark:border-slate-900 rounded-full"></span>
+                    )}
+                </button>
+
+                {/* Dropdown */}
+                {showNotifications && (
+                    <div className="absolute top-full right-0 mt-2 w-72 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden z-50 animate-[fadeIn_0.1s_ease-out]">
+                        <div className="p-3 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
+                            <span className="text-xs font-bold uppercase text-slate-500">Alertas de Pago</span>
+                            <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-600">
+                                <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                        </div>
+                        <div className="max-h-64 overflow-y-auto">
+                            {subscriptionAlerts.length === 0 ? (
+                                <div className="p-6 text-center text-slate-400 text-sm">
+                                    <span className="material-symbols-outlined text-2xl mb-1 block">check_circle</span>
+                                    No hay pagos próximos (3 días).
+                                </div>
+                            ) : (
+                                subscriptionAlerts.map((alert, idx) => (
+                                    <div 
+                                        key={idx} 
+                                        className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer border-b border-slate-50 dark:border-slate-700/50 last:border-0"
+                                        onClick={() => {
+                                            setShowNotifications(false);
+                                            onOpenSubscriptions();
+                                        }}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <h4 className="font-bold text-sm text-slate-900 dark:text-white">{alert.sub.name}</h4>
+                                            <span className="text-xs font-bold text-red-500">{alert.daysLeft === 0 ? 'HOY' : `${alert.daysLeft}d`}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            Vence pronto • {formatMoney(alert.sub.amount)}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* Privacy Toggle */}
             <button 
               onClick={onTogglePrivacy}
