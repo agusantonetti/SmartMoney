@@ -20,7 +20,7 @@ import SalaryCalculator from './components/SalaryCalculator';
 import FinancialAssistant from './components/FinancialAssistant'; 
 import CurrencyConverter from './components/CurrencyConverter'; 
 import WealthLevel from './components/WealthLevel'; 
-import Achievements from './components/Achievements'; // NUEVO COMPONENTE
+import Achievements from './components/Achievements'; 
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -236,10 +236,7 @@ const App: React.FC = () => {
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => acc + safeNum(t.amount), 0);
 
-    // CAMBIO IMPORTANTE: El balance ya NO se calcula dinámicamente con transacciones.
-    // Es puramente el valor manual del perfil (Patrimonio Neto).
     const balance = safeNum(financialProfile.initialBalance || 0);
-    
     const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => sum + src.amount, 0);
     const totalReserved = (financialProfile.savingsBuckets || []).reduce((sum, bucket) => sum + bucket.currentAmount, 0);
     const fixedExpenses = (financialProfile.subscriptions || []).reduce((sum, sub) => sum + sub.amount, 0);
@@ -248,8 +245,6 @@ const App: React.FC = () => {
     const uniqueMonths = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : ''))).size || 1;
     const avgMonthlyExpense = (expense / Math.max(1, uniqueMonths)) + fixedExpenses;
     
-    // Runway usa el Patrimonio Neto para calcular la supervivencia
-    // Restamos lo reservado porque se asume que no es para gastos corrientes
     const liquidAssets = balance - totalReserved;
     
     let runway = 0;
@@ -276,7 +271,7 @@ const App: React.FC = () => {
     return {
       income: safeNum(income),
       expense: safeNum(expense),
-      balance: balance, // Ahora es estático
+      balance: balance, 
       salaryPaid: safeNum(salaryPaid),
       totalReserved: safeNum(totalReserved),
       fixedExpenses: safeNum(fixedExpenses),
@@ -290,7 +285,7 @@ const App: React.FC = () => {
   const renderView = () => {
     if (authLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark text-slate-500">
+            <div className="min-h-[100dvh] flex items-center justify-center bg-background-light dark:bg-background-dark text-slate-500">
                 <span className="material-symbols-outlined animate-spin text-4xl">refresh</span>
             </div>
         );
@@ -318,7 +313,7 @@ const App: React.FC = () => {
             onOpenSalaryCalculator={() => setCurrentView(ViewState.SALARY_CALCULATOR)}
             onOpenCurrencyConverter={() => setCurrentView(ViewState.CURRENCY_CONVERTER)}
             onOpenWealthLevels={() => setCurrentView(ViewState.WEALTH_LEVELS)} 
-            onOpenAchievements={() => setCurrentView(ViewState.ACHIEVEMENTS)} // Nuevo Handler
+            onOpenAchievements={() => setCurrentView(ViewState.ACHIEVEMENTS)} 
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -509,39 +504,26 @@ const App: React.FC = () => {
   };
 
   const showNavigation = currentView !== ViewState.SUCCESS && 
-                         currentView !== ViewState.PROFILE && 
-                         currentView !== ViewState.INCOME_MANAGER &&
-                         currentView !== ViewState.SAVINGS_BUCKETS &&
-                         currentView !== ViewState.SUBSCRIPTIONS &&
-                         currentView !== ViewState.DEBTS &&
-                         currentView !== ViewState.ANALYTICS &&
-                         currentView !== ViewState.BUDGET_CONTROL &&
-                         currentView !== ViewState.TRANSACTION &&
-                         currentView !== ViewState.EVENTS &&
-                         currentView !== ViewState.FUTURE_SIMULATOR &&
-                         currentView !== ViewState.LANDING &&
-                         currentView !== ViewState.BUDGET_ADJUST &&
-                         currentView !== ViewState.SALARY_CALCULATOR &&
-                         currentView !== ViewState.CURRENCY_CONVERTER &&
-                         currentView !== ViewState.WEALTH_LEVELS &&
-                         currentView !== ViewState.ACHIEVEMENTS &&
-                         currentView !== ViewState.ASSISTANT &&
+                         currentView !== ViewState.LANDING && 
                          !authLoading;
 
   return (
-    <div className="relative min-h-screen bg-background-light dark:bg-background-dark transition-colors duration-300">
-      <div className="pb-24"> 
+    // Use 100dvh for better mobile browser support
+    <div className="relative min-h-[100dvh] bg-background-light dark:bg-background-dark transition-colors duration-300">
+      
+      {/* Increased padding bottom to avoid overlap with floating nav */}
+      <div className="pb-32"> 
         {renderView()}
       </div>
 
       {/* TOAST NOTIFICATION SYSTEM */}
-      <div className={`fixed top-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-xl transition-all duration-500 z-[120] flex items-center gap-3 ${
+      <div className={`fixed top-4 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full shadow-2xl transition-all duration-500 z-[120] flex items-center gap-3 w-[90%] max-w-sm justify-center ${
         showToast ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-10 pointer-events-none'
       } ${showToast?.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-900 dark:bg-white dark:text-slate-900 text-white'}`}>
         <span className="material-symbols-outlined text-[20px]">
           {showToast?.type === 'error' ? 'error' : 'check_circle'}
         </span>
-        <span className="font-medium text-sm">{showToast?.message}</span>
+        <span className="font-bold text-sm truncate">{showToast?.message}</span>
       </div>
 
       {/* Navegación Flotante */}
@@ -550,13 +532,14 @@ const App: React.FC = () => {
             {/* AI Assistant FAB */}
             <button 
                 onClick={() => setCurrentView(ViewState.ASSISTANT)}
-                className="fixed bottom-24 right-4 z-[100] size-14 bg-gradient-to-tr from-blue-600 to-purple-600 text-white rounded-full shadow-xl shadow-blue-500/30 flex items-center justify-center transition-transform hover:scale-110 active:scale-95 animate-[bounce_3s_infinite]"
+                className="fixed bottom-24 right-4 z-[100] size-14 bg-gradient-to-tr from-blue-600 to-purple-600 text-white rounded-full shadow-xl shadow-blue-500/30 flex items-center justify-center transition-transform hover:scale-110 active:scale-95 animate-bounce-slow"
+                style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
             >
                 <span className="material-symbols-outlined text-[28px]">auto_awesome</span>
             </button>
 
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-sm px-4">
-                <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2 flex justify-between items-center">
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-sm px-4" style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
+                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/20 dark:border-slate-700/50 rounded-full shadow-2xl p-1.5 flex justify-between items-center ring-1 ring-black/5 dark:ring-white/5">
                     <NavButton 
                     active={currentView === ViewState.DASHBOARD} 
                     onClick={() => setCurrentView(ViewState.DASHBOARD)} 
@@ -566,7 +549,7 @@ const App: React.FC = () => {
                     <NavButton 
                     active={false} 
                     onClick={() => setCurrentView(ViewState.TRANSACTION)} 
-                    icon="add_circle" 
+                    icon="add" 
                     label="Añadir" 
                     highlight
                     />
@@ -595,20 +578,20 @@ interface NavButtonProps {
 const NavButton: React.FC<NavButtonProps> = ({ active, onClick, icon, label, highlight }) => (
   <button
     onClick={onClick}
-    className={`flex flex-col items-center justify-center w-full py-1 gap-1 transition-all duration-200 ${
+    className={`flex flex-col items-center justify-center w-full py-2 gap-0.5 transition-all duration-200 rounded-full ${
       active 
-        ? 'text-primary scale-105' 
+        ? 'text-primary' 
         : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
     }`}
   >
     <div className={`flex items-center justify-center rounded-full transition-all ${
       highlight 
-        ? 'bg-primary text-white size-12 shadow-lg shadow-primary/30 mb-1' 
-        : active ? 'bg-primary/10 size-10' : 'size-8'
+        ? 'bg-primary text-white size-12 shadow-lg shadow-primary/40 -mt-6 border-4 border-background-light dark:border-background-dark' 
+        : active ? 'bg-primary/10 size-9' : 'size-7'
     }`}>
-      <span className={`material-symbols-outlined ${highlight ? 'text-[24px]' : 'text-[22px]'}`}>{icon}</span>
+      <span className={`material-symbols-outlined ${highlight ? 'text-[28px]' : 'text-[22px]'} ${active && !highlight ? 'filled' : ''}`}>{icon}</span>
     </div>
-    {!highlight && <span className="text-[10px] font-bold tracking-wide">{label}</span>}
+    {!highlight && <span className="text-[10px] font-bold tracking-wide opacity-90">{label}</span>}
   </button>
 );
 
