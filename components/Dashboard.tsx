@@ -66,11 +66,20 @@ const Dashboard: React.FC<Props> = ({
     };
   }, []);
 
-  // Formateador seguro
+  // Formateador seguro ARS
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
       style: 'currency', 
       currency: 'ARS',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  // Formateador seguro USD
+  const formatMoneyUSD = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
       maximumFractionDigits: 0
     }).format(amount);
   };
@@ -114,6 +123,8 @@ const Dashboard: React.FC<Props> = ({
   };
 
   const wealthLevel = getWealthLevel(metrics.balance);
+  const dollarRate = profile.customDollarRate || 1130; // Cotización por defecto si no hay
+  const balanceUSD = metrics.balance / dollarRate;
 
   return (
     <div className="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-x-hidden transition-colors duration-300">
@@ -229,14 +240,19 @@ const Dashboard: React.FC<Props> = ({
                       <div>
                           <div className="flex items-center gap-2 mb-3 opacity-80">
                               <span className="material-symbols-outlined text-sm">account_balance</span>
-                              <p className="text-xs font-bold uppercase tracking-widest">Patrimonio Neto</p>
+                              <p className="text-xs font-bold uppercase tracking-widest">Patrimonio Neto (Manual)</p>
                           </div>
-                          <h1 className={`text-5xl md:text-7xl font-black tracking-tight mb-2 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
-                              {formatMoney(metrics.balance)}
-                          </h1>
-                          <div className="flex items-center gap-4">
+                          <div className={`transition-all duration-300 flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>
+                              <h1 className="text-5xl md:text-7xl font-black tracking-tight">
+                                  {formatMoney(metrics.balance)}
+                              </h1>
+                              <span className="text-xl md:text-3xl font-bold text-slate-400">
+                                  ≈ {formatMoneyUSD(balanceUSD)}
+                              </span>
+                          </div>
+                          <div className="flex items-center gap-4 mt-2">
                               <p className="text-sm md:text-base text-slate-300 font-medium">
-                                  Disponible: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
+                                  Líquido: <span className={`text-white font-bold transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(metrics.balance - metrics.totalReserved)}</span>
                               </p>
                               
                               {/* WEALTH LEVEL BADGE */}

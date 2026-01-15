@@ -173,9 +173,9 @@ const ProfileSetup: React.FC<Props> = ({ currentProfile, allTransactions, onSave
            <div>
              <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-emerald-500">account_balance</span>
-                <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Saldo Inicial</label>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-200">Patrimonio Neto (Manual)</label>
              </div>
-             <p className="text-xs text-slate-400 mb-3">Tus ahorros base actuales (Bancos + Efectivo)</p>
+             <p className="text-xs text-slate-400 mb-3">Tu riqueza total actual. Este número no cambia automáticamente.</p>
              <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xl font-bold">$</span>
                 <input 

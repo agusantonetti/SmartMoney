@@ -234,7 +234,10 @@ const App: React.FC = () => {
       .filter(t => t.type === 'expense')
       .reduce((acc, t) => acc + safeNum(t.amount), 0);
 
-    const balance = (financialProfile.initialBalance || 0) + income - expense;
+    // CAMBIO IMPORTANTE: El balance ya NO se calcula dinámicamente con transacciones.
+    // Es puramente el valor manual del perfil (Patrimonio Neto).
+    const balance = safeNum(financialProfile.initialBalance || 0);
+    
     const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => sum + src.amount, 0);
     const totalReserved = (financialProfile.savingsBuckets || []).reduce((sum, bucket) => sum + bucket.currentAmount, 0);
     const fixedExpenses = (financialProfile.subscriptions || []).reduce((sum, sub) => sum + sub.amount, 0);
@@ -242,17 +245,20 @@ const App: React.FC = () => {
 
     const uniqueMonths = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : ''))).size || 1;
     const avgMonthlyExpense = (expense / Math.max(1, uniqueMonths)) + fixedExpenses;
-    const freeBalance = balance - totalReserved;
+    
+    // Runway usa el Patrimonio Neto para calcular la supervivencia
+    // Restamos lo reservado porque se asume que no es para gastos corrientes
+    const liquidAssets = balance - totalReserved;
     
     let runway = 0;
     if (avgMonthlyExpense > 0) {
-      runway = freeBalance / avgMonthlyExpense;
+      runway = liquidAssets / avgMonthlyExpense;
     } else {
-      runway = freeBalance > 0 ? 99 : 0;
+      runway = liquidAssets > 0 ? 99 : 0;
     }
 
     let score = 0;
-    if (freeBalance > 0) score += 20; 
+    if (liquidAssets > 0) score += 20; 
     if (runway >= 6) score += 40; 
     else if (runway >= 3) score += 20; 
     else if (runway >= 1) score += 10;
@@ -263,12 +269,12 @@ const App: React.FC = () => {
     if (savingsRate >= 0.20) score += 40;
     else if (savingsRate >= 0.10) score += 20;
 
-    if (totalDebt > freeBalance) score -= 10;
+    if (totalDebt > liquidAssets) score -= 10;
 
     return {
       income: safeNum(income),
       expense: safeNum(expense),
-      balance: safeNum(balance),
+      balance: balance, // Ahora es estático
       salaryPaid: safeNum(salaryPaid),
       totalReserved: safeNum(totalReserved),
       fixedExpenses: safeNum(fixedExpenses),
