@@ -21,7 +21,11 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(''); 
   const [isEndDateEnabled, setIsEndDateEnabled] = useState(false);
-  const [isCreatorSource, setIsCreatorSource] = useState(false); // NEW
+  const [isCreatorSource, setIsCreatorSource] = useState(false); 
+  
+  // Media / Salary Calculator States
+  const [programsPerWeek, setProgramsPerWeek] = useState('');
+  const [hoursPerProgram, setHoursPerProgram] = useState('');
 
   // States for viewing details
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -73,7 +77,10 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
           isActive: true,
           isCreatorSource: isCreatorSource,
           payments: [],
-          type: 'FIXED' 
+          type: 'FIXED',
+          // Save calculator stats if provided (mapping to existing optional fields)
+          daysPerWeek: programsPerWeek ? parseFloat(programsPerWeek) : undefined,
+          hoursPerDay: hoursPerProgram ? parseFloat(hoursPerProgram) : undefined
       };
 
       const updated = [...sources, newSource];
@@ -91,6 +98,8 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       setEndDate('');
       setIsEndDateEnabled(false);
       setIsCreatorSource(false);
+      setProgramsPerWeek('');
+      setHoursPerProgram('');
       setIsAdding(false);
   };
 
@@ -137,6 +146,23 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       const totalImpressions = selectedSource.payments.reduce((acc, p) => acc + (p.metrics?.impressions || 0), 0);
       const totalEarnings = selectedSource.payments.filter(p => p.isPaid).reduce((acc, p) => acc + p.realAmount, 0);
       const avgRPM = totalImpressions > 0 ? (totalEarnings / totalImpressions) : 0;
+
+      // Calculate Stats for Media Salary (if fields exist)
+      const programsWeek = selectedSource.daysPerWeek || 0;
+      const hoursProgram = selectedSource.hoursPerDay || 0;
+      
+      let valPerShow = 0;
+      let valPerHour = 0;
+
+      if (programsWeek > 0) {
+          const monthlyPrograms = programsWeek * 4.33; // Average weeks
+          valPerShow = selectedSource.amount / monthlyPrograms;
+          
+          if (hoursProgram > 0) {
+              const monthlyHours = monthlyPrograms * hoursProgram;
+              valPerHour = selectedSource.amount / monthlyHours;
+          }
+      }
 
       return (
         <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
@@ -192,6 +218,29 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                     {totalImpressions.toFixed(1)} Millones
                                 </p>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* MEDIA SALARY STATS DASHBOARD */}
+                {!selectedSource.isCreatorSource && valPerShow > 0 && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-5 rounded-3xl relative overflow-hidden shadow-lg">
+                            <div className="absolute top-0 right-0 size-20 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-1 mb-2 opacity-80">
+                                    <span className="material-symbols-outlined text-sm">mic</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest">Valor por Show</span>
+                                </div>
+                                <p className={`text-2xl font-black ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(valPerShow)}</p>
+                                <p className="text-[10px] opacity-70 mt-1">{programsWeek} programas / semana</p>
+                            </div>
+                        </div>
+                        
+                        <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Valor por Hora</p>
+                            <p className={`text-xl font-black text-slate-900 dark:text-white ${privacyMode ? 'blur-sm' : ''}`}>{valPerHour > 0 ? formatMoney(valPerHour) : '-'}</p>
+                            <p className="text-[10px] text-slate-400 mt-1">{hoursProgram} horas / programa</p>
                         </div>
                     </div>
                 )}
@@ -459,6 +508,33 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                             <span className="text-[10px] text-slate-500">Habilita registro de métricas (impresiones) y cálculo RPM.</span>
                         </div>
                     </div>
+
+                    {/* Calculator Fields (Only if NOT Creator) */}
+                    {!isCreatorSource && (
+                        <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                            <div className="col-span-2 text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Cálculo de Valor (Opcional)</div>
+                            <div>
+                                <label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Progs. x Semana</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full bg-white dark:bg-slate-800 p-2 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary"
+                                    placeholder="Ej. 5"
+                                    value={programsPerWeek}
+                                    onChange={e => setProgramsPerWeek(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Horas x Prog.</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full bg-white dark:bg-slate-800 p-2 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary"
+                                    placeholder="Ej. 2"
+                                    value={hoursPerProgram}
+                                    onChange={e => setHoursPerProgram(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {/* Frequency */}
                     <div>
