@@ -26,6 +26,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   // Media / Salary Calculator States
   const [programsPerWeek, setProgramsPerWeek] = useState('');
   const [hoursPerProgram, setHoursPerProgram] = useState('');
+  const [targetPosts, setTargetPosts] = useState(''); // NEW: Posts goal
 
   // States for viewing details
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -78,9 +79,10 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
           isCreatorSource: isCreatorSource,
           payments: [],
           type: 'FIXED',
-          // Save calculator stats if provided (mapping to existing optional fields)
+          // Save calculator stats if provided
           daysPerWeek: programsPerWeek ? parseFloat(programsPerWeek) : undefined,
-          hoursPerDay: hoursPerProgram ? parseFloat(hoursPerProgram) : undefined
+          hoursPerDay: hoursPerProgram ? parseFloat(hoursPerProgram) : undefined,
+          targetPosts: targetPosts ? parseFloat(targetPosts) : undefined, // NEW
       };
 
       const updated = [...sources, newSource];
@@ -100,6 +102,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       setIsCreatorSource(false);
       setProgramsPerWeek('');
       setHoursPerProgram('');
+      setTargetPosts('');
       setIsAdding(false);
   };
 
@@ -123,7 +126,11 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       if (existIdx >= 0) {
           // Merge existing metrics if not provided in update
           const existing = newPayments[existIdx];
-          newPayments[existIdx] = { ...existing, ...payment, metrics: { ...existing.metrics, ...payment.metrics } };
+          newPayments[existIdx] = { 
+              ...existing, 
+              ...payment, 
+              metrics: { ...existing.metrics, ...payment.metrics }
+          };
       } else {
           newPayments.push(payment);
       }
@@ -150,9 +157,11 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       // Calculate Stats for Media Salary (if fields exist)
       const programsWeek = selectedSource.daysPerWeek || 0;
       const hoursProgram = selectedSource.hoursPerDay || 0;
+      const requiredPosts = selectedSource.targetPosts || 0; // NEW
       
       let valPerShow = 0;
       let valPerHour = 0;
+      let valPerPost = 0; // NEW
 
       if (programsWeek > 0) {
           const monthlyPrograms = programsWeek * 4.33; // Average weeks
@@ -162,6 +171,10 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
               const monthlyHours = monthlyPrograms * hoursProgram;
               valPerHour = selectedSource.amount / monthlyHours;
           }
+      }
+
+      if (requiredPosts > 0) {
+          valPerPost = selectedSource.amount / requiredPosts;
       }
 
       return (
@@ -222,26 +235,42 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                     </div>
                 )}
 
-                {/* MEDIA SALARY STATS DASHBOARD */}
-                {!selectedSource.isCreatorSource && valPerShow > 0 && (
+                {/* MEDIA SALARY / POST STATS DASHBOARD */}
+                {!selectedSource.isCreatorSource && (valPerShow > 0 || valPerPost > 0) && (
                     <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-5 rounded-3xl relative overflow-hidden shadow-lg">
-                            <div className="absolute top-0 right-0 size-20 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-                            <div className="relative z-10">
-                                <div className="flex items-center gap-1 mb-2 opacity-80">
-                                    <span className="material-symbols-outlined text-sm">mic</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-widest">Valor por Show</span>
+                        {valPerPost > 0 ? (
+                            <div className="col-span-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 rounded-3xl relative overflow-hidden shadow-lg flex items-center justify-between">
+                                <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl translate-x-1/3 -translate-y-1/2"></div>
+                                <div className="relative z-10">
+                                    <p className="text-xs text-blue-200 font-bold uppercase mb-1">Valor por Post</p>
+                                    <p className={`text-4xl font-black ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(valPerPost)}</p>
                                 </div>
-                                <p className={`text-2xl font-black ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(valPerShow)}</p>
-                                <p className="text-[10px] opacity-70 mt-1">{programsWeek} programas / semana</p>
+                                <div className="relative z-10 text-right">
+                                    <span className="material-symbols-outlined text-3xl opacity-80">post_add</span>
+                                    <p className="text-[10px] uppercase font-bold text-blue-200 mt-1">Meta: {requiredPosts} / mes</p>
+                                </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white p-5 rounded-3xl relative overflow-hidden shadow-lg">
+                                <div className="absolute top-0 right-0 size-20 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+                                <div className="relative z-10">
+                                    <div className="flex items-center gap-1 mb-2 opacity-80">
+                                        <span className="material-symbols-outlined text-sm">mic</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-widest">Valor por Show</span>
+                                    </div>
+                                    <p className={`text-2xl font-black ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(valPerShow)}</p>
+                                    <p className="text-[10px] opacity-70 mt-1">{programsWeek} programas / semana</p>
+                                </div>
+                            </div>
+                        )}
                         
-                        <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Valor por Hora</p>
-                            <p className={`text-xl font-black text-slate-900 dark:text-white ${privacyMode ? 'blur-sm' : ''}`}>{valPerHour > 0 ? formatMoney(valPerHour) : '-'}</p>
-                            <p className="text-[10px] text-slate-400 mt-1">{hoursProgram} horas / programa</p>
-                        </div>
+                        {(valPerShow > 0 && valPerPost === 0) && (
+                            <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Valor por Hora</p>
+                                <p className={`text-xl font-black text-slate-900 dark:text-white ${privacyMode ? 'blur-sm' : ''}`}>{valPerHour > 0 ? formatMoney(valPerHour) : '-'}</p>
+                                <p className="text-[10px] text-slate-400 mt-1">{hoursProgram} horas / programa</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -255,8 +284,6 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 <div className="space-y-3">
                     {monthsList.map((monthName, idx) => {
                         // Logic for Creator vs Standard
-                        // If creator/biweekly, render 2 slots per month.
-                        
                         const renderPaymentSlot = (periodKey: string, periodLabel: string) => {
                             const payment = selectedSource.payments.find(p => p.month === periodKey);
                             const checkDate = new Date(viewYear, idx, 15);
@@ -266,8 +293,21 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                             const isPaid = payment?.isPaid || false;
                             const impressions = payment?.metrics?.impressions || 0;
                             const rpm = (impressions > 0 && currentVal > 0) ? (currentVal / impressions) : 0;
+                            
+                            const postsDone = payment?.postsCompleted || 0; // NEW: Get posts
 
                             const expected = selectedSource.amount; // Base amount
+
+                            // Helper for updating posts
+                            const updatePosts = (increment: number) => {
+                                const newVal = Math.max(0, postsDone + increment);
+                                handleUpdatePayment(selectedSource.id, {
+                                    month: periodKey,
+                                    realAmount: currentVal || expected,
+                                    isPaid,
+                                    postsCompleted: newVal
+                                });
+                            };
 
                             return (
                                 <div key={periodKey} className={`p-4 rounded-xl border flex flex-col gap-3 transition-colors ${
@@ -288,6 +328,17 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                                         {impressions}M • RPM: ${rpm.toFixed(0)}
                                                     </span>
                                                 )}
+                                                {/* POST COUNTER DISPLAY */}
+                                                {!selectedSource.isCreatorSource && requiredPosts > 0 && isActive && (
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[10px] font-bold uppercase text-slate-400">Entregados:</span>
+                                                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-1.5 py-0.5">
+                                                            <button onClick={() => updatePosts(-1)} className="size-5 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[14px]">remove</span></button>
+                                                            <span className={`text-xs font-bold w-10 text-center ${postsDone >= requiredPosts ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{postsDone}/{requiredPosts}</span>
+                                                            <button onClick={() => updatePosts(1)} className="size-5 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[14px]">add</span></button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         
@@ -296,7 +347,8 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                                 onClick={() => handleUpdatePayment(selectedSource.id, { 
                                                     month: periodKey, 
                                                     realAmount: currentVal || expected, 
-                                                    isPaid: !isPaid 
+                                                    isPaid: !isPaid,
+                                                    postsCompleted: postsDone // Preserve posts count
                                                 })} 
                                                 className={`size-8 rounded-full flex items-center justify-center transition-all ${isPaid ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}
                                             >
@@ -347,7 +399,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                                 placeholder={expected.toString()}
                                                 value={currentVal || ''}
                                                 onChange={(e) => handleUpdatePayment(selectedSource.id, {
-                                                    month: periodKey, realAmount: parseFloat(e.target.value), isPaid
+                                                    month: periodKey, realAmount: parseFloat(e.target.value), isPaid, postsCompleted: postsDone
                                                 })}
                                             />
                                         </div>
@@ -511,27 +563,42 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
 
                     {/* Calculator Fields (Only if NOT Creator) */}
                     {!isCreatorSource && (
-                        <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                            <div className="col-span-2 text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Cálculo de Valor (Opcional)</div>
-                            <div>
-                                <label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Progs. x Semana</label>
-                                <input 
-                                    type="number" 
-                                    className="w-full bg-white dark:bg-slate-800 p-2 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary"
-                                    placeholder="Ej. 5"
-                                    value={programsPerWeek}
-                                    onChange={e => setProgramsPerWeek(e.target.value)}
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Horas x Prog.</label>
-                                <input 
-                                    type="number" 
-                                    className="w-full bg-white dark:bg-slate-800 p-2 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary"
-                                    placeholder="Ej. 2"
-                                    value={hoursPerProgram}
-                                    onChange={e => setHoursPerProgram(e.target.value)}
-                                />
+                        <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                            <div className="text-[10px] font-bold text-primary uppercase tracking-widest mb-2">Entregables / Métricas (Opcional)</div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Posts por Mes (Objetivo)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 material-symbols-outlined text-[16px]">post_add</span>
+                                        <input 
+                                            type="number" 
+                                            className="w-full bg-white dark:bg-slate-800 p-2 pl-9 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary"
+                                            placeholder="Ej. 10"
+                                            value={targetPosts}
+                                            onChange={e => setTargetPosts(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Progs. x Semana</label>
+                                    <input 
+                                        type="number" 
+                                        className="w-full bg-white dark:bg-slate-800 p-2 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary"
+                                        placeholder="Ej. 5"
+                                        value={programsPerWeek}
+                                        onChange={e => setProgramsPerWeek(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Horas x Prog.</label>
+                                    <input 
+                                        type="number" 
+                                        className="w-full bg-white dark:bg-slate-800 p-2 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary"
+                                        placeholder="Ej. 2"
+                                        value={hoursPerProgram}
+                                        onChange={e => setHoursPerProgram(e.target.value)}
+                                    />
+                                </div>
                             </div>
                         </div>
                     )}

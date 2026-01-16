@@ -46,6 +46,7 @@ export interface IncomePayment {
     impressions?: number; 
     rpm?: number; 
   };
+  postsCompleted?: number; // Nuevo: Cantidad de posts realizados
 }
 
 export type MediaType = 'TV' | 'RADIO' | 'STREAM' | 'REDACCION' | 'EVENTO' | 'OTRO';
@@ -67,6 +68,7 @@ export interface IncomeSource {
   medium?: MediaType;
   hoursPerDay?: number;
   daysPerWeek?: number;
+  targetPosts?: number; // Nuevo: Objetivo de posts mensuales
 }
 
 export interface SubscriptionPayment {
