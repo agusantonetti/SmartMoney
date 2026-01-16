@@ -14,11 +14,14 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const [sources, setSources] = useState<IncomeSource[]>(profile.incomeSources || []);
   const dollarRate = profile.customDollarRate || 1130;
   
+  // Sorting State
+  const [sortOrder, setSortOrder] = useState<'AMOUNT' | 'DATE'>('AMOUNT');
+
   // States for adding/editing
   const [isAdding, setIsAdding] = useState(false);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS'); // NEW: Currency state
+  const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS'); 
   const [frequency, setFrequency] = useState<PaymentFrequency>('MONTHLY');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(''); 
@@ -81,6 +84,19 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       return sources.reduce((acc, src) => acc + getMonthlyProjection(src), 0);
   }, [sources, dollarRate]);
 
+  // --- SORTING ---
+  const sortedSources = useMemo(() => {
+      return [...sources].sort((a, b) => {
+          if (sortOrder === 'AMOUNT') {
+              const valA = a.currency === 'USD' ? a.amount * dollarRate : a.amount;
+              const valB = b.currency === 'USD' ? b.amount * dollarRate : b.amount;
+              return valB - valA;
+          }
+          // Date Descending (Newest first, using ID as timestamp proxy)
+          return b.id.localeCompare(a.id);
+      });
+  }, [sources, sortOrder, dollarRate]);
+
   // --- CRUD LOGIC ---
   const handleSaveSource = () => {
       if (!name || !amount) return;
@@ -89,7 +105,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
           id: Date.now().toString(),
           name,
           amount: parseFloat(amount),
-          currency, // Save currency
+          currency, 
           frequency,
           startDate,
           endDate: isEndDateEnabled ? endDate : undefined,
@@ -167,8 +183,6 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       const monthsList = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
       const isUSD = selectedSource.currency === 'USD';
       
-      // Values used for calculations should be in ARS for dashboard stats consistency?
-      // User requested "Show in ARS and (USD)". Let's calculate base values in ARS.
       const baseAmountArs = isUSD ? selectedSource.amount * dollarRate : selectedSource.amount;
 
       // Calculate Stats for Creator Source
@@ -316,7 +330,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                     </div>
                 )}
 
-                {/* Year Selector */}
+                {/* Year Selector and Months List ... */}
                 <div className="flex items-center justify-center gap-6 bg-surface-light dark:bg-surface-dark p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
                     <button onClick={() => setViewYear(viewYear - 1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_left</span></button>
                     <span className="text-xl font-black">{viewYear}</span>
@@ -330,17 +344,12 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                             const checkDate = new Date(viewYear, idx, 15);
                             const isActive = isContractActive(selectedSource, checkDate);
                             
-                            // The value stored in `realAmount` matches the contract currency (USD or ARS)
                             const currentVal = payment?.realAmount ?? 0; 
                             const isPaid = payment?.isPaid || false;
                             const impressions = payment?.metrics?.impressions || 0;
-                            // RPM calculation usually in local currency? Assuming impressions drive revenue regardless of currency
-                            // but RPM display usually matches currency. 
                             const rpm = (impressions > 0 && currentVal > 0) ? (currentVal / impressions) : 0;
-                            
                             const postsDone = payment?.postsCompleted || 0;
-
-                            const expected = selectedSource.amount; // Matches contract currency
+                            const expected = selectedSource.amount; 
 
                             const updatePosts = (increment: number) => {
                                 const newVal = Math.max(0, postsDone + increment);
@@ -501,7 +510,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
         </div>
 
         {/* TIMELINE VISUALIZATION (GANTT) */}
-        {sources.length > 0 && (
+        {sortedSources.length > 0 && (
             <div className="space-y-3">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Línea de Tiempo (Activos)</h3>
                 <div className="bg-surface-light dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-700 p-4 overflow-x-auto scrollbar-hide shadow-sm">
@@ -522,7 +531,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                         
                         {/* Contracts */}
                         <div className="space-y-3">
-                            {sources.filter(s => isContractActive(s)).map(src => {
+                            {sortedSources.filter(s => isContractActive(s)).map(src => {
                                 return (
                                     <div key={src.id} className="flex items-center group">
                                         <div className="w-32 shrink-0 pr-4">
@@ -728,8 +737,18 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
         )}
 
         {/* LIST OF SOURCES */}
+        <div className="flex items-center justify-between mb-2">
+             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Listado</h3>
+             <button 
+                onClick={() => setSortOrder(prev => prev === 'AMOUNT' ? 'DATE' : 'AMOUNT')}
+                className="flex items-center gap-1 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-lg text-slate-500 hover:text-primary transition-colors"
+             >
+                <span className="material-symbols-outlined text-[14px]">sort</span>
+                {sortOrder === 'AMOUNT' ? 'Mayor a Menor' : 'Recientes'}
+             </button>
+        </div>
         <div className="space-y-4">
-            {sources.map(src => {
+            {sortedSources.map(src => {
                 const isActive = isContractActive(src);
                 const isBiweekly = src.frequency === 'BIWEEKLY';
                 const isUSD = src.currency === 'USD';
