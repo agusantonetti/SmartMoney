@@ -127,14 +127,16 @@ const Dashboard: React.FC<Props> = ({
           }
       });
 
-      // 2. Totales Mensuales (Sueldo Fijo + Variables)
+      // 2. Totales Mensuales
+      // FIX: Solo contamos transacciones reales para el flujo de caja.
+      // Los "Gastos Fijos" (metrics.fixedExpenses) ahora son solo referenciales en su propia tarjeta y NO se suman aquí.
+      
       const totalCurrentIncome = metrics.salaryPaid + currentIncomeVar;
-      const totalCurrentExpense = metrics.fixedExpenses + currentExpenseVar;
+      const totalCurrentExpense = currentExpenseVar; // Solo transacciones reales
       const totalNetMonthly = totalCurrentIncome - totalCurrentExpense;
 
-      // Asumimos sueldo y fijos constantes para la comparativa simple, a menos que haya historial real
       const totalPrevIncome = metrics.salaryPaid + prevIncomeVar;
-      const totalPrevExpense = metrics.fixedExpenses + prevExpenseVar;
+      const totalPrevExpense = prevExpenseVar; // Solo transacciones reales anteriores
 
       // 3. Balance Historico (Al cierre del mes anterior)
       const prevBalance = (profile.initialBalance || 0) + pastIncomeTotal - pastExpenseTotal;
