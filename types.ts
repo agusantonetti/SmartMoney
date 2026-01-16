@@ -58,6 +58,7 @@ export interface IncomeSource {
   id: string;
   name: string;
   amount: number; 
+  currency?: 'ARS' | 'USD'; // Nuevo: Moneda del contrato
   payments: IncomePayment[];
   type?: IncomeType;
   frequency?: PaymentFrequency; 
