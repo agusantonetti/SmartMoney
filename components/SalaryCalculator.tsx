@@ -10,7 +10,7 @@ interface Props {
 }
 
 const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUpdateProfile }) => {
-  const [activeTab, setActiveTab] = useState<'SALARY' | 'RUNWAY'>('SALARY');
+  const [activeTab, setActiveTab] = useState<'SALARY' | 'RUNWAY' | 'MEDIA'>('SALARY');
 
   // --- SHARED DATA ---
   const currentDollarRate = profile.customDollarRate || 1130;
@@ -28,11 +28,17 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
   const [runwayExpenses, setRunwayExpenses] = useState<string>('');
   const [runwayCurrency, setRunwayCurrency] = useState<'ARS' | 'USD'>('USD'); // Default USD for rent in runway usually
 
+  // --- TAB 3: MEDIA CALCULATOR STATE ---
+  const [mediaIncome, setMediaIncome] = useState<string>('');
+  const [programsPerWeek, setProgramsPerWeek] = useState<string>('');
+  const [hoursPerProgram, setHoursPerProgram] = useState<string>('');
+
   // Load initial data
   useEffect(() => {
-    // Load Income for Tab 1
+    // Load Income for Tab 1 & 3
     const salary = (profile.incomeSources || []).reduce((acc, src) => acc + src.amount, 0) || (profile.monthlySalary || 0);
     setIncome(salary.toString());
+    setMediaIncome(salary.toString());
 
     // Load Patrimony for Tab 2
     const currentSavings = profile.initialBalance || 0;
@@ -58,6 +64,18 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
   const monthsCovered = calcRunwayTotalHousing > 0 ? calcRunwayPatrimony / calcRunwayTotalHousing : 0;
   const yearsCovered = monthsCovered / 12;
 
+  // --- CALCULATIONS: MEDIA ---
+  const calcMediaIncome = parseFloat(mediaIncome) || 0;
+  const calcProgramsWeek = parseFloat(programsPerWeek) || 0;
+  const calcHoursProgram = parseFloat(hoursPerProgram) || 0;
+
+  // Promedio semanas por mes: 4.33
+  const totalProgramsMonth = calcProgramsWeek * 4.33; 
+  const totalHoursMonth = totalProgramsMonth * calcHoursProgram;
+
+  const incomePerProgram = totalProgramsMonth > 0 ? calcMediaIncome / totalProgramsMonth : 0;
+  const incomePerHour = totalHoursMonth > 0 ? calcMediaIncome / totalHoursMonth : 0;
+
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('es-AR', { 
       style: 'currency', 
@@ -75,27 +93,34 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
         <div>
-            <h2 className="text-lg font-bold">Calculadora de Vivienda</h2>
+            <h2 className="text-lg font-bold">Calculadora Financiera</h2>
             <p className="text-xs text-slate-500">Herramientas de planificación</p>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="w-full max-w-2xl mx-auto px-6 pt-6">
-        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
+        <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl overflow-x-auto scrollbar-hide">
             <button 
                 onClick={() => setActiveTab('SALARY')}
-                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'SALARY' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-400'}`}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'SALARY' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-400'}`}
             >
-                <span className="material-symbols-outlined">payments</span>
+                <span className="material-symbols-outlined text-[18px]">payments</span>
                 Sueldo Ideal
             </button>
             <button 
                 onClick={() => setActiveTab('RUNWAY')}
-                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'RUNWAY' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-400'}`}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'RUNWAY' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-400'}`}
             >
-                <span className="material-symbols-outlined">hourglass_top</span>
-                Cobertura Alquiler
+                <span className="material-symbols-outlined text-[18px]">hourglass_top</span>
+                Cobertura
+            </button>
+            <button 
+                onClick={() => setActiveTab('MEDIA')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${activeTab === 'MEDIA' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-400'}`}
+            >
+                <span className="material-symbols-outlined text-[18px]">mic</span>
+                Valor Show
             </button>
         </div>
       </div>
@@ -262,6 +287,89 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
                             <div className="mt-6 pt-4 border-t border-white/20 flex justify-between text-xs font-medium opacity-80">
                                 <span>Costo Mensual Total:</span>
                                 <span>{formatMoney(calcRunwayTotalHousing)}</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* --- TOOL 3: MEDIA INCOME CALCULATOR --- */}
+        {activeTab === 'MEDIA' && (
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+                <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
+                    <h3 className="font-bold text-lg flex items-center gap-2">
+                        <span className="material-symbols-outlined text-purple-500">podcasts</span>
+                        Valor Hora / Programa
+                    </h3>
+                    <p className="text-sm text-slate-500">Calcula cuánto estás ganando realmente por cada salida al aire o por hora de trabajo en medios.</p>
+                    
+                    <div className="space-y-4">
+                        <div>
+                             <label className="text-xs font-bold text-slate-400 block mb-1">Sueldo / Ingreso Mensual Total</label>
+                             <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                                <input 
+                                    type="number" 
+                                    value={mediaIncome} 
+                                    onChange={e => setMediaIncome(e.target.value)} 
+                                    className="w-full bg-slate-100 dark:bg-slate-800 p-3 pl-8 rounded-xl outline-none font-bold text-lg"
+                                    placeholder="0"
+                                />
+                             </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                             <div>
+                                 <label className="text-xs font-bold text-slate-400 block mb-1">Programas x Semana</label>
+                                 <input 
+                                    type="number" 
+                                    value={programsPerWeek} 
+                                    onChange={e => setProgramsPerWeek(e.target.value)} 
+                                    className="w-full bg-slate-100 dark:bg-slate-800 p-3 rounded-xl outline-none font-bold"
+                                    placeholder="Ej. 5"
+                                 />
+                             </div>
+                             <div>
+                                 <label className="text-xs font-bold text-slate-400 block mb-1">Horas x Programa</label>
+                                 <input 
+                                    type="number" 
+                                    value={hoursPerProgram} 
+                                    onChange={e => setHoursPerProgram(e.target.value)} 
+                                    className="w-full bg-slate-100 dark:bg-slate-800 p-3 rounded-xl outline-none font-bold"
+                                    placeholder="Ej. 2"
+                                 />
+                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {(incomePerProgram > 0 || incomePerHour > 0) && (
+                    <div className="grid grid-cols-1 gap-4">
+                        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 rounded-3xl shadow-lg relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                            
+                            <div className="relative z-10">
+                                <div className="flex items-center gap-2 mb-4 opacity-80">
+                                    <span className="material-symbols-outlined text-lg">mic</span>
+                                    <p className="text-xs font-bold uppercase tracking-widest">Valor por Show</p>
+                                </div>
+                                <h2 className="text-5xl font-black mb-2">{formatMoney(incomePerProgram)}</h2>
+                                <p className="text-xs text-purple-200">Cada vez que sales al aire.</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+                                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Valor por Hora</p>
+                                <p className="text-2xl font-black text-slate-900 dark:text-white">{formatMoney(incomePerHour)}</p>
+                            </div>
+                            <div className="bg-white dark:bg-slate-800 p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+                                <p className="text-xs font-bold text-slate-400 uppercase mb-1">Total al Mes</p>
+                                <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                    <span className="block">{Math.round(totalProgramsMonth)} Programas</span>
+                                    <span className="block text-slate-400">{Math.round(totalHoursMonth)} Horas Aire</span>
+                                </div>
                             </div>
                         </div>
                     </div>
