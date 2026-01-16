@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { ViewState, Transaction, FinancialMetrics, FinancialProfile, QuickAction } from './types';
 import Dashboard from './components/Dashboard';
@@ -276,6 +277,7 @@ const App: React.FC = () => {
 
   const metrics: FinancialMetrics = useMemo(() => {
     const safeNum = (n: number) => (isNaN(n) || !isFinite(n)) ? 0 : n;
+    const dollarRate = financialProfile.customDollarRate || 1130;
 
     const income = transactions
       .filter(t => t.type === 'income')
@@ -290,7 +292,15 @@ const App: React.FC = () => {
 
     const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => sum + src.amount, 0);
     const totalReserved = (financialProfile.savingsBuckets || []).reduce((sum, bucket) => sum + bucket.currentAmount, 0);
-    const fixedExpenses = (financialProfile.subscriptions || []).reduce((sum, sub) => sum + sub.amount, 0);
+    
+    // FIX: Calcular gastos fijos normalizados a mes y convirtiendo USD a ARS
+    const fixedExpenses = (financialProfile.subscriptions || []).reduce((sum, sub) => {
+        let val = sub.currency === 'USD' ? sub.amount * dollarRate : sub.amount;
+        // Si es anual, dividimos por 12 para el impacto mensual en métricas
+        if (sub.frequency === 'YEARLY') val = val / 12;
+        return sum + val;
+    }, 0);
+
     const totalDebt = (financialProfile.debts || []).reduce((sum, d) => sum + (d.totalAmount - d.currentAmount), 0);
 
     const uniqueMonths = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : ''))).size || 1;

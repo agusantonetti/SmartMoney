@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Subscription, SubscriptionPayment } from '../types';
 
 interface Props {
@@ -18,6 +18,7 @@ const CATEGORIES = [
 
 const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(profile.subscriptions || []);
+  const dollarRate = profile.customDollarRate || 1130;
   
   // View State
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
@@ -27,6 +28,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
   const [isAdding, setIsAdding] = useState(false);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState<'ARS'|'USD'>('ARS');
   const [day, setDay] = useState('');
   const [selectedCat, setSelectedCat] = useState(CATEGORIES[2]);
   
@@ -40,12 +42,19 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   };
 
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { 
+  const formatMoney = (amount: number, currencyCode: string = 'ARS') => {
+    return new Intl.NumberFormat(currencyCode === 'ARS' ? 'es-AR' : 'en-US', { 
       style: 'currency', 
-      currency: 'ARS', 
+      currency: currencyCode, 
       maximumFractionDigits: 0 
     }).format(amount);
+  };
+
+  // Helper to get value in ARS normalized to monthly frequency for calculation and sorting
+  const getMonthlyArsValue = (sub: Subscription) => {
+      let val = sub.currency === 'USD' ? sub.amount * dollarRate : sub.amount;
+      if (sub.frequency === 'YEARLY') val = val / 12;
+      return val;
   };
 
   const getDaysUntilDue = (sub: Subscription): number => {
@@ -99,6 +108,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
       id: Date.now().toString(),
       name,
       amount: parseFloat(amount),
+      currency,
       billingDay: billingDay,
       category: selectedCat.id,
       frequency: frequency,
@@ -112,6 +122,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
     
     setName('');
     setAmount('');
+    setCurrency('ARS');
     setDay('');
     setNextDate('');
     setFrequency('MONTHLY');
@@ -156,12 +167,17 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
   const getCategoryIcon = (catId: string) => CATEGORIES.find(c => c.id === catId)?.icon || 'receipt';
   const getCategoryColor = (catId: string) => CATEGORIES.find(c => c.id === catId)?.color || 'slate';
 
+  // Sorted Subscriptions: Highest ARS value first
+  const sortedSubscriptions = useMemo(() => {
+      return [...subscriptions].sort((a, b) => getMonthlyArsValue(b) - getMonthlyArsValue(a));
+  }, [subscriptions, dollarRate]);
+
+  // Total monthly normalized in ARS
+  const totalMonthlyArs = useMemo(() => {
+      return subscriptions.reduce((acc, sub) => acc + getMonthlyArsValue(sub), 0);
+  }, [subscriptions, dollarRate]);
+
   const selectedSub = subscriptions.find(s => s.id === selectedSubId);
-  // Total mensual solo cuenta mensuales + (anuales/12)
-  const totalMonthly = subscriptions.reduce((acc, sub) => {
-      if (sub.frequency === 'YEARLY') return acc + (sub.amount / 12);
-      return acc + sub.amount;
-  }, 0);
 
   // VISTA DETALLE: CALENDARIO ANUAL DE PAGOS
   if (selectedSub) {
@@ -252,7 +268,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                            {/* Amount Info (Static Display) */}
                            <div className="md:col-span-4 flex md:justify-center items-center">
                               <p className={`font-bold ${isPaid ? 'text-slate-900 dark:text-white' : 'text-slate-400'} ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                                  {formatMoney(currentAmount)}
+                                  {formatMoney(currentAmount, selectedSub.currency)}
                               </p>
                            </div>
 
@@ -304,10 +320,10 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
         {/* Summary Card */}
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-indigo-900 dark:to-slate-900 rounded-3xl p-8 text-white shadow-xl shadow-slate-500/20 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-          <p className="text-slate-300 font-medium mb-1 relative z-10">Total Mensualizado</p>
-          <h1 className={`text-5xl font-black tracking-tight relative z-10 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(totalMonthly)}</h1>
+          <p className="text-slate-300 font-medium mb-1 relative z-10">Total Mensual Estimado</p>
+          <h1 className={`text-5xl font-black tracking-tight relative z-10 transition-all duration-300 ${privacyMode ? 'blur-md select-none opacity-50' : ''}`}>{formatMoney(totalMonthlyArs)}</h1>
           <p className="text-xs text-slate-400 mt-4 relative z-10 opacity-80">
-             Incluye la parte proporcional de gastos anuales.
+             Incluye gastos en USD convertidos al valor actual (${dollarRate}).
           </p>
         </div>
 
@@ -384,25 +400,34 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                    </div>
                    
                    <div className="grid grid-cols-2 gap-3">
-                     <div className="relative group">
-                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">attach_money</span>
-                       <input 
-                        type="number" 
-                        placeholder="Monto" 
-                        className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-bold text-lg border border-transparent focus:border-primary/30"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                       />
+                     <div className="col-span-2 relative group">
+                       <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block pl-1">Monto y Moneda</label>
+                       <div className="flex gap-2">
+                           <div className="relative flex-1">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{currency === 'ARS' ? '$' : 'US$'}</span>
+                                <input 
+                                    type="number" 
+                                    placeholder="0" 
+                                    className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-bold text-lg border border-transparent focus:border-primary/30"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                />
+                           </div>
+                           <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl flex items-center">
+                                <button onClick={() => setCurrency('ARS')} className={`px-4 py-3 rounded-xl text-xs font-bold ${currency === 'ARS' ? 'bg-white dark:bg-slate-600 shadow' : 'text-slate-400'}`}>ARS</button>
+                                <button onClick={() => setCurrency('USD')} className={`px-4 py-3 rounded-xl text-xs font-bold ${currency === 'USD' ? 'bg-white dark:bg-slate-600 shadow' : 'text-slate-400'}`}>USD</button>
+                           </div>
+                       </div>
                      </div>
                      
                      {/* Dynamic Date Input */}
-                     <div className="relative group">
+                     <div className="col-span-2 relative group">
                         {frequency === 'MONTHLY' ? (
                             <>
                                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">calendar_today</span>
                                 <input 
                                     type="number" 
-                                    placeholder="Día (1-31)" 
+                                    placeholder="Día de Pago (1-31)" 
                                     className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-bold border border-transparent focus:border-primary/30"
                                     value={day}
                                     onChange={(e) => setDay(e.target.value)}
@@ -444,7 +469,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
           )}
 
           <div className="grid gap-3">
-            {subscriptions.length === 0 && !isAdding && (
+            {sortedSubscriptions.length === 0 && !isAdding && (
               <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-3xl text-slate-400">
                 <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">notifications_active</span>
                 <p className="font-bold text-slate-500">Sin alertas configuradas</p>
@@ -452,34 +477,39 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
               </div>
             )}
             
-            {subscriptions.map((sub) => {
+            {sortedSubscriptions.map((sub) => {
                const icon = getCategoryIcon(sub.category);
                const color = getCategoryColor(sub.category);
                
                const daysUntil = getDaysUntilDue(sub);
                const isUrgent = daysUntil <= 3 && daysUntil >= 0;
-               const isDue = daysUntil < 0; // Vencido hace poco o hoy
+               const isDue = daysUntil < 0; 
+
+               // Values
+               const monthlyArs = getMonthlyArsValue(sub);
+               const percent = totalMonthlyArs > 0 ? (monthlyArs / totalMonthlyArs) * 100 : 0;
+               const arsDisplay = sub.currency === 'USD' ? sub.amount * dollarRate : sub.amount;
 
                return (
                  <div 
                     key={sub.id} 
                     onClick={() => setSelectedSubId(sub.id)}
-                    className={`bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border flex items-center justify-between shadow-sm hover:shadow-md transition-all cursor-pointer group ${
+                    className={`bg-surface-light dark:bg-surface-dark p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between shadow-sm hover:shadow-md transition-all cursor-pointer group gap-4 ${
                         isUrgent 
                         ? 'border-red-400 ring-1 ring-red-400 dark:border-red-500' 
                         : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'
                     }`}
                  >
-                   <div className="flex items-center gap-4">
-                     <div className={`size-12 rounded-2xl flex items-center justify-center font-bold text-lg bg-${color}-100 text-${color}-600 dark:bg-${color}-900/30 dark:text-${color}-400 relative`}>
+                   <div className="flex items-center gap-4 flex-1">
+                     <div className={`size-12 rounded-2xl flex items-center justify-center font-bold text-lg bg-${color}-100 text-${color}-600 dark:bg-${color}-900/30 dark:text-${color}-400 relative shrink-0`}>
                        <span className="material-symbols-outlined">{icon}</span>
                        {isUrgent && (
                            <span className="absolute -top-1 -right-1 size-3 bg-red-500 border-2 border-white dark:border-slate-800 rounded-full"></span>
                        )}
                      </div>
-                     <div>
-                       <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{sub.name}</h4>
+                     <div className="min-w-0">
+                       <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="font-bold text-slate-900 dark:text-white group-hover:text-primary transition-colors truncate">{sub.name}</h4>
                             {sub.frequency === 'YEARLY' && (
                                 <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 rounded font-bold uppercase">Anual</span>
                             )}
@@ -499,8 +529,26 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                        </div>
                      </div>
                    </div>
-                   <div className="flex items-center gap-4">
-                     <span className={`font-black text-lg text-slate-800 dark:text-slate-200 transition-all duration-300 ${privacyMode ? 'blur-sm select-none' : ''}`}>{formatMoney(sub.amount)}</span>
+
+                   <div className="flex items-center justify-between sm:justify-end gap-4">
+                     <div className="text-right">
+                        <span className={`font-black text-lg text-slate-800 dark:text-slate-200 transition-all duration-300 block leading-none ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                            {formatMoney(sub.amount, sub.currency || 'ARS')}
+                        </span>
+                        
+                        {sub.currency === 'USD' && (
+                            <span className={`text-[10px] font-medium text-slate-400 block mt-1 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                                (≈ {formatMoney(arsDisplay)})
+                            </span>
+                        )}
+                        
+                        <div className="mt-1 flex justify-end">
+                            <span className="text-[9px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-500 px-1.5 py-0.5 rounded-md">
+                                {percent.toFixed(1)}% del total
+                            </span>
+                        </div>
+                     </div>
+                     
                      <div className="flex gap-1">
                         <button 
                             className="size-8 flex items-center justify-center rounded-full text-slate-300 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"

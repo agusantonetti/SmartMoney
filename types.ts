@@ -81,6 +81,7 @@ export interface Subscription {
   id: string;
   name: string;
   amount: number;
+  currency?: 'ARS' | 'USD'; // Nuevo campo de moneda
   billingDay: number;
   category: string;
   history?: SubscriptionPayment[];
