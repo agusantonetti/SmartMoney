@@ -1,4 +1,5 @@
-
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
 
 // Removed reference to vite/client to fix "Cannot find type definition file" error
 

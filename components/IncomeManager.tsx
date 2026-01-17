@@ -66,9 +66,31 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       return true;
   };
 
+  // Helper to get actual inputted amount for the current month
+  const getCurrentMonthRealAmount = (src: IncomeSource) => {
+      const now = new Date();
+      // Format YYYY-MM
+      const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}`;
+      
+      // Filter payments that belong to this month (matches YYYY-MM or YYYY-MM-Q1/2)
+      const currentPayments = src.payments.filter(p => p.month.startsWith(currentMonthPrefix));
+      
+      const totalReal = currentPayments.reduce((acc, p) => acc + p.realAmount, 0);
+      
+      if (src.currency === 'USD') {
+          return totalReal * dollarRate;
+      }
+      return totalReal;
+  };
+
   const getMonthlyProjection = (src: IncomeSource) => {
       if (!isContractActive(src)) return 0;
       
+      // FIX: For Creator Sources, strictly use what has been entered for the current month
+      if (src.isCreatorSource) {
+          return getCurrentMonthRealAmount(src);
+      }
+
       // Convert to ARS for total projection if source is USD
       let val = src.amount;
       if (src.currency === 'USD') {
@@ -88,8 +110,9 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const sortedSources = useMemo(() => {
       return [...sources].sort((a, b) => {
           if (sortOrder === 'AMOUNT') {
-              const valA = a.currency === 'USD' ? a.amount * dollarRate : a.amount;
-              const valB = b.currency === 'USD' ? b.amount * dollarRate : b.amount;
+              // For variable sources, use current month projection for sorting
+              const valA = a.isCreatorSource ? getCurrentMonthRealAmount(a) : (a.currency === 'USD' ? a.amount * dollarRate : a.amount);
+              const valB = b.isCreatorSource ? getCurrentMonthRealAmount(b) : (b.currency === 'USD' ? b.amount * dollarRate : b.amount);
               return valB - valA;
           }
           // Date Descending (Newest first, using ID as timestamp proxy)
@@ -99,12 +122,14 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
 
   // --- CRUD LOGIC ---
   const handleSaveSource = () => {
-      if (!name || !amount) return;
+      // If creator source, amount can be 0 or ignored
+      if (!name) return;
+      if (!isCreatorSource && !amount) return;
 
       const newSource: IncomeSource = {
           id: Date.now().toString(),
           name,
-          amount: parseFloat(amount),
+          amount: isCreatorSource ? 0 : parseFloat(amount), // Force 0 for variable sources
           currency, 
           frequency,
           startDate,
@@ -205,18 +230,21 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       let valPerHour = 0;
       let valPerPost = 0;
 
-      if (programsWeek > 0) {
-          const monthlyPrograms = programsWeek * 4.33; 
-          valPerShow = baseAmountArs / monthlyPrograms;
-          
-          if (hoursProgram > 0) {
-              const monthlyHours = monthlyPrograms * hoursProgram;
-              valPerHour = baseAmountArs / monthlyHours;
+      // Only calculate fixed per-unit values if there is a base amount
+      if (selectedSource.amount > 0) {
+          if (programsWeek > 0) {
+              const monthlyPrograms = programsWeek * 4.33; 
+              valPerShow = baseAmountArs / monthlyPrograms;
+              
+              if (hoursProgram > 0) {
+                  const monthlyHours = monthlyPrograms * hoursProgram;
+                  valPerHour = baseAmountArs / monthlyHours;
+              }
           }
-      }
 
-      if (requiredPosts > 0) {
-          valPerPost = baseAmountArs / requiredPosts;
+          if (requiredPosts > 0) {
+              valPerPost = baseAmountArs / requiredPosts;
+          }
       }
 
       return (
@@ -282,8 +310,8 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                     </div>
                 )}
 
-                {/* MEDIA SALARY / POST STATS DASHBOARD */}
-                {!selectedSource.isCreatorSource && (valPerShow > 0 || valPerPost > 0) && (
+                {/* MEDIA SALARY / POST STATS DASHBOARD - Only show if there's a base salary */}
+                {!selectedSource.isCreatorSource && selectedSource.amount > 0 && (valPerShow > 0 || valPerPost > 0) && (
                     <div className="grid grid-cols-2 gap-3">
                         {valPerPost > 0 ? (
                             <div className="col-span-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 rounded-3xl relative overflow-hidden shadow-lg flex items-center justify-between">
@@ -344,12 +372,15 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                             const checkDate = new Date(viewYear, idx, 15);
                             const isActive = isContractActive(selectedSource, checkDate);
                             
-                            const currentVal = payment?.realAmount ?? 0; 
+                            // For Creator sources, default to 0 if no payment exists (pure variable)
+                            // For Fixed sources, default to contract amount
+                            const currentVal = payment ? payment.realAmount : (selectedSource.isCreatorSource ? 0 : selectedSource.amount);
                             const isPaid = payment?.isPaid || false;
                             const impressions = payment?.metrics?.impressions || 0;
                             const rpm = (impressions > 0 && currentVal > 0) ? (currentVal / impressions) : 0;
                             const postsDone = payment?.postsCompleted || 0;
-                            const expected = selectedSource.amount; 
+                            // Expected is 0 for creator (variable), otherwise contract amount
+                            const expected = selectedSource.isCreatorSource ? 0 : selectedSource.amount;
 
                             const updatePosts = (increment: number) => {
                                 const newVal = Math.max(0, postsDone + increment);
@@ -590,32 +621,38 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                         </div>
                         <div>
                             <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Monto y Moneda</label>
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{currency === 'ARS' ? '$' : 'U$'}</span>
-                                    <input 
-                                        type="number" 
-                                        className="w-full bg-slate-100 dark:bg-slate-900 p-3 pl-8 rounded-xl outline-none font-bold text-sm"
-                                        placeholder="0"
-                                        value={amount}
-                                        onChange={e => setAmount(e.target.value)}
-                                    />
+                            {isCreatorSource ? (
+                                <div className="h-11 flex items-center px-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300 font-bold">
+                                    Ingreso variable mes a mes.
                                 </div>
-                                <div className="bg-slate-100 dark:bg-slate-900 p-1 rounded-xl flex items-center">
-                                    <button 
-                                        onClick={() => setCurrency('ARS')} 
-                                        className={`px-3 py-2 rounded-lg text-xs font-bold ${currency === 'ARS' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400'}`}
-                                    >
-                                        ARS
-                                    </button>
-                                    <button 
-                                        onClick={() => setCurrency('USD')} 
-                                        className={`px-3 py-2 rounded-lg text-xs font-bold ${currency === 'USD' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400'}`}
-                                    >
-                                        USD
-                                    </button>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">{currency === 'ARS' ? '$' : 'U$'}</span>
+                                        <input 
+                                            type="number" 
+                                            className="w-full bg-slate-100 dark:bg-slate-900 p-3 pl-8 rounded-xl outline-none font-bold text-sm"
+                                            placeholder="0"
+                                            value={amount}
+                                            onChange={e => setAmount(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="bg-slate-100 dark:bg-slate-900 p-1 rounded-xl flex items-center">
+                                        <button 
+                                            onClick={() => setCurrency('ARS')} 
+                                            className={`px-3 py-2 rounded-lg text-xs font-bold ${currency === 'ARS' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400'}`}
+                                        >
+                                            ARS
+                                        </button>
+                                        <button 
+                                            onClick={() => setCurrency('USD')} 
+                                            className={`px-3 py-2 rounded-lg text-xs font-bold ${currency === 'USD' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400'}`}
+                                        >
+                                            USD
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
 
@@ -627,7 +664,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                         </label>
                         <div>
                             <span className="text-sm font-bold block">Ingreso de Creador (X / YouTube)</span>
-                            <span className="text-[10px] text-slate-500">Habilita registro de métricas (impresiones) y cálculo RPM.</span>
+                            <span className="text-[10px] text-slate-500">Habilita registro variable por mes sin monto fijo.</span>
                         </div>
                     </div>
 
@@ -729,7 +766,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
 
                     {/* Buttons */}
                     <div className="flex gap-3 pt-2">
-                        <button onClick={handleSaveSource} disabled={!name || !amount} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">Guardar Contrato</button>
+                        <button onClick={handleSaveSource} disabled={!name || (!isCreatorSource && !amount)} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">Guardar Contrato</button>
                         <button onClick={() => setIsAdding(false)} className="px-6 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancelar</button>
                     </div>
                 </div>
@@ -754,7 +791,12 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 const isUSD = src.currency === 'USD';
                 
                 // Calculate display amounts
-                const displayAmountArs = isUSD ? src.amount * dollarRate : src.amount;
+                // For creator sources, we want to show CURRENT MONTHS real income in the list, not 0
+                const currentMonthReal = getCurrentMonthRealAmount(src);
+                
+                const displayAmountArs = src.isCreatorSource 
+                    ? currentMonthReal 
+                    : (isUSD ? src.amount * dollarRate : src.amount);
                 
                 return (
                     <div 
@@ -798,17 +840,23 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                 <div className={`font-black text-lg text-slate-900 dark:text-white transition-all duration-300 leading-none ${privacyMode ? 'blur-sm select-none' : ''}`}>
                                     {formatMoney(displayAmountArs)}
                                 </div>
-                                {isUSD && (
-                                    <div className={`text-xs font-medium text-slate-400 mt-1 ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                                        ({formatUSD(src.amount)})
-                                    </div>
-                                )}
-                                
-                                {isBiweekly && isActive && !isUSD && (
-                                    <p className="text-[10px] text-slate-400 mt-1">Est. Mes: {formatMoney(src.amount * 2)}</p>
-                                )}
-                                {isBiweekly && isActive && isUSD && (
-                                    <p className="text-[10px] text-slate-400 mt-1">Est. Mes: {formatMoney(src.amount * 2 * dollarRate)}</p>
+                                {src.isCreatorSource ? (
+                                    <p className="text-[10px] text-emerald-500 font-bold mt-1">Este mes</p>
+                                ) : (
+                                    <>
+                                        {isUSD && (
+                                            <div className={`text-xs font-medium text-slate-400 mt-1 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                                                ({formatUSD(src.amount)})
+                                            </div>
+                                        )}
+                                        
+                                        {isBiweekly && isActive && !isUSD && (
+                                            <p className="text-[10px] text-slate-400 mt-1">Est. Mes: {formatMoney(src.amount * 2)}</p>
+                                        )}
+                                        {isBiweekly && isActive && isUSD && (
+                                            <p className="text-[10px] text-slate-400 mt-1">Est. Mes: {formatMoney(src.amount * 2 * dollarRate)}</p>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
