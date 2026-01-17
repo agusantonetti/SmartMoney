@@ -846,7 +846,12 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                     {formatMoney(displayAmountArs)}
                                 </div>
                                 {src.isCreatorSource ? (
-                                    <p className="text-[10px] text-emerald-500 font-bold mt-1">Este mes</p>
+                                    <>
+                                        <div className={`text-xs font-medium text-slate-400 mt-1 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                                            ({formatUSD(displayAmountUsd)})
+                                        </div>
+                                        <p className="text-[10px] text-emerald-500 font-bold mt-0.5">Este mes</p>
+                                    </>
                                 ) : (
                                     <>
                                         <div className={`text-xs font-medium text-slate-400 mt-1 ${privacyMode ? 'blur-sm select-none' : ''}`}>
