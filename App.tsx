@@ -290,7 +290,37 @@ const App: React.FC = () => {
     // FIX: El Balance ahora es SOLO el valor manual (Patrimonio Neto), desconectado del flujo de caja diario.
     const manualBalance = safeNum(financialProfile.initialBalance || 0);
 
-    const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => sum + src.amount, 0);
+    // FIX SALARY CALCULATION: 
+    // Ahora iteramos inteligentemente para incluir los pagos VARIABLES del mes actual.
+    const currentDate = new Date();
+    const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2,'0')}`;
+
+    const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => {
+        // Ignorar inactivos si la fecha de fin ya pasó
+        if (src.isActive === false) return sum;
+        if (src.endDate && new Date(src.endDate) < currentDate) return sum;
+
+        let val = 0;
+        
+        if (src.isCreatorSource) {
+            // Para Creadores (Variables): Sumar SOLO pagos registrados para este mes
+            const monthPayments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
+            val = monthPayments.reduce((acc, p) => acc + p.realAmount, 0);
+        } else {
+            // Para Fijos: Usar el monto base
+            val = src.amount;
+            if (src.frequency === 'BIWEEKLY') val = val * 2;
+            if (src.frequency === 'ONE_TIME') val = 0; // Proyectos únicos no se suman al mensual fijo
+        }
+
+        // Convertir a ARS si está en USD
+        if (src.currency === 'USD') {
+            val = val * dollarRate;
+        }
+        
+        return sum + val;
+    }, 0);
+
     const totalReserved = (financialProfile.savingsBuckets || []).reduce((sum, bucket) => sum + bucket.currentAmount, 0);
     
     // FIX: Calcular gastos fijos normalizados a mes y convirtiendo USD a ARS

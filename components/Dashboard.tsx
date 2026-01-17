@@ -100,6 +100,36 @@ const Dashboard: React.FC<Props> = ({
       const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const prevMonthKey = prevDate.toISOString().slice(0, 7);
 
+      // Helper para calcular ingreso de contratos por mes (Variable + Fijo)
+      const getContractIncomeForMonth = (monthKey: string) => {
+          return (profile.incomeSources || []).reduce((sum, src) => {
+              // Validar vigencia
+              if (src.isActive === false) return sum;
+              if (src.startDate && src.startDate > monthKey + '-31') return sum;
+              if (src.endDate && src.endDate < monthKey + '-01') return sum;
+
+              let val = 0;
+              if (src.isCreatorSource) {
+                  // Variables: Sumar pagos registrados en ese mes específico
+                  const monthPayments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
+                  val = monthPayments.reduce((acc, p) => acc + p.realAmount, 0);
+              } else {
+                  // Fijos: Monto base
+                  val = src.amount;
+                  if (src.frequency === 'BIWEEKLY') val = val * 2;
+                  if (src.frequency === 'ONE_TIME') val = 0; 
+              }
+
+              if (src.currency === 'USD') {
+                  val = val * currentDollarRate;
+              }
+              return sum + val;
+          }, 0);
+      };
+
+      const currentContractIncome = getContractIncomeForMonth(currentMonthKey);
+      const prevContractIncome = getContractIncomeForMonth(prevMonthKey);
+
       // 1. Clasificar transacciones por periodo
       let currentIncomeVar = 0;
       let currentExpenseVar = 0;
@@ -128,14 +158,11 @@ const Dashboard: React.FC<Props> = ({
       });
 
       // 2. Totales Mensuales
-      // FIX: Solo contamos transacciones reales para el flujo de caja.
-      // Los "Gastos Fijos" (metrics.fixedExpenses) ahora son solo referenciales en su propia tarjeta y NO se suman aquí.
-      
-      const totalCurrentIncome = metrics.salaryPaid + currentIncomeVar;
+      const totalCurrentIncome = currentContractIncome + currentIncomeVar;
       const totalCurrentExpense = currentExpenseVar; // Solo transacciones reales
       const totalNetMonthly = totalCurrentIncome - totalCurrentExpense;
 
-      const totalPrevIncome = metrics.salaryPaid + prevIncomeVar;
+      const totalPrevIncome = prevContractIncome + prevIncomeVar;
       const totalPrevExpense = prevExpenseVar; // Solo transacciones reales anteriores
 
       // 3. Balance Historico (Al cierre del mes anterior)
@@ -161,7 +188,7 @@ const Dashboard: React.FC<Props> = ({
           prevExpense: totalPrevExpense,
           expensePct: calcPct(totalCurrentExpense, totalPrevExpense)
       };
-  }, [transactions, metrics, profile.initialBalance]);
+  }, [transactions, metrics, profile.initialBalance, profile.incomeSources, currentDollarRate]);
 
   // --- ALERTAS DE SUSCRIPCIÓN ---
   const subscriptionAlerts = useMemo(() => {
