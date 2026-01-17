@@ -798,6 +798,11 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                     ? currentMonthReal 
                     : (isUSD ? src.amount * dollarRate : src.amount);
                 
+                // NEW: Calculate USD equivalent for display (Fixed Incomes)
+                const displayAmountUsd = src.isCreatorSource 
+                    ? (currentMonthReal / dollarRate)
+                    : (isUSD ? src.amount : src.amount / dollarRate);
+
                 return (
                     <div 
                         key={src.id} 
@@ -844,17 +849,12 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                                     <p className="text-[10px] text-emerald-500 font-bold mt-1">Este mes</p>
                                 ) : (
                                     <>
-                                        {isUSD && (
-                                            <div className={`text-xs font-medium text-slate-400 mt-1 ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                                                ({formatUSD(src.amount)})
-                                            </div>
-                                        )}
+                                        <div className={`text-xs font-medium text-slate-400 mt-1 ${privacyMode ? 'blur-sm select-none' : ''}`}>
+                                            ({formatUSD(displayAmountUsd)})
+                                        </div>
                                         
-                                        {isBiweekly && isActive && !isUSD && (
-                                            <p className="text-[10px] text-slate-400 mt-1">Est. Mes: {formatMoney(src.amount * 2)}</p>
-                                        )}
-                                        {isBiweekly && isActive && isUSD && (
-                                            <p className="text-[10px] text-slate-400 mt-1">Est. Mes: {formatMoney(src.amount * 2 * dollarRate)}</p>
+                                        {isBiweekly && isActive && (
+                                            <p className="text-[10px] text-slate-400 mt-1">Est. Mes: {formatMoney(displayAmountArs * 2)}</p>
                                         )}
                                     </>
                                 )}
