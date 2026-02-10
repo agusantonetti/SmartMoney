@@ -70,21 +70,63 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
 
   // --- DETAIL VIEW LOGIC ---
   const selectedEvent = events.find(e => e.id === selectedEventId);
+  
   const eventTransactions = useMemo(() => {
       if (!selectedEventId) return [];
       return transactions.filter(t => t.eventId === selectedEventId).sort((a, b) => b.date.localeCompare(a.date));
   }, [selectedEventId, transactions]);
 
-  const eventTotalSpent = eventTransactions
-    .filter(t => t.type === 'expense')
-    .reduce((acc, t) => acc + t.amount, 0);
+  // CÁLCULO MEJORADO DE GASTOS
+  const eventStats = useMemo(() => {
+      const dollarRate = profile.customDollarRate || 1130;
+      
+      let totalArsSystem = 0; // Suma de amounts en BD (siempre en ARS)
+      let realUsdSpent = 0;   // Suma de originalAmount cuando es USD
+      let realArsSpent = 0;   // Suma de amount cuando NO es USD
+      
+      const categoryTotals: Record<string, number> = {};
+
+      eventTransactions.filter(t => t.type === 'expense').forEach(t => {
+          // 1. Total Sistema (Para barra de progreso vs presupuesto en ARS)
+          totalArsSystem += t.amount;
+
+          // 2. Desglose Real (Transparencia)
+          if (t.originalCurrency === 'USD') {
+              realUsdSpent += (t.originalAmount || 0);
+          } else {
+              // Si es ARS u otra moneda convertida a ARS
+              realArsSpent += t.amount;
+          }
+
+          // 3. Categorías (Usamos valor sistema unificado)
+          categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
+      });
+
+      // Total combinado estimado en USD
+      // (Dólares reales) + (Pesos convertidos al valor de hoy)
+      const totalEquivalentUsd = realUsdSpent + (realArsSpent / dollarRate);
+
+      // Ordenar categorías
+      const sortedCategories = Object.entries(categoryTotals)
+        .sort(([, a], [, b]) => b - a)
+        .map(([name, value]) => ({ name, value, percent: (value / totalArsSystem) * 100 }));
+
+      return {
+          totalArsSystem,
+          realUsdSpent,
+          realArsSpent,
+          totalEquivalentUsd,
+          sortedCategories
+      };
+  }, [eventTransactions, profile.customDollarRate]);
+
 
   // --- RENDER ---
 
   if (selectedEvent) {
       // VISTA DETALLE DEL VIAJE
       const progress = selectedEvent.budget && selectedEvent.budget > 0 
-        ? Math.min(100, (eventTotalSpent / selectedEvent.budget) * 100) 
+        ? Math.min(100, (eventStats.totalArsSystem / selectedEvent.budget) * 100) 
         : 0;
       
       const dollarRate = profile.customDollarRate || 1130;
@@ -99,7 +141,7 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                     <div>
                         <h2 className="text-lg font-bold leading-none">{selectedEvent.name}</h2>
                         <p className="text-xs text-slate-500">
-                            {selectedEvent.status === 'active' ? 'En curso' : 'Finalizado'} • {eventTransactions.length} movimientos
+                            {selectedEvent.status === 'active' ? 'En curso' : 'Finalizado'} • {eventTransactions.length} items
                         </p>
                     </div>
                 </div>
@@ -108,7 +150,7 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                         onClick={() => handleFinishEvent(selectedEvent.id)}
                         className="text-xs font-bold text-slate-400 hover:text-red-500 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-full transition-colors"
                     >
-                        Finalizar Viaje
+                        Finalizar
                     </button>
                 )}
             </div>
@@ -120,12 +162,17 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                     <div className="absolute top-0 right-0 size-40 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                     
                     <div className="relative z-10 flex flex-col items-center text-center">
-                        <p className="text-indigo-200 text-xs font-bold uppercase tracking-wider mb-2">Total Gastado</p>
-                        <h1 className="text-5xl font-black mb-1">{formatMoney(eventTotalSpent)}</h1>
-                        <p className="text-sm font-medium opacity-70 mb-4">
-                            (US$ {new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(eventTotalSpent / dollarRate)})
-                        </p>
+                        <p className="text-indigo-200 text-xs font-bold uppercase tracking-wider mb-2">Total Consolidado</p>
                         
+                        {/* Precios Principales */}
+                        <div className="flex flex-col items-center gap-1 mb-4">
+                            <h1 className="text-5xl font-black">{formatUSD(Math.round(eventStats.totalEquivalentUsd))}</h1>
+                            <p className="text-sm font-medium opacity-70">
+                                ≈ {formatMoney(eventStats.totalArsSystem)}
+                            </p>
+                        </div>
+                        
+                        {/* Barra de Presupuesto */}
                         {selectedEvent.budget && selectedEvent.budget > 0 && (
                             <div className="w-full max-w-xs bg-black/20 rounded-full h-2 mb-2 overflow-hidden">
                                 <div className={`h-full ${progress > 100 ? 'bg-red-400' : 'bg-emerald-400'}`} style={{ width: `${progress}%` }}></div>
@@ -134,12 +181,44 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                         {selectedEvent.budget && selectedEvent.budget > 0 && (
                             <p className="text-xs text-indigo-200">
                                 {progress > 100 
-                                    ? `Te excediste por ${formatMoney(eventTotalSpent - selectedEvent.budget)}` 
-                                    : `Quedan ${formatMoney(selectedEvent.budget - eventTotalSpent)} del presupuesto`}
+                                    ? `Excedido por ${formatMoney(eventStats.totalArsSystem - selectedEvent.budget)}` 
+                                    : `Disponibles: ${formatMoney(selectedEvent.budget - eventStats.totalArsSystem)}`}
                             </p>
                         )}
+
+                        {/* Desglose de Moneda Real */}
+                        <div className="mt-6 flex gap-2 w-full justify-center">
+                            <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/10 flex flex-col items-center min-w-[100px]">
+                                <span className="text-[10px] text-indigo-200 uppercase font-bold">Gastado en USD</span>
+                                <span className="font-bold text-lg">{formatUSD(eventStats.realUsdSpent)}</span>
+                            </div>
+                            <div className="bg-white/10 px-4 py-2 rounded-xl border border-white/10 flex flex-col items-center min-w-[100px]">
+                                <span className="text-[10px] text-indigo-200 uppercase font-bold">Gastado en ARS</span>
+                                <span className="font-bold text-lg">{formatMoney(eventStats.realArsSpent)}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                {/* Categorías Breakdown */}
+                {eventStats.sortedCategories.length > 0 && (
+                    <div className="bg-surface-light dark:bg-surface-dark p-5 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm animate-[fadeIn_0.2s_ease-out]">
+                        <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-slate-500">Distribución</h3>
+                        <div className="space-y-3">
+                            {eventStats.sortedCategories.map((cat) => (
+                                <div key={cat.name} className="flex items-center gap-3 text-sm">
+                                    <div className="w-24 truncate font-bold text-slate-700 dark:text-slate-300">{cat.name}</div>
+                                    <div className="flex-1 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary" style={{ width: `${cat.percent}%` }}></div>
+                                    </div>
+                                    <div className="w-20 text-right font-medium text-slate-500 text-xs">
+                                        {formatUSD(cat.value / dollarRate)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Add Button */}
                 {selectedEvent.status === 'active' && (
@@ -172,11 +251,21 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="text-right">
-                                        <span className="font-bold text-slate-900 dark:text-white block">{formatMoney(tx.amount)}</span>
-                                        {tx.originalCurrency && tx.originalCurrency !== 'ARS' && (
-                                            <span className="text-[10px] text-slate-400 block">
-                                                {tx.originalAmount} {tx.originalCurrency}
-                                            </span>
+                                        {/* Show Original Currency prominently if it's USD */}
+                                        {tx.originalCurrency === 'USD' ? (
+                                            <>
+                                                <span className="font-bold text-emerald-600 dark:text-emerald-400 block">{formatUSD(tx.originalAmount || 0)}</span>
+                                                <span className="text-[10px] text-slate-400 block">
+                                                    ({formatMoney(tx.amount)})
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-bold text-slate-900 dark:text-white block">{formatMoney(tx.amount)}</span>
+                                                <span className="text-[10px] text-slate-400 block">
+                                                    (US$ {Math.round(tx.amount / dollarRate)})
+                                                </span>
+                                            </>
                                         )}
                                     </div>
                                     
@@ -241,7 +330,7 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                     />
                     <input 
                         type="number" 
-                        placeholder="Presupuesto (Opcional)"
+                        placeholder="Presupuesto (Opcional en ARS)"
                         className="w-full bg-slate-50 dark:bg-slate-900 p-4 rounded-xl outline-none focus:ring-2 focus:ring-primary"
                         value={newEventBudget}
                         onChange={(e) => setNewEventBudget(e.target.value)}
