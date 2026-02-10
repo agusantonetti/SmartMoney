@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, TravelEvent, Transaction } from '../types';
 
@@ -61,6 +60,14 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
     }).format(amount);
   };
 
+  const formatUSD = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
   // --- DETAIL VIEW LOGIC ---
   const selectedEvent = events.find(e => e.id === selectedEventId);
   const eventTransactions = useMemo(() => {
@@ -79,6 +86,8 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
       const progress = selectedEvent.budget && selectedEvent.budget > 0 
         ? Math.min(100, (eventTotalSpent / selectedEvent.budget) * 100) 
         : 0;
+      
+      const dollarRate = profile.customDollarRate || 1130;
 
       return (
         <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
@@ -112,7 +121,10 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                     
                     <div className="relative z-10 flex flex-col items-center text-center">
                         <p className="text-indigo-200 text-xs font-bold uppercase tracking-wider mb-2">Total Gastado</p>
-                        <h1 className="text-5xl font-black mb-4">{formatMoney(eventTotalSpent)}</h1>
+                        <h1 className="text-5xl font-black mb-1">{formatMoney(eventTotalSpent)}</h1>
+                        <p className="text-sm font-medium opacity-70 mb-4">
+                            (US$ {new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(eventTotalSpent / dollarRate)})
+                        </p>
                         
                         {selectedEvent.budget && selectedEvent.budget > 0 && (
                             <div className="w-full max-w-xs bg-black/20 rounded-full h-2 mb-2 overflow-hidden">

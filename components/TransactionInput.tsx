@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, FinancialProfile, QuickAction } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -320,7 +319,8 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Only analyze on Ctrl+Enter, otherwise let native behavior (new line) happen
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         handleAnalyze();
     }
@@ -386,8 +386,8 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                             <textarea 
                                 ref={inputRef}
                                 autoFocus 
-                                placeholder={selectedCurrency.code === 'ARS' ? "Ej: Super 25000" : "Ej: Cena 50"} 
-                                className="flex-1 bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 text-lg p-2 focus:ring-0 font-medium resize-none min-h-[80px]"
+                                placeholder={selectedCurrency.code === 'ARS' ? "Ej: Super 25000\nUber 5000" : "Ej: Cena 50\nTaxi 20"} 
+                                className="flex-1 bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 text-lg p-2 focus:ring-0 font-medium resize-none min-h-[120px]"
                                 style={{ fontSize: '16px' }} // IMPORTANT: Prevents iOS zoom
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
@@ -414,6 +414,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                             </button>
                         </div>
                     </div>
+                    <p className="text-center text-xs text-slate-400 mt-1">Escribe un gasto por línea para cargar varios a la vez.</p>
                 </div>
 
                 {/* Quick Actions Grid */}
