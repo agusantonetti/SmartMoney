@@ -212,7 +212,7 @@ const App: React.FC = () => {
       }
   };
 
-  const handleAddTransaction = (txOrTxs: Transaction | Transaction[]) => {
+  const handleAddTransaction = (txOrTxs: Transaction | Transaction[], shouldNavigate = true) => {
     const incoming = Array.isArray(txOrTxs) ? txOrTxs : [txOrTxs];
     const newTransactions = [...incoming, ...transactions];
     saveToFirestore(financialProfile, newTransactions);
@@ -223,12 +223,14 @@ const App: React.FC = () => {
     
     triggerToast(message, 'success');
     
-    // Regresar al Dashboard o Eventos directamente, saltando SuccessScreen
-    if (tempEventContext) {
-        setCurrentView(ViewState.EVENTS);
-        setTempEventContext(null);
-    } else {
-        setCurrentView(ViewState.DASHBOARD);
+    // Regresar al Dashboard o Eventos solo si shouldNavigate es true
+    if (shouldNavigate) {
+        if (tempEventContext) {
+            setCurrentView(ViewState.EVENTS);
+            setTempEventContext(null);
+        } else {
+            setCurrentView(ViewState.DASHBOARD);
+        }
     }
   };
 

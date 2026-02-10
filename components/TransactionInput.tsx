@@ -4,7 +4,7 @@ import { Transaction, FinancialProfile, QuickAction } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 
 interface Props {
-  onConfirm: (transaction: Transaction | Transaction[]) => void;
+  onConfirm: (transaction: Transaction | Transaction[], shouldNavigate?: boolean) => void;
   onBack?: () => void;
   profile?: FinancialProfile; 
   onUpdateProfile?: (profile: FinancialProfile) => void;
@@ -286,7 +286,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
       setShowActionModal(false);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = (shouldNavigate = true) => {
     if (parsedItems.length === 0) return;
     const rate = parseFloat(customRate) || selectedCurrency.rate;
     const now = new Date();
@@ -306,8 +306,17 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         eventName: defaultEventName || undefined
     }));
 
-    if (finalTransactions.length === 1) onConfirm(finalTransactions[0]);
-    else onConfirm(finalTransactions);
+    if (finalTransactions.length === 1) onConfirm(finalTransactions[0], shouldNavigate);
+    else onConfirm(finalTransactions, shouldNavigate);
+
+    if (!shouldNavigate) {
+        // Reset state for new entry
+        setParsedItems([]);
+        setAnalyzed(false);
+        setInputValue("");
+        setScanMode(false);
+        setTimeout(() => inputRef.current?.focus(), 100);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -550,11 +559,18 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
             </div>
             
             <button 
-                onClick={handleConfirm}
-                className="w-full bg-primary hover:bg-blue-600 text-white rounded-2xl h-14 text-lg font-bold shadow-xl shadow-blue-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2 mb-4"
+                onClick={() => handleConfirm(false)}
+                className="w-full bg-primary hover:bg-blue-600 text-white rounded-2xl h-14 text-lg font-bold shadow-xl shadow-blue-500/30 transition-transform active:scale-95 flex items-center justify-center gap-2 mb-3"
             >
-                <span className="material-symbols-outlined text-2xl">check_circle</span>
-                Confirmar Todo
+                <span className="material-symbols-outlined text-2xl">add_circle</span>
+                Guardar y Agregar Otro
+            </button>
+
+            <button 
+                onClick={() => handleConfirm(true)}
+                className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl h-12 text-sm font-bold transition-all hover:bg-slate-200 dark:hover:bg-slate-700 mb-4"
+            >
+                Guardar y Salir
             </button>
             
             <button 
