@@ -591,7 +591,7 @@ const Dashboard: React.FC<Props> = ({
                     tooltip={<TooltipContent label="Sin Cambios" amount={metrics.fixedExpenses} percent={0} inverse={true} />} 
                   />
                   
-                  <AppCard title="Límites" subtitle="Presupuesto" icon="tune" color="teal" onClick={onOpenBudget} />
+                  <AppCard title="Presupuesto" subtitle="Tu plata mensual" icon="account_balance" color="teal" onClick={onOpenBudget} />
                   
                   <AppCard 
                     title="Apartados" 
