@@ -1,23 +1,44 @@
 
 import React, { useState, useMemo } from 'react';
-import { Transaction } from '../types';
-import { formatMoney, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon } from '../utils';
+import { Transaction, FinancialProfile } from '../types';
+import { formatMoney, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon } from '../utils';
 
 interface Props {
   transactions: Transaction[];
+  profile: FinancialProfile;
   onBack: () => void;
 }
 
-const MonthComparator: React.FC<Props> = ({ transactions, onBack }) => {
+const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => {
   const [monthA, setMonthA] = useState(getCurrentMonthKey());
   const [monthB, setMonthB] = useState(getPrevMonthKey(getCurrentMonthKey()));
+  const dollarRate = getDollarRate(profile);
+
+  // Helper: calcular ingreso de sueldos para un mes dado
+  const getSalaryForMonth = (monthKey: string) => {
+    return (profile.incomeSources || []).reduce((sum, src) => {
+      if (src.isActive === false) return sum;
+      let val = 0;
+      if (src.isCreatorSource) {
+        const payments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
+        val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+      } else {
+        val = src.amount;
+        if (src.frequency === 'BIWEEKLY') val *= 2;
+        if (src.frequency === 'ONE_TIME') val = 0;
+      }
+      if (src.currency === 'USD') val *= dollarRate;
+      return sum + val;
+    }, 0);
+  };
 
   const comparison = useMemo(() => {
     const txA = transactions.filter(t => t.date.startsWith(monthA));
     const txB = transactions.filter(t => t.date.startsWith(monthB));
 
-    const incomeA = txA.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-    const incomeB = txB.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+    // Ingresos basados en sueldos configurados
+    const incomeA = getSalaryForMonth(monthA);
+    const incomeB = getSalaryForMonth(monthB);
     const expenseA = txA.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
     const expenseB = txB.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
 
@@ -50,7 +71,7 @@ const MonthComparator: React.FC<Props> = ({ transactions, onBack }) => {
       categoryComparison,
       totalDiff: expenseA - expenseB,
     };
-  }, [transactions, monthA, monthB]);
+  }, [transactions, monthA, monthB, profile, dollarRate]);
 
   const maxCategoryAmount = Math.max(
     ...comparison.categoryComparison.map(c => Math.max(c.amountA, c.amountB)),

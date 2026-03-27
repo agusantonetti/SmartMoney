@@ -572,6 +572,7 @@ const App: React.FC = () => {
         return (
           <MonthComparator
             transactions={transactions}
+            profile={financialProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
           />
         );
