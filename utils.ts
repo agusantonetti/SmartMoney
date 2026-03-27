@@ -202,3 +202,21 @@ export const getNextMonthKey = (monthKey: string): string => {
   const d = new Date(year, month, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
+
+/** Calcula el ingreso mensual de sueldos configurados para un mes dado */
+export const getSalaryForMonth = (profile: FinancialProfile, monthKey: string, dollarRate: number): number => {
+  return (profile.incomeSources || []).reduce((sum, src) => {
+    if (src.isActive === false) return sum;
+    let val = 0;
+    if (src.isCreatorSource) {
+      const payments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
+      val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+    } else {
+      val = src.amount;
+      if (src.frequency === 'BIWEEKLY') val *= 2;
+      if (src.frequency === 'ONE_TIME') val = 0;
+    }
+    if (src.currency === 'USD') val *= dollarRate;
+    return sum + val;
+  }, 0);
+};

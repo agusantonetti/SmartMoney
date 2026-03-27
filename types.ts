@@ -143,6 +143,7 @@ export interface FinancialProfile {
   events?: TravelEvent[];
   customDollarRate?: number;
   customCategories?: string[];
+  appOrder?: string[];
 }
 
 export interface FinancialMetrics {

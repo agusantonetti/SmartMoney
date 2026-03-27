@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories } from '../utils';
+import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories, getSalaryForMonth, getDollarRate } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -18,6 +18,7 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
   const [reclassifyEdits, setReclassifyEdits] = useState<Record<string, string>>({});
 
   const availableCategories = getAllCategories(profile?.customCategories);
+  const dollarRate = getDollarRate(profile);
 
   // --- LOGIC: CATEGORY BREAKDOWN (DONUT CHART) ---
   const categoryData = useMemo(() => {
@@ -59,30 +60,23 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
       relevantTxs = transactions.filter(t => t.date.startsWith(yearKey));
     }
 
-    // Previous period transactions (for comparison)
+    // Previous period income (salary-based)
     const prevMonth = getPrevMonthKey(selectedMonth);
-    let prevTxs = transactions;
-    if (timeRange === 'MONTH') {
-      prevTxs = transactions.filter(t => t.date.startsWith(prevMonth));
-    } else if (timeRange === 'YEAR') {
-      const prevYearKey = (parseInt(selectedMonth.split('-')[0]) - 1).toString();
-      prevTxs = transactions.filter(t => t.date.startsWith(prevYearKey));
-    }
+    const prevIncome = getSalaryForMonth(profile, prevMonth, dollarRate);
+    const prevExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonth)).reduce((a, t) => a + t.amount, 0);
 
-    const prevIncome = prevTxs.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-    const prevExpense = prevTxs.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
-
-    // Income sources
-    const incomes = relevantTxs.filter(t => t.type === 'income');
-    const incomeGroups: Record<string, number> = {};
-    incomes.forEach(t => {
-       const key = t.category === 'Ingreso' ? (t.description.split(' ')[0]) : t.category;
-       incomeGroups[key] = (incomeGroups[key] || 0) + t.amount;
-    });
-    const incomeNodes = Object.keys(incomeGroups).map(k => ({
-        name: k, amount: incomeGroups[k], color: '#10b981'
-    })).sort((a,b) => b.amount - a.amount);
-    const totalIncome = incomeNodes.reduce((acc, n) => acc + n.amount, 0);
+    // Income from salary sources
+    const totalIncome = getSalaryForMonth(profile, selectedMonth, dollarRate);
+    const incomeNodes = (profile.incomeSources || []).filter(s => s.isActive !== false).map(src => {
+      let val = src.amount;
+      if (src.frequency === 'BIWEEKLY') val *= 2;
+      if (src.frequency === 'ONE_TIME') val = 0;
+      if (src.isCreatorSource) {
+        val = (src.payments?.filter(p => p.month.startsWith(selectedMonth)) || []).reduce((a, p) => a + p.realAmount, 0);
+      }
+      if (src.currency === 'USD') val *= dollarRate;
+      return { name: src.name, amount: val, color: '#10b981' };
+    }).filter(s => s.amount > 0).sort((a, b) => b.amount - a.amount);
 
     // Expense categories
     const expenses = relevantTxs.filter(t => t.type === 'expense');

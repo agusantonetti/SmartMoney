@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getSalaryForMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -19,25 +19,12 @@ const AutoPilot: React.FC<Props> = ({ profile, transactions, currentBalance, onB
   const projection = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
-    const monthsToDecember = 12 - currentMonth;
+    const monthsToDecember = 11 - currentMonth; // meses que faltan hasta diciembre
 
-    // Ingreso mensual promedio (de sueldos)
-    const monthlyIncome = (profile.incomeSources || []).reduce((sum, src) => {
-      if (src.isActive === false) return sum;
-      let val = 0;
-      if (src.isCreatorSource) {
-        const payments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
-        val = payments.reduce((a, p) => a + p.realAmount, 0);
-      } else {
-        val = src.amount;
-        if (src.frequency === 'BIWEEKLY') val *= 2;
-        if (src.frequency === 'ONE_TIME') val = 0;
-      }
-      if (src.currency === 'USD') val *= dollarRate;
-      return sum + val;
-    }, 0);
+    // Ingreso mensual (de sueldos configurados)
+    const monthlyIncome = getSalaryForMonth(profile, currentMonthKey, dollarRate);
 
-    // Gasto mensual promedio (últimos 3 meses)
+    // Gasto mensual promedio (últimos 3 meses con datos)
     const last3Months: number[] = [];
     for (let i = 0; i < 3; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -47,7 +34,7 @@ const AutoPilot: React.FC<Props> = ({ profile, transactions, currentBalance, onB
     }
     const avgExpense = last3Months.length > 0 ? last3Months.reduce((a, b) => a + b, 0) / last3Months.length : 0;
 
-    // Top categoría de gasto
+    // Top categoría de gasto (del mes actual)
     const recentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey));
     const byCat: Record<string, number> = {};
     recentExpenses.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
@@ -55,6 +42,7 @@ const AutoPilot: React.FC<Props> = ({ profile, transactions, currentBalance, onB
     const topCatName = topCategory ? topCategory[0] : 'Gastos';
     const topCatAmount = topCategory ? topCategory[1] : 0;
 
+    // Ahorro mensual = sueldo - gasto promedio
     const monthlySaving = monthlyIncome - avgExpense;
 
     // Escenario 1: Seguir igual

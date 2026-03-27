@@ -605,7 +605,7 @@ const App: React.FC = () => {
           <AutoPilot
             profile={financialProfile}
             transactions={transactions}
-            currentBalance={metrics.balance - metrics.totalReserved}
+            currentBalance={metrics.balance}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
           />
         );

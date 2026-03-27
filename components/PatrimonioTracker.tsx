@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { FinancialProfile, FinancialMetrics, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -15,30 +15,46 @@ const PatrimonioTracker: React.FC<Props> = ({ profile, metrics, transactions, on
   const patrimonio = metrics.balance;
   const patrimonioUSD = patrimonio / dollarRate;
 
-  // Evolución de patrimonio (últimos 12 meses estimado)
+  // Evolución de patrimonio (últimos 12 meses)
+  // Usa el patrimonio actual como punto de referencia y reconstruye hacia atrás
   const evolution = useMemo(() => {
     const months: { key: string, label: string, balance: number }[] = [];
     const now = new Date();
     
+    // Calcular net (sueldo - gastos) de cada mes
+    const monthlyNets: { key: string, label: string, net: number }[] = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }).replace('.', '');
       
-      // Calcular balance acumulado hasta ese mes
-      const txsUntilMonth = transactions.filter(t => t.date <= `${mk}-31`);
-      const income = txsUntilMonth.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
-      const expense = txsUntilMonth.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
-      const estimatedBalance = (profile.initialBalance || 0) + income - expense;
+      const salary = getSalaryForMonth(profile, mk, dollarRate);
+      const expense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
       
-      months.push({ key: mk, label, balance: estimatedBalance });
+      monthlyNets.push({ key: mk, label, net: salary - expense });
     }
     
-    const maxVal = Math.max(...months.map(m => Math.abs(m.balance)), 1);
+    // Reconstruir evolución desde el patrimonio actual hacia atrás
+    // Mes actual = patrimonio real (metrics.balance)
+    // Mes anterior = patrimonio actual - lo que ahorraste este mes
+    let runningBalance = patrimonio;
+    const balances: number[] = new Array(12).fill(0);
+    balances[11] = patrimonio;
+    
+    for (let i = 10; i >= 0; i--) {
+      runningBalance = runningBalance - monthlyNets[i + 1].net;
+      balances[i] = runningBalance;
+    }
+    
+    monthlyNets.forEach((m, i) => {
+      months.push({ key: m.key, label: m.label, balance: balances[i] });
+    });
+    
+    const maxVal = Math.max(...months.map(m => m.balance), 1);
     const minVal = Math.min(...months.map(m => m.balance), 0);
     
     return { months, maxVal, minVal };
-  }, [transactions, profile.initialBalance]);
+  }, [transactions, profile, patrimonio, dollarRate]);
 
   // Niveles de riqueza
   const levels = [

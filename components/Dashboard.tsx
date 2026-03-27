@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile, Subscription } from '../types';
-import { formatMoney, formatMoneyUSD } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth } from '../utils';
 
 interface Props {
   metrics: FinancialMetrics;
@@ -65,6 +65,7 @@ const Dashboard: React.FC<Props> = ({
   
   const [showNotifications, setShowNotifications] = useState(false);
   const [isEditingRate, setIsEditingRate] = useState(false);
+  const [isEditingApps, setIsEditingApps] = useState(false);
   const [tempRate, setTempRate] = useState(profile.customDollarRate?.toString() || "1130");
 
   useEffect(() => {
@@ -289,7 +290,7 @@ const Dashboard: React.FC<Props> = ({
       for (let i = 0; i < 12; i++) {
           const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
           const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-          const monthIncome = transactions.filter(t => t.type === 'income' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
+          const monthIncome = getSalaryForMonth(profile, mk, currentDollarRate);
           const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
           if (monthIncome > monthExpense && monthIncome > 0) streak++;
           else break;
@@ -319,12 +320,12 @@ const Dashboard: React.FC<Props> = ({
         key,
         label,
         expense: monthTxs.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0),
-        income: monthTxs.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0),
+        income: getSalaryForMonth(profile, key, currentDollarRate),
       });
     }
     const maxVal = Math.max(...months.map(m => Math.max(m.expense, m.income)), 1);
     return { months, maxVal };
-  }, [transactions]);
+  }, [transactions, profile, currentDollarRate]);
 
   // --- TOOLTIP COMPONENT ---
   const TooltipContent = ({ label, amount, percent, inverse = false }: { label: string, amount: number, percent: number, inverse?: boolean }) => {
@@ -644,51 +645,107 @@ const Dashboard: React.FC<Props> = ({
           )}
 
           {/* 3. APP LAUNCHER GRID */}
-          <div>
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1">Apps & Herramientas</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  <AppCard title="Ingresos" subtitle="Fuentes fijas" icon="payments" color="blue" onClick={onOpenIncomeManager} />
-                  
-                  <AppCard 
-                    title="Gastos Fijos" 
-                    subtitle={`Total: ${formatMoney(metrics.fixedExpenses)}`} 
-                    icon="home_work" 
-                    color="indigo" 
-                    onClick={onOpenSubscriptions} 
-                    privacyMode={privacyMode} 
-                    tooltip={<TooltipContent label="Sin Cambios" amount={metrics.fixedExpenses} percent={0} inverse={true} />} 
-                  />
-                  
-                  <AppCard title="Presupuesto" subtitle="Tu plata mensual" icon="account_balance" color="teal" onClick={onOpenBudget} />
-                  
-                  <AppCard 
-                    title="Apartados" 
-                    subtitle={`${formatMoney(metrics.totalReserved)}`} 
-                    icon="savings" 
-                    color="purple" 
-                    onClick={onOpenSavingsBuckets} 
-                    privacyMode={privacyMode} 
-                    tooltip={
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 bg-slate-900/95 backdrop-blur-xl text-white p-3 rounded-xl shadow-xl border border-white/10 z-50 w-max opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none scale-95 group-hover:scale-100 origin-top">
-                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900/95 border-l border-t border-white/10 rotate-45"></div>
-                            <p className="text-slate-400 mb-1 font-bold uppercase text-[9px]">Disponible Real</p>
-                            <span className="font-bold text-sm">{formatMoney(metrics.balance - metrics.totalReserved)}</span>
-                        </div>
-                    }
-                  />
-                  
-                  <AppCard title="Eventos" subtitle={`${activeEventsCount} Activos`} icon="flight_takeoff" color="pink" onClick={onOpenEvents} />
-                  <AppCard title="Deudas" subtitle={`${formatMoney(metrics.totalDebt)}`} icon="gavel" color="red" onClick={onOpenDebts} privacyMode={privacyMode} />
-                  <AppCard title="Analíticas" subtitle="Gráficos" icon="bar_chart" color="orange" onClick={onOpenAnalytics} />
-                  <AppCard title="Comparar" subtitle="Mes vs Mes" icon="compare_arrows" color="cyan" onClick={onOpenMonthComparator} />
-                  <AppCard title="Radiografía" subtitle="Foto completa" icon="monitoring" color="amber" onClick={onOpenFinancialXRay} />
-                  <AppCard title="Patrimonio" subtitle="Tu crecimiento" icon="diamond" color="purple" onClick={onOpenPatrimonio} />
-                  <AppCard title="Piloto Auto" subtitle="Proyección" icon="rocket_launch" color="emerald" onClick={onOpenAutoPilot} />
-                  <AppCard title="Conversor" subtitle="Dólar & Divisas" icon="currency_exchange" color="yellow" onClick={onOpenCurrencyConverter} />
-                  <AppCard title="Simulador" subtitle="Futuro a 30 días" icon="timeline" color="violet" onClick={onOpenFuture} />
-                  <AppCard title="Costo Vida" subtitle="Calculadora" icon="price_check" color="emerald" onClick={onOpenSalaryCalculator} />
-              </div>
-          </div>
+          {(() => {
+              const allApps = [
+                  { id: 'ingresos', title: 'Ingresos', subtitle: 'Fuentes fijas', icon: 'payments', color: 'blue', onClick: onOpenIncomeManager },
+                  { id: 'gastos-fijos', title: 'Gastos Fijos', subtitle: `Total: ${formatMoney(metrics.fixedExpenses)}`, icon: 'home_work', color: 'indigo', onClick: onOpenSubscriptions, showPrivacy: true },
+                  { id: 'presupuesto', title: 'Presupuesto', subtitle: 'Tu plata mensual', icon: 'account_balance', color: 'teal', onClick: onOpenBudget },
+                  { id: 'apartados', title: 'Apartados', subtitle: `${formatMoney(metrics.totalReserved)}`, icon: 'savings', color: 'purple', onClick: onOpenSavingsBuckets, showPrivacy: true },
+                  { id: 'eventos', title: 'Eventos', subtitle: `${activeEventsCount} Activos`, icon: 'flight_takeoff', color: 'pink', onClick: onOpenEvents },
+                  { id: 'deudas', title: 'Deudas', subtitle: `${formatMoney(metrics.totalDebt)}`, icon: 'gavel', color: 'red', onClick: onOpenDebts, showPrivacy: true },
+                  { id: 'analiticas', title: 'Analíticas', subtitle: 'Gráficos', icon: 'bar_chart', color: 'orange', onClick: onOpenAnalytics },
+                  { id: 'comparar', title: 'Comparar', subtitle: 'Mes vs Mes', icon: 'compare_arrows', color: 'cyan', onClick: onOpenMonthComparator },
+                  { id: 'radiografia', title: 'Radiografía', subtitle: 'Foto completa', icon: 'monitoring', color: 'amber', onClick: onOpenFinancialXRay },
+                  { id: 'patrimonio', title: 'Patrimonio', subtitle: 'Tu crecimiento', icon: 'diamond', color: 'purple', onClick: onOpenPatrimonio },
+                  { id: 'piloto', title: 'Piloto Auto', subtitle: 'Proyección', icon: 'rocket_launch', color: 'emerald', onClick: onOpenAutoPilot },
+                  { id: 'conversor', title: 'Conversor', subtitle: 'Dólar & Divisas', icon: 'currency_exchange', color: 'yellow', onClick: onOpenCurrencyConverter },
+                  { id: 'simulador', title: 'Simulador', subtitle: 'Futuro a 30 días', icon: 'timeline', color: 'violet', onClick: onOpenFuture },
+                  { id: 'costo-vida', title: 'Costo Vida', subtitle: 'Calculadora', icon: 'price_check', color: 'emerald', onClick: onOpenSalaryCalculator },
+              ];
+
+              // Ordenar según el orden guardado del usuario
+              const savedOrder = profile.appOrder || [];
+              const orderedApps = savedOrder.length > 0
+                  ? [...allApps].sort((a, b) => {
+                      const idxA = savedOrder.indexOf(a.id);
+                      const idxB = savedOrder.indexOf(b.id);
+                      if (idxA === -1 && idxB === -1) return 0;
+                      if (idxA === -1) return 1;
+                      if (idxB === -1) return -1;
+                      return idxA - idxB;
+                  })
+                  : allApps;
+
+              const moveApp = (index: number, direction: 'up' | 'down') => {
+                  const newIndex = direction === 'up' ? index - 1 : index + 1;
+                  if (newIndex < 0 || newIndex >= orderedApps.length) return;
+                  const newOrder = orderedApps.map(a => a.id);
+                  [newOrder[index], newOrder[newIndex]] = [newOrder[newIndex], newOrder[index]];
+                  if (onUpdateProfile) {
+                      onUpdateProfile({ ...profile, appOrder: newOrder });
+                  }
+              };
+
+              return (
+                  <div>
+                      <div className="flex items-center justify-between mb-3 ml-1">
+                          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Apps & Herramientas</h3>
+                          <button 
+                              onClick={() => setIsEditingApps(!isEditingApps)}
+                              className={`text-[10px] font-bold px-3 py-1 rounded-full transition-colors ${isEditingApps ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-primary'}`}
+                          >
+                              {isEditingApps ? 'Listo' : 'Ordenar'}
+                          </button>
+                      </div>
+                      <div className={`grid ${isEditingApps ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'} gap-3`}>
+                          {orderedApps.map((app, index) => (
+                              isEditingApps ? (
+                                  <div key={app.id} className="flex items-center gap-2 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl border border-white/30 dark:border-slate-700/50 rounded-xl p-3 shadow-sm">
+                                      <div className="flex flex-col gap-0.5">
+                                          <button 
+                                              onClick={() => moveApp(index, 'up')}
+                                              className={`size-7 rounded-lg flex items-center justify-center transition-colors ${index === 0 ? 'opacity-20' : 'bg-slate-100 dark:bg-slate-800 hover:bg-primary/20 text-slate-500 hover:text-primary'}`}
+                                              disabled={index === 0}
+                                          >
+                                              <span className="material-symbols-outlined text-[16px]">expand_less</span>
+                                          </button>
+                                          <button 
+                                              onClick={() => moveApp(index, 'down')}
+                                              className={`size-7 rounded-lg flex items-center justify-center transition-colors ${index === orderedApps.length - 1 ? 'opacity-20' : 'bg-slate-100 dark:bg-slate-800 hover:bg-primary/20 text-slate-500 hover:text-primary'}`}
+                                              disabled={index === orderedApps.length - 1}
+                                          >
+                                              <span className="material-symbols-outlined text-[16px]">expand_more</span>
+                                          </button>
+                                      </div>
+                                      <div className="flex items-center gap-3 flex-1">
+                                          <div className={`size-8 rounded-lg flex items-center justify-center ${
+                                              {blue:'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',indigo:'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400',teal:'bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400',purple:'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',pink:'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400',red:'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',orange:'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',yellow:'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',emerald:'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',violet:'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400',amber:'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',cyan:'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400'}[app.color] || ''
+                                          }`}>
+                                              <span className="material-symbols-outlined text-[18px]">{app.icon}</span>
+                                          </div>
+                                          <div>
+                                              <p className="text-sm font-bold text-slate-900 dark:text-white">{app.title}</p>
+                                              <p className="text-[10px] text-slate-400">{app.subtitle}</p>
+                                          </div>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-slate-300 dark:text-slate-600">#{index + 1}</span>
+                                  </div>
+                              ) : (
+                                  <AppCard 
+                                      key={app.id} 
+                                      title={app.title} 
+                                      subtitle={app.subtitle} 
+                                      icon={app.icon} 
+                                      color={app.color} 
+                                      onClick={app.onClick} 
+                                      privacyMode={app.showPrivacy ? privacyMode : false} 
+                                  />
+                              )
+                          ))}
+                      </div>
+                  </div>
+              );
+          })()}
 
         </div>
       </div>
