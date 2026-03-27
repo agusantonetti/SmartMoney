@@ -137,7 +137,7 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
                 <div key={i} className="flex items-center justify-between">
                   <span className="text-sm text-slate-600 dark:text-slate-300">{src.name}</span>
                   <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    {src.currency === 'USD' ? `US$ ${src.amount.toLocaleString()}` : formatMoney(src.amount * (src.currency === 'USD' ? dollarRate : 1))}
+                    {src.currency === 'USD' ? `US$ ${src.amount.toLocaleString()}` : formatMoney(src.amount)}
                   </span>
                 </div>
               ))}
