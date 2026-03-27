@@ -22,39 +22,15 @@ import CurrencyConverter from './components/CurrencyConverter';
 import WealthLevel from './components/WealthLevel'; 
 import Achievements from './components/Achievements'; 
 
+// UTILS
+import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
+
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import * as firestore from 'firebase/firestore';
 
 const { doc, setDoc, onSnapshot } = firestore;
-
-// Helper para traducir errores de Firebase a mensajes amigables
-const getFriendlyErrorMessage = (error: any): string => {
-  const code = error?.code || '';
-  const message = error?.message || '';
-
-  if (code.includes('unavailable') || message.includes('offline')) {
-      return "Sin conexión. Los cambios se guardarán al recuperar internet.";
-  }
-  if (code.includes('permission-denied')) {
-      return "No tienes permisos para realizar esta acción.";
-  }
-  if (code.includes('resource-exhausted')) {
-      return "Límite de cuota excedido. Intenta más tarde.";
-  }
-  if (code.includes('cancelled')) {
-      return "La operación fue cancelada.";
-  }
-  if (code.includes('unauthenticated')) {
-      return "Tu sesión ha expirado. Por favor ingresa nuevamente.";
-  }
-  if (code.includes('network-request-failed')) {
-      return "Error de red. Verifica tu conexión.";
-  }
-  
-  return "Ocurrió un error inesperado. Intenta nuevamente.";
-};
 
 // Default Actions definition for init
 const DEFAULT_ACTIONS: QuickAction[] = [
@@ -196,13 +172,10 @@ const App: React.FC = () => {
 
       try {
           const userDocRef = doc(db, 'users', currentUser.uid);
-          
-          // SANITIZACIÓN: Eliminar valores 'undefined' que causan error en Firestore
-          const sanitize = (data: any) => JSON.parse(JSON.stringify(data));
 
           await setDoc(userDocRef, {
-              profile: sanitize(newProfile),
-              transactions: sanitize(newTransactions)
+              profile: sanitizeForFirestore(newProfile),
+              transactions: sanitizeForFirestore(newTransactions)
           }, { merge: true });
       } catch (e: any) {
           console.error("Error guardando en nube:", e);
@@ -278,8 +251,7 @@ const App: React.FC = () => {
   // --- APP LOGIC ---
 
   const metrics: FinancialMetrics = useMemo(() => {
-    const safeNum = (n: number) => (isNaN(n) || !isFinite(n)) ? 0 : n;
-    const dollarRate = financialProfile.customDollarRate || 1130;
+    const dollarRate = getDollarRate(financialProfile);
 
     const income = transactions
       .filter(t => t.type === 'income')

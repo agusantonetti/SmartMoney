@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile, Subscription } from '../types';
+import { formatMoney, formatMoneyUSD } from '../utils';
 
 interface Props {
   metrics: FinancialMetrics;
@@ -73,22 +74,6 @@ const Dashboard: React.FC<Props> = ({
   };
 
   const currentDollarRate = parseFloat(tempRate) || 1130;
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { 
-      style: 'currency', 
-      currency: 'ARS',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatMoneyUSD = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency: 'USD',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
 
   const defaultAvatar = "https://lh3.googleusercontent.com/aida-public/AB6AXuD3W_-QV28bpv6tswBdb3gVXfvQ9Sd1qa2FIGrEXSr2QQhwgjBocZveQ_iZ7J4KEKay2_eW-X1e_D_YgmIkcA8CzxI9m9DrfSKITYEyZh1QbS_cU-ikAMnjc7jppiRpUtx2MU_e_8F4iEoxnnZDfqR5h0oOSuSVTm6ylZNFaJtmmBRyWTnZFGJLM0cmMDBGgzzyJBlAtbXeWNN-cYcN-zQt3qUI1cKXVPswGJB4Tmr449006R1-PDELmsW7e06pa1WY4URePcx_rEcX";
 

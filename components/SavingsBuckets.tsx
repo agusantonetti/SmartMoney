@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { FinancialProfile, SavingsBucket } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -84,14 +85,6 @@ const SavingsBuckets: React.FC<Props> = ({ profile, totalBalance, onUpdateProfil
     const updated = buckets.filter(b => b.id !== id);
     setBuckets(updated);
     onUpdateProfile({ ...profile, savingsBuckets: updated });
-  };
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', { 
-      style: 'currency', 
-      currency: 'MXN',
-      maximumFractionDigits: 0
-    }).format(amount);
   };
 
   return (

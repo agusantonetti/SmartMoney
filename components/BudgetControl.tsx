@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -52,10 +53,6 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
     onUpdateProfile({ ...profile, budgetLimits: newLimits });
     setEditingCategory(null);
     setLimitInput('');
-  };
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
   };
 
   const getProgressColor = (spent: number, limit: number) => {

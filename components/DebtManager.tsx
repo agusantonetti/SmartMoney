@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { FinancialProfile, Debt } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -69,14 +70,6 @@ const DebtManager: React.FC<Props> = ({ profile, totalBalance, onUpdateProfile, 
     const updated = debts.filter(d => d.id !== id);
     setDebts(updated);
     onUpdateProfile({ ...profile, debts: updated });
-  };
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', { 
-      style: 'currency', 
-      currency: 'MXN', 
-      maximumFractionDigits: 0 
-    }).format(amount);
   };
 
   return (

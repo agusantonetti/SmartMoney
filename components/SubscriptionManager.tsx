@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Subscription, SubscriptionPayment } from '../types';
+import { formatMoney, formatCurrency, getDollarRate } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -18,7 +19,7 @@ const CATEGORIES = [
 
 const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>(profile.subscriptions || []);
-  const dollarRate = profile.customDollarRate || 1130;
+  const dollarRate = getDollarRate(profile);
   
   // View State
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
@@ -40,14 +41,6 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
   const getCurrentMonthKey = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  };
-
-  const formatMoney = (amount: number, currencyCode: string = 'ARS') => {
-    return new Intl.NumberFormat(currencyCode === 'ARS' ? 'es-AR' : 'en-US', { 
-      style: 'currency', 
-      currency: currencyCode, 
-      maximumFractionDigits: 0 
-    }).format(amount);
   };
 
   // Helper to get value in ARS normalized to monthly frequency for calculation and sorting
@@ -268,7 +261,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                            {/* Amount Info (Static Display) */}
                            <div className="md:col-span-4 flex md:justify-center items-center">
                               <p className={`font-bold ${isPaid ? 'text-slate-900 dark:text-white' : 'text-slate-400'} ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                                  {formatMoney(currentAmount, selectedSub.currency)}
+                                  {formatCurrency(currentAmount, selectedSub.currency)}
                               </p>
                            </div>
 
@@ -533,7 +526,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                    <div className="flex items-center justify-between sm:justify-end gap-4">
                      <div className="text-right">
                         <span className={`font-black text-lg text-slate-800 dark:text-slate-200 transition-all duration-300 block leading-none ${privacyMode ? 'blur-sm select-none' : ''}`}>
-                            {formatMoney(sub.amount, sub.currency || 'ARS')}
+                            {formatCurrency(sub.amount, sub.currency || 'ARS')}
                         </span>
                         
                         {sub.currency === 'USD' && (

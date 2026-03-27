@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -83,10 +84,6 @@ const BudgetAdjust: React.FC<Props> = ({ profile, freeBalance, onUpdateProfile, 
     // Reset or Go Back
     setAmount('');
     onBack();
-  };
-
-  const formatMoney = (val: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(val);
   };
 
   return (

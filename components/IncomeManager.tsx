@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, IncomeSource, IncomePayment, PaymentFrequency } from '../types';
+import { formatMoney, formatUSD, getDollarRate } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -12,7 +13,7 @@ interface Props {
 
 const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
   const [sources, setSources] = useState<IncomeSource[]>(profile.incomeSources || []);
-  const dollarRate = profile.customDollarRate || 1130;
+  const dollarRate = getDollarRate(profile);
   
   // Sorting State
   const [sortOrder, setSortOrder] = useState<'AMOUNT' | 'DATE'>('AMOUNT');
@@ -38,22 +39,6 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
 
   // --- HELPERS ---
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { 
-      style: 'currency', 
-      currency: 'ARS',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatUSD = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency: 'USD',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
   const isContractActive = (src: IncomeSource, targetDate: Date = new Date()) => {
       if (src.isActive === false) return false;
       const start = src.startDate ? new Date(src.startDate) : new Date(0);

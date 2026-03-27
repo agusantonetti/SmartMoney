@@ -1,6 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -181,14 +182,6 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
     ...historyData.map(d => Math.max(d.income, d.expense)),
     100
   );
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', { 
-      style: 'currency', 
-      currency: 'MXN',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
 
   return (
     <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">

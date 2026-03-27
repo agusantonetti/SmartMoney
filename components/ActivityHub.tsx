@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -70,10 +71,6 @@ const ActivityHub: React.FC<Props> = ({ transactions, onUpdateTransactions, onBa
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  };
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
   };
 
   return (

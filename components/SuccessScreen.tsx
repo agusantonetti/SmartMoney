@@ -1,6 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { FinancialMetrics } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   onBack: () => void;
@@ -9,11 +10,6 @@ interface Props {
 
 const SuccessScreen: React.FC<Props> = ({ onBack, metrics }) => {
   
-  // Helpers
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
-  };
-
   // Calcular Nivel Actual de Riqueza
   const wealthData = useMemo(() => {
     const balance = metrics?.balance || 0;

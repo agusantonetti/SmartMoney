@@ -1,6 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { Transaction, FinancialProfile } from '../types';
+import { formatMoney } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -74,10 +75,6 @@ const FutureSimulator: React.FC<Props> = ({ transactions, profile, currentBalanc
     }
     return dataPoints;
   }, [currentBalance, averageDailySpend, profile]);
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(amount);
-  };
 
   const finalBalance = projection[projection.length - 1].balance;
   const daysUntilZero = projection.findIndex(p => p.balance < 0);

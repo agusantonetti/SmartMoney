@@ -1,6 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { FinancialProfile, FinancialMetrics } from '../types';
+import { formatUSD, getDollarRate } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -9,7 +10,7 @@ interface Props {
 }
 
 const WealthLevel: React.FC<Props> = ({ profile, metrics, onBack }) => {
-  const dollarRate = profile.customDollarRate || 1130;
+  const dollarRate = getDollarRate(profile);
   const balanceUSD = metrics.balance / dollarRate;
 
   // Sistema de 12 Niveles para gamificación constante
@@ -129,10 +130,6 @@ const WealthLevel: React.FC<Props> = ({ profile, metrics, onBack }) => {
   const progressPercent = nextLevel 
     ? Math.min(100, Math.max(0, ((balanceUSD - currentLevel.limit) / (nextLevel.limit - currentLevel.limit)) * 100))
     : 100;
-
-  const formatUSD = (val: number) => {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val);
-  };
 
   return (
     <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">

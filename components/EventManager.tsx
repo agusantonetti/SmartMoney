@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, TravelEvent, Transaction } from '../types';
+import { formatMoney, formatUSD, getDollarRate } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -52,22 +53,6 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
       }
   };
 
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { 
-      style: 'currency', 
-      currency: 'ARS',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const formatUSD = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency: 'USD',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
   // --- DETAIL VIEW LOGIC ---
   const selectedEvent = events.find(e => e.id === selectedEventId);
   
@@ -78,7 +63,7 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
 
   // CÁLCULO MEJORADO DE GASTOS
   const eventStats = useMemo(() => {
-      const dollarRate = profile.customDollarRate || 1130;
+      const dollarRate = getDollarRate(profile);
       
       let totalArsSystem = 0; // Suma de amounts en BD (siempre en ARS)
       let realUsdSpent = 0;   // Suma de originalAmount cuando es USD
@@ -129,7 +114,7 @@ const EventManager: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
         ? Math.min(100, (eventStats.totalArsSystem / selectedEvent.budget) * 100) 
         : 0;
       
-      const dollarRate = profile.customDollarRate || 1130;
+      const dollarRate = getDollarRate(profile);
 
       return (
         <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">

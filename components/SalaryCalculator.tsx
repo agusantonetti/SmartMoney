@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FinancialProfile, Transaction } from '../types';
+import { formatMoney, getDollarRate } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -13,7 +14,7 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
   const [activeTab, setActiveTab] = useState<'SALARY' | 'RUNWAY' | 'MEDIA'>('SALARY');
 
   // --- SHARED DATA ---
-  const currentDollarRate = profile.customDollarRate || 1130;
+  const currentDollarRate = getDollarRate(profile);
   
   // --- TAB 1: SALARY CALCULATOR STATE ---
   const [income, setIncome] = useState<string>('');
@@ -75,14 +76,6 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
 
   const incomePerProgram = totalProgramsMonth > 0 ? calcMediaIncome / totalProgramsMonth : 0;
   const incomePerHour = totalHoursMonth > 0 ? calcMediaIncome / totalHoursMonth : 0;
-
-  const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('es-AR', { 
-      style: 'currency', 
-      currency: 'ARS',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
 
   return (
     <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
