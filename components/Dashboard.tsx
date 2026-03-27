@@ -220,6 +220,84 @@ const Dashboard: React.FC<Props> = ({
   const wealthLevel = getWealthLevel(metrics.balance, currentDollarRate);
   const balanceUSD = metrics.balance / currentDollarRate;
 
+  // --- INSIGHTS INTELIGENTES ---
+  const insights = useMemo(() => {
+      const cards: { id: string, icon: string, text: string, color: string, action?: () => void }[] = [];
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+
+      const currentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey));
+      const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey));
+
+      // 1. Balance mensual
+      if (stats.netMonthly > 0) {
+          cards.push({ id: 'net-positive', icon: 'trending_up', text: `Balance positivo este mes: te sobran ${formatMoney(stats.netMonthly)}`, color: 'emerald' });
+      } else if (stats.netMonthly < 0 && stats.totalMonthlyIncome > 0) {
+          cards.push({ id: 'net-negative', icon: 'warning', text: `Gastaste ${formatMoney(Math.abs(stats.netMonthly))} más de lo que ingresaste este mes`, color: 'red' });
+      }
+
+      // 2. Categorías que subieron mucho vs mes anterior
+      const currentByCategory: Record<string, number> = {};
+      const prevByCategory: Record<string, number> = {};
+      currentExpenses.forEach(t => { currentByCategory[t.category] = (currentByCategory[t.category] || 0) + t.amount; });
+      prevExpenses.forEach(t => { prevByCategory[t.category] = (prevByCategory[t.category] || 0) + t.amount; });
+
+      Object.keys(currentByCategory).forEach(cat => {
+          if (cat === 'Otros' || cat === 'Ingreso') return;
+          const curr = currentByCategory[cat];
+          const prev = prevByCategory[cat] || 0;
+          if (prev > 0 && curr > prev * 1.3 && curr > 5000) {
+              const pct = Math.round(((curr - prev) / prev) * 100);
+              cards.push({ id: `cat-up-${cat}`, icon: 'trending_up', text: `${cat}: gastaste ${pct}% más que el mes pasado (${formatMoney(curr)} vs ${formatMoney(prev)})`, color: 'amber' });
+          }
+      });
+
+      // 3. Categoría top del mes
+      const topCategory = Object.entries(currentByCategory).sort((a, b) => b[1] - a[1])[0];
+      if (topCategory && topCategory[1] > 0) {
+          const totalExp = currentExpenses.reduce((a, t) => a + t.amount, 0);
+          const pct = Math.round((topCategory[1] / totalExp) * 100);
+          if (pct > 40) {
+              cards.push({ id: 'top-cat', icon: 'pie_chart', text: `${topCategory[0]} representa el ${pct}% de tus gastos este mes`, color: 'blue' });
+          }
+      }
+
+      // 4. Suscripciones próximas a vencer (mostrar las que vencen en 3 días)
+      subscriptionAlerts.forEach(alert => {
+          const dayText = alert.daysLeft === 0 ? 'hoy' : alert.daysLeft === 1 ? 'mañana' : `en ${alert.daysLeft} días`;
+          cards.push({ id: `sub-${alert.sub.id}`, icon: 'event_upcoming', text: `${alert.sub.name} vence ${dayText} — ${formatMoney(alert.sub.amount)}`, color: 'purple', action: onOpenSubscriptions });
+      });
+
+      // 5. Gastos sin categoría
+      const otrosCount = currentExpenses.filter(t => t.category === 'Otros').length;
+      if (otrosCount > 0) {
+          cards.push({ id: 'otros', icon: 'help_center', text: `Tenés ${otrosCount} gasto${otrosCount > 1 ? 's' : ''} sin categoría este mes — reclasificalos en Analíticas`, color: 'amber', action: onOpenAnalytics });
+      }
+
+      // 6. Racha de meses positivos
+      let streak = 0;
+      for (let i = 0; i < 12; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const monthIncome = transactions.filter(t => t.type === 'income' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
+          const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
+          if (monthIncome > monthExpense && monthIncome > 0) streak++;
+          else break;
+      }
+      if (streak >= 2) {
+          cards.push({ id: 'streak', icon: 'local_fire_department', text: `Racha de ${streak} meses con balance positivo`, color: 'emerald' });
+      }
+
+      // 7. Sin movimientos este mes
+      if (currentExpenses.length === 0 && stats.totalMonthlyIncome === 0) {
+          cards.push({ id: 'empty', icon: 'edit_note', text: `No registraste movimientos este mes — cargá tus gastos para ver tu resumen`, color: 'gray' });
+      }
+
+      return cards;
+  }, [transactions, stats, subscriptionAlerts, metrics]);
+
   // --- TOOLTIP COMPONENT ---
   const TooltipContent = ({ label, amount, percent, inverse = false }: { label: string, amount: number, percent: number, inverse?: boolean }) => {
       const isPositiveGood = !inverse;
@@ -461,6 +539,41 @@ const Dashboard: React.FC<Props> = ({
                   <span className="material-symbols-outlined text-xl md:text-2xl">swap_horiz</span>
               </button>
           </div>
+
+          {/* 2.5 INSIGHTS INTELIGENTES */}
+          {insights.length > 0 && (
+              <div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 ml-1 flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                      Insights
+                  </h3>
+                  <div className="space-y-2">
+                      {insights.map(insight => {
+                          const colorMap: Record<string, { bg: string, border: string, icon: string, text: string }> = {
+                              emerald: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-200 dark:border-emerald-800', icon: 'text-emerald-500', text: 'text-emerald-800 dark:text-emerald-300' },
+                              red: { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-200 dark:border-red-800', icon: 'text-red-500', text: 'text-red-800 dark:text-red-300' },
+                              amber: { bg: 'bg-amber-50 dark:bg-amber-900/20', border: 'border-amber-200 dark:border-amber-800', icon: 'text-amber-500', text: 'text-amber-800 dark:text-amber-300' },
+                              blue: { bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-200 dark:border-blue-800', icon: 'text-blue-500', text: 'text-blue-800 dark:text-blue-300' },
+                              purple: { bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-200 dark:border-purple-800', icon: 'text-purple-500', text: 'text-purple-800 dark:text-purple-300' },
+                              gray: { bg: 'bg-slate-50 dark:bg-slate-800/50', border: 'border-slate-200 dark:border-slate-700', icon: 'text-slate-400', text: 'text-slate-600 dark:text-slate-300' },
+                          };
+                          const c = colorMap[insight.color] || colorMap.gray;
+
+                          return (
+                              <button
+                                  key={insight.id}
+                                  onClick={insight.action}
+                                  className={`w-full flex items-center gap-3 p-3 rounded-xl border ${c.bg} ${c.border} transition-all ${insight.action ? 'hover:scale-[1.01] active:scale-[0.99] cursor-pointer' : 'cursor-default'}`}
+                              >
+                                  <span className={`material-symbols-outlined text-[20px] ${c.icon} shrink-0`}>{insight.icon}</span>
+                                  <p className={`text-xs font-medium text-left leading-snug ${c.text}`}>{insight.text}</p>
+                                  {insight.action && <span className="material-symbols-outlined text-[16px] text-slate-300 dark:text-slate-600 shrink-0 ml-auto">chevron_right</span>}
+                              </button>
+                          );
+                      })}
+                  </div>
+              </div>
+          )}
 
           {/* 3. APP LAUNCHER GRID */}
           <div>
