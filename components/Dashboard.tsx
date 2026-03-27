@@ -22,6 +22,9 @@ interface Props {
   onOpenWealthLevels?: () => void;
   onOpenAchievements?: () => void;
   onOpenMonthComparator?: () => void;
+  onOpenFinancialXRay?: () => void;
+  onOpenPatrimonio?: () => void;
+  onOpenAutoPilot?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -49,6 +52,9 @@ const Dashboard: React.FC<Props> = ({
   onOpenWealthLevels,
   onOpenAchievements,
   onOpenMonthComparator,
+  onOpenFinancialXRay,
+  onOpenPatrimonio,
+  onOpenAutoPilot,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -675,6 +681,9 @@ const Dashboard: React.FC<Props> = ({
                   <AppCard title="Deudas" subtitle={`${formatMoney(metrics.totalDebt)}`} icon="gavel" color="red" onClick={onOpenDebts} privacyMode={privacyMode} />
                   <AppCard title="Analíticas" subtitle="Gráficos" icon="bar_chart" color="orange" onClick={onOpenAnalytics} />
                   <AppCard title="Comparar" subtitle="Mes vs Mes" icon="compare_arrows" color="cyan" onClick={onOpenMonthComparator} />
+                  <AppCard title="Radiografía" subtitle="Foto completa" icon="monitoring" color="amber" onClick={onOpenFinancialXRay} />
+                  <AppCard title="Patrimonio" subtitle="Tu crecimiento" icon="diamond" color="purple" onClick={onOpenPatrimonio} />
+                  <AppCard title="Piloto Auto" subtitle="Proyección" icon="rocket_launch" color="emerald" onClick={onOpenAutoPilot} />
                   <AppCard title="Conversor" subtitle="Dólar & Divisas" icon="currency_exchange" color="yellow" onClick={onOpenCurrencyConverter} />
                   <AppCard title="Simulador" subtitle="Futuro a 30 días" icon="timeline" color="violet" onClick={onOpenFuture} />
                   <AppCard title="Costo Vida" subtitle="Calculadora" icon="price_check" color="emerald" onClick={onOpenSalaryCalculator} />
