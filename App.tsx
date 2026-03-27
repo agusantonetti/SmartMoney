@@ -22,9 +22,6 @@ import CurrencyConverter from './components/CurrencyConverter';
 import WealthLevel from './components/WealthLevel'; 
 import Achievements from './components/Achievements'; 
 import MonthComparator from './components/MonthComparator';
-import FinancialXRay from './components/FinancialXRay';
-import PatrimonioTracker from './components/PatrimonioTracker';
-import AutoPilot from './components/AutoPilot';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
@@ -385,9 +382,6 @@ const App: React.FC = () => {
             onOpenWealthLevels={() => setCurrentView(ViewState.WEALTH_LEVELS)} 
             onOpenAchievements={() => setCurrentView(ViewState.ACHIEVEMENTS)} 
             onOpenMonthComparator={() => setCurrentView(ViewState.MONTH_COMPARATOR)}
-            onOpenFinancialXRay={() => setCurrentView(ViewState.FINANCIAL_XRAY)}
-            onOpenPatrimonio={() => setCurrentView(ViewState.PATRIMONIO)}
-            onOpenAutoPilot={() => setCurrentView(ViewState.AUTOPILOT)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -579,33 +573,6 @@ const App: React.FC = () => {
           <MonthComparator
             transactions={transactions}
             profile={financialProfile}
-            onBack={() => setCurrentView(ViewState.DASHBOARD)}
-          />
-        );
-      case ViewState.FINANCIAL_XRAY:
-        return (
-          <FinancialXRay
-            profile={financialProfile}
-            metrics={metrics}
-            transactions={transactions}
-            onBack={() => setCurrentView(ViewState.DASHBOARD)}
-          />
-        );
-      case ViewState.PATRIMONIO:
-        return (
-          <PatrimonioTracker
-            profile={financialProfile}
-            metrics={metrics}
-            transactions={transactions}
-            onBack={() => setCurrentView(ViewState.DASHBOARD)}
-          />
-        );
-      case ViewState.AUTOPILOT:
-        return (
-          <AutoPilot
-            profile={financialProfile}
-            transactions={transactions}
-            currentBalance={metrics.balance - metrics.totalReserved}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
           />
         );
