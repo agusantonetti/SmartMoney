@@ -21,6 +21,7 @@ interface Props {
   onOpenCurrencyConverter?: () => void;
   onOpenWealthLevels?: () => void;
   onOpenAchievements?: () => void;
+  onOpenMonthComparator?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -47,6 +48,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenCurrencyConverter,
   onOpenWealthLevels,
   onOpenAchievements,
+  onOpenMonthComparator,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -298,6 +300,26 @@ const Dashboard: React.FC<Props> = ({
       return cards;
   }, [transactions, stats, subscriptionAlerts, metrics]);
 
+  // --- MINI TREND CHART DATA (últimos 6 meses) ---
+  const trendData = useMemo(() => {
+    const months: { key: string, label: string, expense: number, income: number }[] = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+      const monthTxs = transactions.filter(t => t.date.startsWith(key));
+      months.push({
+        key,
+        label,
+        expense: monthTxs.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0),
+        income: monthTxs.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0),
+      });
+    }
+    const maxVal = Math.max(...months.map(m => Math.max(m.expense, m.income)), 1);
+    return { months, maxVal };
+  }, [transactions]);
+
   // --- TOOLTIP COMPONENT ---
   const TooltipContent = ({ label, amount, percent, inverse = false }: { label: string, amount: number, percent: number, inverse?: boolean }) => {
       const isPositiveGood = !inverse;
@@ -320,7 +342,7 @@ const Dashboard: React.FC<Props> = ({
   return (
     <div className="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen flex flex-col overflow-x-hidden transition-colors duration-300">
       {/* Top Navigation - ADJUSTED FOR IOS SAFE AREA */}
-      <header className="sticky top-0 z-50 w-full bg-surface-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-colors duration-300 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
+      <header className="sticky top-0 z-50 w-full bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-b border-white/30 dark:border-slate-700/40 transition-colors duration-300 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
         <div className="px-4 md:px-8 flex items-center justify-between max-w-[1440px] mx-auto w-full">
           <div className="flex items-center gap-2 md:gap-4">
             <div className="size-8 bg-primary rounded-lg flex items-center justify-center text-white">
@@ -429,7 +451,7 @@ const Dashboard: React.FC<Props> = ({
           </div>
 
           {/* 1. SECCIÓN HERO: BALANCE */}
-          <section className="w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-blue-950 dark:via-slate-900 dark:to-slate-950 rounded-[2rem] p-6 md:p-10 text-white shadow-xl shadow-slate-300 dark:shadow-none relative overflow-hidden group">
+          <section className="w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-blue-950/90 dark:via-slate-900/95 dark:to-slate-950 rounded-[2rem] p-6 md:p-10 text-white shadow-xl shadow-slate-300/50 dark:shadow-none relative overflow-hidden group backdrop-blur-sm">
                <div className="absolute top-0 right-0 w-[300px] md:w-[500px] h-[300px] md:h-[500px] bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 group-hover:bg-white/10 transition-colors duration-700"></div>
                
                <div className="relative z-10 flex flex-col gap-6">
@@ -522,6 +544,46 @@ const Dashboard: React.FC<Props> = ({
                </div>
           </section>
 
+          {/* 1.5 MINI TREND CHART */}
+          <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl border border-white/30 dark:border-slate-700/50 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">show_chart</span>
+                      Últimos 6 meses
+                  </span>
+                  <button onClick={onOpenMonthComparator} className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5">
+                      Comparar
+                      <span className="material-symbols-outlined text-[12px]">chevron_right</span>
+                  </button>
+              </div>
+              <div className="flex items-end justify-between gap-1.5 h-20">
+                  {trendData.months.map((m, i) => {
+                      const expH = (m.expense / trendData.maxVal) * 100;
+                      const incH = (m.income / trendData.maxVal) * 100;
+                      const isCurrentMonth = i === trendData.months.length - 1;
+                      return (
+                          <div key={m.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                              <div className="w-full flex justify-center gap-0.5 items-end flex-1">
+                                  <div 
+                                      className={`w-2 rounded-t-sm transition-all duration-500 ${isCurrentMonth ? 'bg-emerald-500' : 'bg-emerald-300 dark:bg-emerald-700'}`}
+                                      style={{ height: `${Math.max(2, incH)}%` }}
+                                  />
+                                  <div 
+                                      className={`w-2 rounded-t-sm transition-all duration-500 ${isCurrentMonth ? 'bg-red-500' : 'bg-red-300 dark:bg-red-700'}`}
+                                      style={{ height: `${Math.max(2, expH)}%` }}
+                                  />
+                              </div>
+                              <span className={`text-[9px] font-bold ${isCurrentMonth ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>{m.label}</span>
+                          </div>
+                      );
+                  })}
+              </div>
+              <div className="flex items-center justify-center gap-4 mt-2">
+                  <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="size-1.5 rounded-full bg-emerald-500 inline-block" /> Ingresos</span>
+                  <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="size-1.5 rounded-full bg-red-500 inline-block" /> Gastos</span>
+              </div>
+          </div>
+
           {/* 2. ACCIÓN PRINCIPAL */}
           <div className="flex gap-3 md:gap-4">
               <button 
@@ -563,7 +625,7 @@ const Dashboard: React.FC<Props> = ({
                               <button
                                   key={insight.id}
                                   onClick={insight.action}
-                                  className={`w-full flex items-center gap-3 p-3 rounded-xl border ${c.bg} ${c.border} transition-all ${insight.action ? 'hover:scale-[1.01] active:scale-[0.99] cursor-pointer' : 'cursor-default'}`}
+                                  className={`w-full flex items-center gap-3 p-3 rounded-xl border backdrop-blur-lg ${c.bg} ${c.border} transition-all ${insight.action ? 'hover:scale-[1.01] active:scale-[0.99] cursor-pointer' : 'cursor-default'}`}
                               >
                                   <span className={`material-symbols-outlined text-[20px] ${c.icon} shrink-0`}>{insight.icon}</span>
                                   <p className={`text-xs font-medium text-left leading-snug ${c.text}`}>{insight.text}</p>
@@ -612,6 +674,7 @@ const Dashboard: React.FC<Props> = ({
                   <AppCard title="Eventos" subtitle={`${activeEventsCount} Activos`} icon="flight_takeoff" color="pink" onClick={onOpenEvents} />
                   <AppCard title="Deudas" subtitle={`${formatMoney(metrics.totalDebt)}`} icon="gavel" color="red" onClick={onOpenDebts} privacyMode={privacyMode} />
                   <AppCard title="Analíticas" subtitle="Gráficos" icon="bar_chart" color="orange" onClick={onOpenAnalytics} />
+                  <AppCard title="Comparar" subtitle="Mes vs Mes" icon="compare_arrows" color="cyan" onClick={onOpenMonthComparator} />
                   <AppCard title="Conversor" subtitle="Dólar & Divisas" icon="currency_exchange" color="yellow" onClick={onOpenCurrencyConverter} />
                   <AppCard title="Simulador" subtitle="Futuro a 30 días" icon="timeline" color="violet" onClick={onOpenFuture} />
                   <AppCard title="Costo Vida" subtitle="Calculadora" icon="price_check" color="emerald" onClick={onOpenSalaryCalculator} />
@@ -647,12 +710,13 @@ const AppCard: React.FC<{
         emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
         violet: 'bg-violet-100 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400',
         amber: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
+        cyan: 'bg-cyan-100 text-cyan-600 dark:bg-cyan-900/30 dark:text-cyan-400',
     };
 
     return (
         <button 
             onClick={onClick}
-            className="flex flex-col items-start p-3 md:p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 h-24 md:h-28 justify-between relative overflow-visible group"
+            className="flex flex-col items-start p-3 md:p-4 bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/50 shadow-sm hover:shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/80 hover:-translate-y-1 active:scale-[0.98] transition-all duration-200 h-24 md:h-28 justify-between relative overflow-visible group"
         >
             <div className={`size-8 md:size-10 rounded-xl flex items-center justify-center mb-1 ${colorClasses[color] || colorClasses['blue']}`}>
                 <span className="material-symbols-outlined text-[18px] md:text-[20px]">{icon}</span>

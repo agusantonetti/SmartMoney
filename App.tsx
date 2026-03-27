@@ -21,6 +21,7 @@ import FinancialAssistant from './components/FinancialAssistant';
 import CurrencyConverter from './components/CurrencyConverter'; 
 import WealthLevel from './components/WealthLevel'; 
 import Achievements from './components/Achievements'; 
+import MonthComparator from './components/MonthComparator';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
@@ -380,6 +381,7 @@ const App: React.FC = () => {
             onOpenCurrencyConverter={() => setCurrentView(ViewState.CURRENCY_CONVERTER)}
             onOpenWealthLevels={() => setCurrentView(ViewState.WEALTH_LEVELS)} 
             onOpenAchievements={() => setCurrentView(ViewState.ACHIEVEMENTS)} 
+            onOpenMonthComparator={() => setCurrentView(ViewState.MONTH_COMPARATOR)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -566,6 +568,13 @@ const App: React.FC = () => {
             onUpdateTransactions={handleUpdateTransactions}
           />
         );
+      case ViewState.MONTH_COMPARATOR:
+        return (
+          <MonthComparator
+            transactions={transactions}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+          />
+        );
       default:
         return null;
     }
@@ -607,7 +616,7 @@ const App: React.FC = () => {
             </button>
 
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] w-full max-w-sm px-4" style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
-                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border border-white/20 dark:border-slate-700/50 rounded-full shadow-2xl p-1.5 flex justify-between items-center ring-1 ring-black/5 dark:ring-white/5">
+                <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-3xl border border-white/40 dark:border-slate-700/40 rounded-full shadow-2xl shadow-black/10 dark:shadow-black/30 p-1.5 flex justify-between items-center">
                     <NavButton 
                     active={currentView === ViewState.DASHBOARD} 
                     onClick={() => setCurrentView(ViewState.DASHBOARD)} 

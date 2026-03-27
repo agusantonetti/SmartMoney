@@ -20,6 +20,7 @@ export enum ViewState {
   EVENTS = 'EVENTS',
   FUTURE_SIMULATOR = 'FUTURE_SIMULATOR',
   ASSISTANT = 'ASSISTANT',
+  MONTH_COMPARATOR = 'MONTH_COMPARATOR',
 }
 
 export interface Transaction {

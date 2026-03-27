@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, getCurrentMonthKey, formatMonthKey, getCategoryIcon } from '../utils';
+import { formatMoney, getDollarRate, getCurrentMonthKey, formatMonthKey, getCategoryIcon } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -14,15 +14,28 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [limitInput, setLimitInput] = useState('');
   const currentMonthKey = getCurrentMonthKey();
+  const dollarRate = getDollarRate(profile);
 
-  // === DATOS DEL MES — SOLO de transacciones registradas manualmente ===
   const monthData = useMemo(() => {
     const monthTxs = transactions.filter(t => t.date.startsWith(currentMonthKey));
     
-    // Solo ingresos que el usuario registró como transacciones
-    const totalIncome = monthTxs.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0);
+    // Ingreso mensual basado en sueldos configurados en el perfil
+    const totalIncome = (profile.incomeSources || []).reduce((sum, src) => {
+        if (src.isActive === false) return sum;
+        let val = 0;
+        if (src.isCreatorSource) {
+            const payments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
+            val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+        } else {
+            val = src.amount;
+            if (src.frequency === 'BIWEEKLY') val *= 2;
+            if (src.frequency === 'ONE_TIME') val = 0;
+        }
+        if (src.currency === 'USD') val *= dollarRate;
+        return sum + val;
+    }, 0);
 
-    // Solo gastos que el usuario registró como transacciones
+    // Gastos solo de transacciones registradas
     const expenseTxs = monthTxs.filter(t => t.type === 'expense');
     const totalExpense = expenseTxs.reduce((a, t) => a + t.amount, 0);
 
@@ -58,7 +71,7 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
     });
 
     return { totalIncome, totalExpense, balance, categories };
-  }, [transactions, profile.budgetLimits, currentMonthKey]);
+  }, [transactions, profile, currentMonthKey, dollarRate]);
 
   // === HANDLERS ===
   const handleSaveLimit = (category: string) => {
@@ -101,7 +114,7 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4">
                 <div className="flex items-center gap-1.5 mb-1">
                     <span className="material-symbols-outlined text-emerald-500 text-[18px]">arrow_downward</span>
-                    <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">Ingresé</span>
+                    <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">Sueldo mensual</span>
                 </div>
                 <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">{formatMoney(monthData.totalIncome)}</p>
             </div>
