@@ -563,6 +563,7 @@ const App: React.FC = () => {
             transactions={transactions}
             profile={financialProfile} 
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            onUpdateTransactions={handleUpdateTransactions}
           />
         );
       default:

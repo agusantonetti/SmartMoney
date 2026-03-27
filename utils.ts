@@ -107,22 +107,24 @@ export interface CategoryDef {
 
 /** Categorías predefinidas con palabras clave para clasificación automática */
 export const DEFAULT_CATEGORIES: CategoryDef[] = [
-  { name: 'Comida', icon: 'restaurant', keywords: ['comida', 'cena', 'almuerzo', 'desayuno', 'burger', 'pizza', 'sushi', 'restaurant', 'restaurante', 'merienda', 'snack', 'delivery', 'rappi', 'pedidosya'] },
-  { name: 'Café', icon: 'coffee', keywords: ['cafe', 'café', 'starbucks', 'cafetería', 'cafeteria', 'cappuccino', 'latte'] },
-  { name: 'Supermercado', icon: 'shopping_cart', keywords: ['super', 'supermercado', 'mercado', 'coto', 'carrefour', 'dia', 'jumbo', 'chango', 'despensa', 'verdulería', 'verduleria', 'carnicería', 'carniceria'] },
-  { name: 'Transporte', icon: 'directions_car', keywords: ['uber', 'cabify', 'taxi', 'nafta', 'combustible', 'tren', 'sube', 'colectivo', 'bondi', 'subte', 'estacionamiento', 'peaje', 'gasolina', 'gnc'] },
-  { name: 'Hogar', icon: 'home', keywords: ['alquiler', 'luz', 'gas', 'internet', 'wifi', 'agua', 'expensas', 'ABL', 'abl', 'limpieza', 'mueble', 'deco', 'electrodoméstico'] },
-  { name: 'Salud', icon: 'favorite', keywords: ['farmacia', 'médico', 'medico', 'doctor', 'hospital', 'clínica', 'clinica', 'dentista', 'óptica', 'optica', 'lentes', 'prepaga', 'obra social', 'turno', 'análisis', 'analisis', 'medicamento', 'remedio'] },
-  { name: 'Entretenimiento', icon: 'movie', keywords: ['cine', 'netflix', 'spotify', 'disney', 'hbo', 'youtube', 'juego', 'gaming', 'play', 'steam', 'ps', 'xbox', 'salida', 'boliche', 'bar', 'cerveza', 'birra', 'teatro', 'recital', 'concierto', 'museo'] },
-  { name: 'Ropa', icon: 'checkroom', keywords: ['ropa', 'zapatillas', 'zapatos', 'remera', 'pantalón', 'pantalon', 'campera', 'jean', 'buzo', 'vestido', 'zara', 'nike', 'adidas', 'tienda'] },
-  { name: 'Educación', icon: 'school', keywords: ['universidad', 'facultad', 'curso', 'clase', 'libro', 'cuaderno', 'udemy', 'platzi', 'educación', 'educacion', 'colegio', 'escuela', 'matrícula', 'matricula', 'apunte'] },
-  { name: 'Servicios', icon: 'build', keywords: ['celular', 'teléfono', 'telefono', 'plan', 'personal', 'claro', 'movistar', 'seguro', 'impuesto', 'monotributo', 'contador', 'abogado', 'trámite', 'tramite'] },
-  { name: 'Suscripciones', icon: 'subscriptions', keywords: ['suscripción', 'suscripcion', 'membresía', 'membresia', 'premium', 'pro', 'plus', 'mensual'] },
-  { name: 'Regalos', icon: 'redeem', keywords: ['regalo', 'cumple', 'cumpleaños', 'navidad', 'presente', 'sorpresa', 'obsequio'] },
-  { name: 'Viajes', icon: 'flight', keywords: ['vuelo', 'avión', 'avion', 'hotel', 'hostel', 'airbnb', 'booking', 'viaje', 'vacaciones', 'excursión', 'excursion', 'pasaje', 'valija'] },
-  { name: 'Mascotas', icon: 'pets', keywords: ['veterinario', 'vet', 'mascota', 'perro', 'gato', 'alimento', 'vacuna'] },
-  { name: 'Trabajo', icon: 'work', keywords: ['oficina', 'cowork', 'coworking', 'herramienta', 'software', 'hosting', 'dominio', 'freelance'] },
-  { name: 'Transferencia', icon: 'swap_horiz', keywords: ['transferencia', 'transferí', 'transferi', 'envié', 'envie', 'presté', 'preste', 'préstamo', 'prestamo', 'devolución', 'devolucion'] },
+  { name: 'Comida', icon: 'restaurant', keywords: ['comida', 'cena', 'almuerzo', 'desayuno', 'burger', 'pizza', 'sushi', 'restaurant', 'restaurante', 'merienda', 'snack', 'delivery', 'rappi', 'pedidosya', 'empanada', 'milanesa', 'asado', 'parrilla', 'hamburgues', 'panchos', 'pancho', 'helado', 'heladería', 'heladeria', 'pollo', 'ensalada', 'sandwich', 'tostado', 'medialunas', 'facturas', 'rotisería', 'rotiseria', 'sándwich', 'lomito', 'morfi', 'guiso', 'pasta', 'ravioles', 'ñoquis', 'wok', 'poke', 'bowl', 'wrap', 'comedor', 'cantina', 'buffet', 'brunch', 'cenas', 'kiosco', 'golosina', 'galletitas', 'alfajor', 'chocolate'] },
+  { name: 'Café', icon: 'coffee', keywords: ['cafe', 'café', 'starbucks', 'cafetería', 'cafeteria', 'cappuccino', 'latte', 'cortado', 'espresso', 'te ', 'té ', 'infusión', 'infusion', 'jugo', 'batido', 'smoothie'] },
+  { name: 'Supermercado', icon: 'shopping_cart', keywords: ['super', 'supermercado', 'mercado', 'coto', 'carrefour', 'dia', 'jumbo', 'chango', 'despensa', 'verdulería', 'verduleria', 'carnicería', 'carniceria', 'fiambrería', 'fiambreria', 'almacén', 'almacen', 'vea', 'disco', 'walmart', 'changomas'] },
+  { name: 'Transporte', icon: 'directions_car', keywords: ['uber', 'cabify', 'taxi', 'nafta', 'combustible', 'tren', 'sube', 'colectivo', 'bondi', 'subte', 'estacionamiento', 'peaje', 'gasolina', 'gnc', 'remis', 'didi', 'beat', 'pasaje', 'pasajes', 'micro', 'ómnibus', 'omnibus', 'avión', 'avion', 'vuelo', 'aerolínea', 'aerolinea', 'aeroparque', 'ezeiza', 'flybondi', 'jetsmart', 'aerolíneas', 'aerolineas', 'buquebus'] },
+  { name: 'Hogar', icon: 'home', keywords: ['alquiler', 'luz', 'gas', 'internet', 'wifi', 'agua', 'expensas', 'ABL', 'abl', 'limpieza', 'mueble', 'deco', 'electrodoméstico', 'electrodomestico', 'renta', 'depto', 'departamento', 'casa', 'mudanza', 'pintura', 'arreglo', 'plomero', 'electricista', 'inmobiliaria', 'garantía', 'garantia', 'condominio'] },
+  { name: 'Salud', icon: 'favorite', keywords: ['farmacia', 'médico', 'medico', 'doctor', 'hospital', 'clínica', 'clinica', 'dentista', 'óptica', 'optica', 'lentes', 'prepaga', 'obra social', 'turno', 'análisis', 'analisis', 'medicamento', 'remedio', 'psicólogo', 'psicologo', 'terapia', 'nutricionista', 'traumatólogo', 'traumatologo', 'dermatólogo', 'dermatologo', 'oftalmólogo', 'oftalmologo', 'kinesiología', 'kinesiologia', 'vacuna', 'cirugía', 'cirugia', 'guardia', 'emergencia', 'ambulancia'] },
+  { name: 'Entretenimiento', icon: 'movie', keywords: ['cine', 'netflix', 'spotify', 'disney', 'hbo', 'youtube', 'juego', 'gaming', 'play', 'steam', 'ps', 'xbox', 'salida', 'boliche', 'bar', 'cerveza', 'birra', 'teatro', 'recital', 'concierto', 'museo', 'parque', 'diversión', 'diversion', 'escape room', 'bowling', 'karaoke', 'billar', 'arcade', 'fútbol', 'futbol', 'cancha', 'paddle', 'padel', 'pileta', 'club', 'after', 'previa', 'joda', 'trago', 'drink', 'vino', 'fernet', 'bebida'] },
+  { name: 'Fiestas y Eventos', icon: 'celebration', keywords: ['fiesta', 'fiestas', 'evento', 'eventos', 'cumpleaños', 'cumple', 'casamiento', 'boda', 'bautismo', 'comunión', 'comunion', '15 años', 'quince', 'graduación', 'graduacion', 'despedida', 'celebración', 'celebracion', 'brindis', 'cotillón', 'cotillon', 'decoración', 'decoracion', 'catering', 'DJ', 'dj', 'salón', 'salon', 'quincho', 'reunión', 'reunion', 'asado amigos'] },
+  { name: 'Ropa', icon: 'checkroom', keywords: ['ropa', 'zapatillas', 'zapatos', 'remera', 'pantalón', 'pantalon', 'campera', 'jean', 'buzo', 'vestido', 'zara', 'nike', 'adidas', 'tienda', 'calzado', 'bota', 'ojotas', 'bermuda', 'short', 'gorra', 'mochila', 'cartera', 'bolso', 'lentes de sol', 'reloj', 'accesorio', 'bijou', 'peluquería', 'peluqueria', 'barbería', 'barberia', 'corte', 'tintura'] },
+  { name: 'Educación', icon: 'school', keywords: ['universidad', 'facultad', 'curso', 'clase', 'libro', 'cuaderno', 'udemy', 'platzi', 'educación', 'educacion', 'colegio', 'escuela', 'matrícula', 'matricula', 'apunte', 'taller', 'workshop', 'seminario', 'certificación', 'certificacion', 'capacitación', 'capacitacion', 'idioma', 'inglés', 'ingles', 'instituto', 'beca', 'examen'] },
+  { name: 'Servicios', icon: 'build', keywords: ['celular', 'teléfono', 'telefono', 'plan', 'personal', 'claro', 'movistar', 'seguro', 'impuesto', 'monotributo', 'contador', 'abogado', 'trámite', 'tramite', 'escribano', 'gestoría', 'gestoria', 'patente', 'VTV', 'vtv', 'registro', 'DNI', 'dni', 'pasaporte', 'visa', 'comisión', 'comision', 'mantenimiento', 'técnico', 'tecnico'] },
+  { name: 'Suscripciones', icon: 'subscriptions', keywords: ['suscripción', 'suscripcion', 'membresía', 'membresia', 'premium', 'pro', 'plus', 'mensual', 'anual', 'renovación', 'renovacion', 'chatgpt', 'claude', 'notion', 'canva', 'amazon prime', 'apple', 'icloud', 'google one', 'crunchyroll', 'twitch', 'patreon', 'github'] },
+  { name: 'Regalos', icon: 'redeem', keywords: ['regalo', 'presente', 'sorpresa', 'obsequio', 'navidad', 'amigo invisible', 'día del padre', 'día de la madre', 'san valentín', 'san valentin', 'souvenir'] },
+  { name: 'Viajes', icon: 'flight', keywords: ['hotel', 'hostel', 'airbnb', 'booking', 'viaje', 'vacaciones', 'excursión', 'excursion', 'valija', 'turismo', 'tour', 'guía', 'guia', 'mapa', 'seguro viajero', 'aeropuerto', 'terminal', 'camping', 'cabaña', 'cabana', 'resort'] },
+  { name: 'Mascotas', icon: 'pets', keywords: ['veterinario', 'vet', 'mascota', 'perro', 'gato', 'alimento mascota', 'pipeta', 'collar', 'correa', 'pecera', 'pez', 'antiparasitario'] },
+  { name: 'Trabajo', icon: 'work', keywords: ['oficina', 'cowork', 'coworking', 'herramienta', 'software', 'hosting', 'dominio', 'freelance', 'impresora', 'tinta', 'escritorio', 'silla', 'monitor', 'teclado', 'mouse', 'notebook', 'computadora', 'pc', 'webcam', 'auriculares'] },
+  { name: 'Transferencia', icon: 'swap_horiz', keywords: ['transferencia', 'transferí', 'transferi', 'envié', 'envie', 'presté', 'preste', 'préstamo', 'prestamo', 'devolución', 'devolucion', 'mandé', 'mande', 'giré', 'gire', 'mercadopago', 'mp'] },
+  { name: 'Compras', icon: 'shopping_bag', keywords: ['compra', 'compras', 'shopping', 'online', 'mercadolibre', 'amazon', 'shein', 'temu', 'aliexpress', 'pedido', 'encargo', 'envío', 'envio'] },
   { name: 'Otros', icon: 'category', keywords: [] },
 ];
 
@@ -151,6 +153,18 @@ export const guessCategory = (text: string, type: 'income' | 'expense'): string 
   }
   
   return 'Otros';
+};
+
+/** Intenta reclasificar una transacción que está en "Otros" usando las keywords expandidas */
+export const tryReclassify = (description: string): string | null => {
+  const lower = description.toLowerCase();
+  for (const cat of DEFAULT_CATEGORIES) {
+    if (cat.name === 'Otros') continue;
+    if (cat.keywords.some(kw => lower.includes(kw))) {
+      return cat.name;
+    }
+  }
+  return null;
 };
 
 // ============================================================

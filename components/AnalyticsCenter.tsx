@@ -1,18 +1,23 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey } from '../utils';
+import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories } from '../utils';
 
 interface Props {
   transactions: Transaction[];
   profile: FinancialProfile;
   onBack: () => void;
+  onUpdateTransactions?: (transactions: Transaction[]) => void;
 }
 
-const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => {
+const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpdateTransactions }) => {
   const [timeRange, setTimeRange] = useState<'ALL' | 'MONTH' | 'YEAR'>('MONTH');
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'FLOW'>('OVERVIEW');
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
+  const [showReclassify, setShowReclassify] = useState(false);
+  const [reclassifyEdits, setReclassifyEdits] = useState<Record<string, string>>({});
+
+  const availableCategories = getAllCategories(profile?.customCategories);
 
   // --- LOGIC: CATEGORY BREAKDOWN (DONUT CHART) ---
   const categoryData = useMemo(() => {
@@ -139,41 +144,6 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
         expense: monthsMap[key].expense
       };
     });
-  }, [transactions]);
-
-  // --- LOGIC: HEATMAP ---
-  const heatmapData = useMemo(() => {
-    const dailyTotals: Record<string, number> = {};
-    let maxDaily = 0;
-    
-    transactions.filter(t => t.type === 'expense').forEach(t => {
-        dailyTotals[t.date] = (dailyTotals[t.date] || 0) + t.amount;
-        if (dailyTotals[t.date] > maxDaily) maxDaily = dailyTotals[t.date];
-    });
-
-    const days = [];
-    const today = new Date();
-    const totalDaysToShow = 14 * 7; 
-    
-    for (let i = totalDaysToShow - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(today.getDate() - i);
-        const isoDate = d.toISOString().split('T')[0];
-        const amount = dailyTotals[isoDate] || 0;
-        let intensity = 0;
-        if (amount > 0) {
-            if (maxDaily === 0) intensity = 1;
-            else {
-                const ratio = amount / maxDaily;
-                if (ratio > 0.75) intensity = 4;
-                else if (ratio > 0.50) intensity = 3;
-                else if (ratio > 0.25) intensity = 2;
-                else intensity = 1;
-            }
-        }
-        days.push({ date: d, isoDate, amount, intensity });
-    }
-    return { days, maxDaily };
   }, [transactions]);
 
   const maxBarValue = Math.max(
@@ -480,53 +450,111 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
                 </div>
                 </div>
 
-                {/* CHART: EXPENSE HEATMAP */}
-                <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-                    <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-orange-500">calendar_month</span>
-                    Intensidad de Gastos
-                    </h3>
-                    <p className="text-xs text-slate-500 mb-6">Mapa de calor de tus gastos diarios (últimos 3 meses).</p>
+                {/* RECLASSIFY "OTROS" SECTION */}
+                {(() => {
+                    let filteredTxs = transactions;
+                    if (timeRange === 'MONTH') filteredTxs = transactions.filter(t => t.date.startsWith(selectedMonth));
+                    else if (timeRange === 'YEAR') filteredTxs = transactions.filter(t => t.date.startsWith(selectedMonth.split('-')[0]));
+                    
+                    const otrosTxs = filteredTxs.filter(t => t.category === 'Otros' && t.type === 'expense');
+                    if (otrosTxs.length === 0) return null;
 
-                    <div className="w-full overflow-x-auto pb-4 scrollbar-hide">
-                    {/* GitHub Style Grid: 7 rows (days), auto columns (weeks) */}
-                    <div 
-                        className="grid grid-rows-7 grid-flow-col gap-1 w-max"
-                        style={{ gridTemplateRows: 'repeat(7, 1fr)' }}
-                    >
-                        {/* Generate cells */}
-                        {heatmapData.days.map((day) => {
-                            let bgClass = 'bg-slate-100 dark:bg-slate-800';
-                            if (day.intensity === 1) bgClass = 'bg-emerald-200 dark:bg-emerald-900/40';
-                            if (day.intensity === 2) bgClass = 'bg-emerald-300 dark:bg-emerald-800/60';
-                            if (day.intensity === 3) bgClass = 'bg-emerald-400 dark:bg-emerald-600';
-                            if (day.intensity === 4) bgClass = 'bg-emerald-600 dark:bg-emerald-500';
+                    return (
+                        <div className="bg-amber-50 dark:bg-amber-900/20 rounded-3xl p-6 border border-amber-200 dark:border-amber-800 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-lg flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                                    <span className="material-symbols-outlined">help_center</span>
+                                    {otrosTxs.length} gasto{otrosTxs.length > 1 ? 's' : ''} sin categoría
+                                </h3>
+                                {!showReclassify && (
+                                    <button 
+                                        onClick={() => {
+                                            const autoEdits: Record<string, string> = {};
+                                            otrosTxs.forEach(tx => {
+                                                const suggested = tryReclassify(tx.description);
+                                                if (suggested) autoEdits[tx.id] = suggested;
+                                            });
+                                            setReclassifyEdits(autoEdits);
+                                            setShowReclassify(true);
+                                        }}
+                                        className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5"
+                                    >
+                                        <span className="material-symbols-outlined text-[16px]">auto_fix_high</span>
+                                        Reclasificar
+                                    </button>
+                                )}
+                            </div>
 
-                            return (
-                                <div 
-                                key={day.isoDate}
-                                className={`size-3 sm:size-4 rounded-sm ${bgClass} relative group`}
-                                title={`${day.isoDate}: ${formatMoney(day.amount)}`}
-                                >
-                                {/* Tooltip */}
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 bg-slate-900 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
-                                    <span className="font-bold block">{day.isoDate}</span>
-                                    {day.amount > 0 ? formatMoney(day.amount) : 'Sin gastos'}
+                            {!showReclassify && (
+                                <p className="text-xs text-amber-700 dark:text-amber-400">
+                                    Estos gastos no pudieron clasificarse automáticamente. Tocá "Reclasificar" para asignarles categoría.
+                                </p>
+                            )}
+
+                            {showReclassify && (
+                                <div className="space-y-2">
+                                    {otrosTxs.map(tx => {
+                                        const autoSuggested = tryReclassify(tx.description);
+                                        const currentEdit = reclassifyEdits[tx.id] || 'Otros';
+                                        return (
+                                            <div key={tx.id} className="flex items-center gap-3 bg-white dark:bg-slate-800 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{tx.description}</p>
+                                                    <p className="text-[10px] text-slate-400">{tx.date} — {formatMoney(tx.amount)}</p>
+                                                </div>
+                                                {autoSuggested && currentEdit === autoSuggested && (
+                                                    <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full whitespace-nowrap">Auto</span>
+                                                )}
+                                                <select
+                                                    value={currentEdit}
+                                                    onChange={(e) => setReclassifyEdits({ ...reclassifyEdits, [tx.id]: e.target.value })}
+                                                    className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-sm font-bold outline-none focus:ring-1 focus:ring-primary min-w-[130px]"
+                                                    style={{ fontSize: '16px' }}
+                                                >
+                                                    {availableCategories.map(cat => (
+                                                        <option key={cat} value={cat}>{cat}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        );
+                                    })}
+
+                                    <div className="flex gap-2 pt-3">
+                                        <button
+                                            onClick={() => {
+                                                if (!onUpdateTransactions) return;
+                                                const editedIds = Object.keys(reclassifyEdits).filter(id => reclassifyEdits[id] !== 'Otros');
+                                                if (editedIds.length === 0) {
+                                                    setShowReclassify(false);
+                                                    return;
+                                                }
+                                                const updated = transactions.map(tx => {
+                                                    if (reclassifyEdits[tx.id] && reclassifyEdits[tx.id] !== 'Otros') {
+                                                        return { ...tx, category: reclassifyEdits[tx.id] };
+                                                    }
+                                                    return tx;
+                                                });
+                                                onUpdateTransactions(updated);
+                                                setShowReclassify(false);
+                                                setReclassifyEdits({});
+                                            }}
+                                            className="flex-1 bg-primary hover:bg-blue-600 text-white py-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">save</span>
+                                            Guardar cambios ({Object.keys(reclassifyEdits).filter(id => reclassifyEdits[id] !== 'Otros').length})
+                                        </button>
+                                        <button
+                                            onClick={() => { setShowReclassify(false); setReclassifyEdits({}); }}
+                                            className="px-4 py-3 rounded-xl text-sm font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
                                 </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400 justify-end">
-                    <span>Menos</span>
-                    <div className="size-3 bg-slate-100 dark:bg-slate-800 rounded-sm"></div>
-                    <div className="size-3 bg-emerald-200 dark:bg-emerald-900/40 rounded-sm"></div>
-                    <div className="size-3 bg-emerald-400 dark:bg-emerald-600 rounded-sm"></div>
-                    <div className="size-3 bg-emerald-600 dark:bg-emerald-500 rounded-sm"></div>
-                    <span>Más</span>
-                    </div>
-                </div>
+                            )}
+                        </div>
+                    );
+                })()}
 
                 {/* CHART: INCOME VS EXPENSE (BAR CHART) */}
                 <div className="bg-surface-light dark:bg-surface-dark rounded-3xl p-6 border border-slate-200 dark:border-slate-700 shadow-sm">
@@ -586,6 +614,7 @@ function getColorForCategory(category: string): string {
    if (normalized.includes('mascota') || normalized.includes('veterinario')) return '#a3e635';
    if (normalized.includes('trabajo') || normalized.includes('oficina')) return '#64748b';
    if (normalized.includes('transferencia') || normalized.includes('préstamo') || normalized.includes('prestamo')) return '#cbd5e1';
+   if (normalized.includes('fiesta') || normalized.includes('evento') || normalized.includes('celebraci')) return '#f472b6';
    if (normalized.includes('compra')) return '#c084fc';
    if (normalized.includes('ingreso')) return '#10b981';
    return '#94a3b8';
