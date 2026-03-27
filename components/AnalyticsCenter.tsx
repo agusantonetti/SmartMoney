@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney } from '../utils';
+import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -10,18 +10,18 @@ interface Props {
 }
 
 const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => {
-  const [timeRange, setTimeRange] = useState<'ALL' | 'MONTH' | 'YEAR'>('ALL');
+  const [timeRange, setTimeRange] = useState<'ALL' | 'MONTH' | 'YEAR'>('MONTH');
   const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'FLOW'>('OVERVIEW');
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
 
   // --- LOGIC: CATEGORY BREAKDOWN (DONUT CHART) ---
   const categoryData = useMemo(() => {
-    // Filtro por tiempo si es necesario
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    
     let filteredTransactions = transactions;
     if (timeRange === 'MONTH') {
-        filteredTransactions = transactions.filter(t => t.date.startsWith(currentMonthKey));
+        filteredTransactions = transactions.filter(t => t.date.startsWith(selectedMonth));
+    } else if (timeRange === 'YEAR') {
+        const yearKey = selectedMonth.split('-')[0];
+        filteredTransactions = transactions.filter(t => t.date.startsWith(yearKey));
     }
 
     const expenses = filteredTransactions.filter(t => t.type === 'expense');
@@ -38,20 +38,19 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
       value: totalsByCategory[cat],
       percentage: totalExpense > 0 ? (totalsByCategory[cat] / totalExpense) * 100 : 0,
       color: getColorForCategory(cat)
-    })).sort((a, b) => b.value - a.value); // Sort highest first
+    })).sort((a, b) => b.value - a.value);
 
     return { data, totalExpense };
-  }, [transactions, timeRange]);
+  }, [transactions, timeRange, selectedMonth]);
 
   // --- LOGIC: FLOW CHART (SANKEY-LIKE) ---
   const flowData = useMemo(() => {
-    const now = new Date();
-    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    
-    // Filtrar transacciones según el rango de tiempo seleccionado
     let relevantTxs = transactions;
     if (timeRange === 'MONTH') {
-      relevantTxs = transactions.filter(t => t.date.startsWith(currentMonthKey));
+      relevantTxs = transactions.filter(t => t.date.startsWith(selectedMonth));
+    } else if (timeRange === 'YEAR') {
+      const yearKey = selectedMonth.split('-')[0];
+      relevantTxs = transactions.filter(t => t.date.startsWith(yearKey));
     }
 
     // 1. Fuentes de Ingreso (Izquierda)
@@ -108,7 +107,7 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
         totalExpense,
         maxFlow 
     };
-  }, [transactions, timeRange]);
+  }, [transactions, timeRange, selectedMonth]);
 
 
   // --- LOGIC: MONTHLY HISTORY (BAR CHART) ---
@@ -203,6 +202,12 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
             Mes
           </button>
           <button 
+            onClick={() => setTimeRange('YEAR')} 
+            className={`px-3 py-1.5 rounded-md transition-all ${timeRange === 'YEAR' ? 'bg-white dark:bg-slate-600 shadow-sm text-primary' : 'text-slate-500'}`}
+          >
+            Año
+          </button>
+          <button 
             onClick={() => setTimeRange('ALL')} 
             className={`px-3 py-1.5 rounded-md transition-all ${timeRange === 'ALL' ? 'bg-white dark:bg-slate-600 shadow-sm text-primary' : 'text-slate-500'}`}
           >
@@ -210,6 +215,32 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
           </button>
         </div>
       </div>
+
+      {/* Month Navigator - only show when filtering by MONTH or YEAR */}
+      {timeRange !== 'ALL' && (
+        <div className="w-full max-w-4xl mx-auto px-6 pt-3">
+          <div className="flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-2.5 shadow-sm">
+            <button 
+              onClick={() => setSelectedMonth(getPrevMonthKey(selectedMonth))}
+              className="size-8 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+            </button>
+            <span className="text-sm font-bold text-slate-900 dark:text-white min-w-[140px] text-center">
+              {timeRange === 'YEAR' ? selectedMonth.split('-')[0] : formatMonthKey(selectedMonth)}
+            </span>
+            <button 
+              onClick={() => {
+                const next = getNextMonthKey(selectedMonth);
+                if (next <= getCurrentMonthKey()) setSelectedMonth(next);
+              }}
+              className={`size-8 rounded-full flex items-center justify-center transition-colors ${getNextMonthKey(selectedMonth) > getCurrentMonthKey() ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+            >
+              <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="w-full max-w-4xl mx-auto px-6 pt-6">
@@ -547,13 +578,25 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack }) => 
 // Helper for Colors
 function getColorForCategory(category: string): string {
    const normalized = category.toLowerCase();
-   if (normalized.includes('comida') || normalized.includes('restaurante')) return '#fbbf24'; // Amber
-   if (normalized.includes('hogar') || normalized.includes('renta')) return '#818cf8'; // Indigo
-   if (normalized.includes('transporte') || normalized.includes('uber') || normalized.includes('gasolina')) return '#34d399'; // Emerald
-   if (normalized.includes('entretenimiento') || normalized.includes('cine')) return '#f472b6'; // Pink
-   if (normalized.includes('salud') || normalized.includes('medico')) return '#f87171'; // Red
-   if (normalized.includes('servicios') || normalized.includes('internet')) return '#60a5fa'; // Blue
-   return '#94a3b8'; // Slate (Default)
+   if (normalized.includes('comida') || normalized.includes('restaurante')) return '#fbbf24';
+   if (normalized.includes('café') || normalized.includes('cafe')) return '#d97706';
+   if (normalized.includes('supermercado') || normalized.includes('mercado')) return '#fb923c';
+   if (normalized.includes('hogar') || normalized.includes('renta')) return '#818cf8';
+   if (normalized.includes('transporte') || normalized.includes('uber')) return '#34d399';
+   if (normalized.includes('entretenimiento') || normalized.includes('cine')) return '#f472b6';
+   if (normalized.includes('salud') || normalized.includes('medic') || normalized.includes('farmacia')) return '#f87171';
+   if (normalized.includes('servicios') || normalized.includes('internet')) return '#60a5fa';
+   if (normalized.includes('educación') || normalized.includes('educacion') || normalized.includes('curso')) return '#a78bfa';
+   if (normalized.includes('ropa') || normalized.includes('zapatilla')) return '#e879f9';
+   if (normalized.includes('suscripcion') || normalized.includes('suscripción')) return '#2dd4bf';
+   if (normalized.includes('regalo')) return '#fb7185';
+   if (normalized.includes('viaje') || normalized.includes('vuelo') || normalized.includes('hotel')) return '#38bdf8';
+   if (normalized.includes('mascota') || normalized.includes('veterinario')) return '#a3e635';
+   if (normalized.includes('trabajo') || normalized.includes('oficina')) return '#64748b';
+   if (normalized.includes('transferencia') || normalized.includes('préstamo') || normalized.includes('prestamo')) return '#cbd5e1';
+   if (normalized.includes('compra')) return '#c084fc';
+   if (normalized.includes('ingreso')) return '#10b981';
+   return '#94a3b8';
 }
 
 // Helper for Conic Gradient

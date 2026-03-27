@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Transaction, FinancialProfile, QuickAction } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
+import { guessCategory, getAllCategories, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey } from '../utils';
 
 interface Props {
   onConfirm: (transaction: Transaction | Transaction[], shouldNavigate?: boolean) => void;
@@ -54,21 +55,14 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   const [selectedCurrency, setSelectedCurrency] = useState(CURRENCIES[0]);
   const [customRate, setCustomRate] = useState<string>(""); 
   const [parsedItems, setParsedItems] = useState<ParsedItem[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
+
+  const availableCategories = getAllCategories(profile?.customCategories);
 
   useEffect(() => {
     if (selectedCurrency.code === 'ARS') setCustomRate("");
     else setCustomRate(selectedCurrency.rate.toString());
   }, [selectedCurrency]);
-
-  const guessCategory = (text: string, type: 'income' | 'expense'): string => {
-      if (type === 'income') return 'Ingreso';
-      const lower = text.toLowerCase();
-      if (lower.includes('uber') || lower.includes('taxi') || lower.includes('nafta') || lower.includes('tren') || lower.includes('sube')) return 'Transporte';
-      if (lower.includes('comida') || lower.includes('cena') || lower.includes('almuerzo') || lower.includes('burger') || lower.includes('cafe')) return 'Comida';
-      if (lower.includes('super') || lower.includes('mercado') || lower.includes('coto') || lower.includes('carrefour')) return 'Compras';
-      if (lower.includes('alquiler') || lower.includes('luz') || lower.includes('gas') || lower.includes('internet')) return 'Hogar';
-      return 'Otros';
-  };
 
   const extractFramesFromVideo = async (videoFile: File, numFrames: number = 5): Promise<string[]> => {
     return new Promise((resolve, reject) => {
@@ -289,7 +283,13 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
     if (parsedItems.length === 0) return;
     const rate = parseFloat(customRate) || selectedCurrency.rate;
     const now = new Date();
-    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    const todayDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    const currentMonthKey = getCurrentMonthKey();
+    
+    // Si el mes seleccionado es el actual, usar fecha de hoy. Si no, usar el día 15 del mes elegido.
+    const transactionDate = selectedMonth === currentMonthKey 
+        ? todayDate 
+        : `${selectedMonth}-15`;
 
     const finalTransactions: Transaction[] = parsedItems.map((item, index) => ({
         id: (Date.now() + index).toString(),
@@ -297,7 +297,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         description: item.description,
         category: item.category,
         type: item.type,
-        date: localDate,
+        date: transactionDate,
         originalCurrency: selectedCurrency.code,
         originalAmount: item.amount,
         exchangeRate: rate,
@@ -505,6 +505,27 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         {/* Review List */}
         {analyzed && parsedItems.length > 0 && (
           <div className="w-full animate-[fadeIn_0.3s_ease-out]">
+            {/* Month Selector */}
+            <div className="flex items-center justify-center gap-3 mb-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-3 shadow-sm">
+                <span className="text-xs font-bold text-slate-400 uppercase">Mes del gasto:</span>
+                <button 
+                    onClick={() => setSelectedMonth(getPrevMonthKey(selectedMonth))}
+                    className="size-8 rounded-full flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                    <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                </button>
+                <span className="text-sm font-bold text-slate-900 dark:text-white min-w-[140px] text-center">{formatMonthKey(selectedMonth)}</span>
+                <button 
+                    onClick={() => {
+                        const next = getNextMonthKey(selectedMonth);
+                        if (next <= getCurrentMonthKey()) setSelectedMonth(next);
+                    }}
+                    className={`size-8 rounded-full flex items-center justify-center transition-colors ${getNextMonthKey(selectedMonth) > getCurrentMonthKey() ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                </button>
+            </div>
+
             <div className="space-y-3 mb-6">
                 {parsedItems.map((item) => (
                     <div key={item.id} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 shadow-sm relative">
@@ -538,13 +559,19 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                             </div>
                             <div>
                                 <label className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Categoría</label>
-                                <input 
-                                    type="text" 
+                                <select 
                                     value={item.category} 
                                     onChange={(e) => updateParsedItem(item.id, 'category', e.target.value)}
                                     className="w-full bg-slate-50 dark:bg-slate-900 rounded-lg px-2 py-2 text-sm font-bold outline-none focus:ring-1 focus:ring-primary"
                                     style={{ fontSize: '16px' }}
-                                />
+                                >
+                                    {availableCategories.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                    {!availableCategories.includes(item.category) && (
+                                        <option value={item.category}>{item.category}</option>
+                                    )}
+                                </select>
                             </div>
                         </div>
                         <div className="mt-2 flex justify-end">

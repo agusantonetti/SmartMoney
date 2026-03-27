@@ -138,6 +138,7 @@ export interface FinancialProfile {
   hourlyWage?: number;
   events?: TravelEvent[];
   customDollarRate?: number;
+  customCategories?: string[];
 }
 
 export interface FinancialMetrics {
