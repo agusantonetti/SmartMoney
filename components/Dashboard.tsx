@@ -26,6 +26,7 @@ interface Props {
   onOpenPatrimonio?: () => void;
   onOpenAutoPilot?: () => void;
   onOpenGoals?: () => void;
+  onOpenReport?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -57,6 +58,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenPatrimonio,
   onOpenAutoPilot,
   onOpenGoals,
+  onOpenReport,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -661,6 +663,7 @@ const Dashboard: React.FC<Props> = ({
                   { id: 'patrimonio', title: 'Patrimonio', subtitle: 'Tu crecimiento', icon: 'diamond', color: 'purple', onClick: onOpenPatrimonio },
                   { id: 'piloto', title: 'Piloto Auto', subtitle: 'Proyección', icon: 'rocket_launch', color: 'emerald', onClick: onOpenAutoPilot },
                   { id: 'metas', title: 'Mis Metas', subtitle: 'Objetivos', icon: 'flag', color: 'pink', onClick: onOpenGoals },
+                  { id: 'reporte', title: 'Reporte PDF', subtitle: 'Descargar', icon: 'picture_as_pdf', color: 'red', onClick: onOpenReport },
                   { id: 'simulador', title: 'Simulador', subtitle: 'Futuro a 30 días', icon: 'timeline', color: 'violet', onClick: onOpenFuture },
                   { id: 'costo-vida', title: 'Costo Vida', subtitle: 'Calculadora', icon: 'price_check', color: 'emerald', onClick: onOpenSalaryCalculator },
               ];

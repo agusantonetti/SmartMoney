@@ -25,6 +25,7 @@ export enum ViewState {
   PATRIMONIO = 'PATRIMONIO',
   AUTOPILOT = 'AUTOPILOT',
   GOALS = 'GOALS',
+  REPORT = 'REPORT',
 }
 
 export interface Transaction {
