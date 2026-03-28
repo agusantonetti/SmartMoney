@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, getDollarRate } from '../utils';
+import { formatMoney, getDollarRate, getSalaryForMonth, getCurrentMonthKey } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -36,15 +36,15 @@ const SalaryCalculator: React.FC<Props> = ({ profile, transactions, onBack, onUp
 
   // Load initial data
   useEffect(() => {
-    // Load Income for Tab 1 & 3
-    const salary = (profile.incomeSources || []).reduce((acc, src) => acc + src.amount, 0) || (profile.monthlySalary || 0);
+    // Load Income using salary calculation (same as rest of app)
+    const salary = getSalaryForMonth(profile, getCurrentMonthKey(), currentDollarRate);
     setIncome(salary.toString());
     setMediaIncome(salary.toString());
 
     // Load Patrimony for Tab 2
     const currentSavings = profile.initialBalance || 0;
     setRunwayPatrimony(currentSavings.toString());
-  }, [profile]);
+  }, [profile, currentDollarRate]);
 
   // --- CALCULATIONS: SALARY ---
   const calcSalaryRent = parseFloat(rent) || 0;

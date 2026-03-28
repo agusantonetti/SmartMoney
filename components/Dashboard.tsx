@@ -658,7 +658,6 @@ const Dashboard: React.FC<Props> = ({
                   { id: 'radiografia', title: 'Radiografía', subtitle: 'Foto completa', icon: 'monitoring', color: 'amber', onClick: onOpenFinancialXRay },
                   { id: 'patrimonio', title: 'Patrimonio', subtitle: 'Tu crecimiento', icon: 'diamond', color: 'purple', onClick: onOpenPatrimonio },
                   { id: 'piloto', title: 'Piloto Auto', subtitle: 'Proyección', icon: 'rocket_launch', color: 'emerald', onClick: onOpenAutoPilot },
-                  { id: 'conversor', title: 'Conversor', subtitle: 'Dólar & Divisas', icon: 'currency_exchange', color: 'yellow', onClick: onOpenCurrencyConverter },
                   { id: 'simulador', title: 'Simulador', subtitle: 'Futuro a 30 días', icon: 'timeline', color: 'violet', onClick: onOpenFuture },
                   { id: 'costo-vida', title: 'Costo Vida', subtitle: 'Calculadora', icon: 'price_check', color: 'emerald', onClick: onOpenSalaryCalculator },
               ];

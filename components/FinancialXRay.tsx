@@ -57,8 +57,9 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
       if (src.isCreatorSource) {
         val = (src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || []).reduce((a, p) => a + p.realAmount, 0);
       }
-      return { name: src.name, amount: val, currency: src.currency || 'ARS' };
-    }).filter(s => s.amount > 0);
+      const arsAmount = src.currency === 'USD' ? val * dollarRate : val;
+      return { name: src.name, amount: val, arsAmount, currency: src.currency || 'ARS' };
+    }).filter(s => s.amount > 0).sort((a, b) => b.arsAmount - a.arsAmount);
 
     // Distribución
     const patrimonio = metrics.balance;
@@ -136,9 +137,14 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
               {data.sources.map((src, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <span className="text-sm text-slate-600 dark:text-slate-300">{src.name}</span>
-                  <span className="text-sm font-bold text-slate-900 dark:text-white">
-                    {src.currency === 'USD' ? `US$ ${src.amount.toLocaleString()}` : formatMoney(src.amount)}
-                  </span>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">
+                      {formatMoney(src.arsAmount)}
+                    </span>
+                    {src.currency === 'USD' && (
+                      <span className="text-[10px] text-slate-400 block">US$ {src.amount.toLocaleString()}</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
