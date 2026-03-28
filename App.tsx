@@ -25,6 +25,7 @@ import MonthComparator from './components/MonthComparator';
 import FinancialXRay from './components/FinancialXRay';
 import PatrimonioTracker from './components/PatrimonioTracker';
 import AutoPilot from './components/AutoPilot';
+import GoalsTracker from './components/GoalsTracker';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
@@ -388,6 +389,7 @@ const App: React.FC = () => {
             onOpenFinancialXRay={() => setCurrentView(ViewState.FINANCIAL_XRAY)}
             onOpenPatrimonio={() => setCurrentView(ViewState.PATRIMONIO)}
             onOpenAutoPilot={() => setCurrentView(ViewState.AUTOPILOT)}
+            onOpenGoals={() => setCurrentView(ViewState.GOALS)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -606,6 +608,15 @@ const App: React.FC = () => {
             profile={financialProfile}
             transactions={transactions}
             currentBalance={metrics.balance}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+          />
+        );
+      case ViewState.GOALS:
+        return (
+          <GoalsTracker
+            profile={financialProfile}
+            transactions={transactions}
+            onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
           />
         );

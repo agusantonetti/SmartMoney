@@ -24,6 +24,7 @@ export enum ViewState {
   FINANCIAL_XRAY = 'FINANCIAL_XRAY',
   PATRIMONIO = 'PATRIMONIO',
   AUTOPILOT = 'AUTOPILOT',
+  GOALS = 'GOALS',
 }
 
 export interface Transaction {
@@ -144,6 +145,19 @@ export interface FinancialProfile {
   customDollarRate?: number;
   customCategories?: string[];
   appOrder?: string[];
+  goals?: FinancialGoal[];
+}
+
+export interface FinancialGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currency: 'ARS' | 'USD';
+  currentAmount: number;
+  deadline?: string;
+  createdAt: string;
+  icon: string;
+  color: string;
 }
 
 export interface FinancialMetrics {
