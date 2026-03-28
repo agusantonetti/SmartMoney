@@ -333,30 +333,29 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
   return (
     <div className="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen flex flex-col transition-colors duration-200">
       {/* Top Navbar */}
-      <header className="w-full bg-surface-light dark:bg-surface-dark border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
-        <div className="px-4 flex items-center justify-between max-w-7xl mx-auto w-full">
-          <div className="flex items-center gap-4">
+      <header className="w-full bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-b border-white/30 dark:border-slate-700/40 sticky top-0 z-50 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
+        <div className="px-4 flex items-center justify-between max-w-2xl mx-auto w-full">
+          <div className="flex items-center gap-3">
              {onBack && (
-               <button onClick={onBack} className="p-3 -ml-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                  <span className="material-symbols-outlined">arrow_back</span>
+               <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">arrow_back</span>
                </button>
              )}
-            <h2 className="text-base font-bold tracking-tight text-slate-900 dark:text-white">Nuevo Movimiento</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Nuevo Movimiento</h2>
           </div>
           
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg overflow-x-auto max-w-[150px] scrollbar-hide">
-            {CURRENCIES.map(curr => (
+          <div className="flex items-center gap-1 bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
+            {CURRENCIES.slice(0, 3).map(curr => (
                <button
                   key={curr.code}
                   onClick={() => setSelectedCurrency(curr)}
-                  className={`px-2 py-1 rounded text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
                      selectedCurrency.code === curr.code 
                      ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white' 
                      : 'text-slate-400'
                   }`}
                >
-                  <span>{curr.flag}</span>
-                  <span className="hidden sm:inline">{curr.code}</span>
+                  {curr.flag} {curr.code}
                </button>
             ))}
           </div>
@@ -380,31 +379,31 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
             <div className="w-full flex flex-col items-center">
                 {/* Input Field - Styled for Mobile */}
                 <div className="w-full relative mb-6">
-                    <div className="relative bg-surface-light dark:bg-surface-dark shadow-sm rounded-3xl p-4 border border-slate-200 dark:border-slate-700 focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10 transition-all flex flex-col">
-                        <div className="flex w-full">
-                            <span className="pt-2 text-lg font-bold text-slate-400 mr-2">{selectedCurrency.symbol}</span>
-                            <textarea 
-                                ref={inputRef}
-                                autoFocus 
-                                placeholder={selectedCurrency.code === 'ARS' ? "Ej: Super 25000\nUber 5000" : "Ej: Cena 50\nTaxi 20"} 
-                                className="flex-1 bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 text-lg p-2 focus:ring-0 font-medium resize-none min-h-[120px]"
-                                style={{ fontSize: '16px' }} // IMPORTANT: Prevents iOS zoom
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                disabled={loading}
-                            />
-                        </div>
-                        <div className="flex justify-between mt-2 items-center">
-                            <button onClick={triggerFileInput} className="p-3 rounded-full text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                                <span className="material-symbols-outlined text-[24px]">document_scanner</span>
-                            </button>
+                    <div className="relative bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl shadow-sm rounded-2xl p-4 border border-white/30 dark:border-slate-700/50 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/10 transition-all flex flex-col">
+                        <textarea 
+                            ref={inputRef}
+                            autoFocus 
+                            placeholder={selectedCurrency.code === 'ARS' ? "Ej: Super 25000\nUber 5000" : "Ej: Cena 50\nTaxi 20"} 
+                            className="w-full bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-slate-600 text-base p-1 focus:ring-0 font-medium resize-none min-h-[100px]"
+                            style={{ fontSize: '16px' }}
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            disabled={loading}
+                        />
+                        <div className="flex justify-between mt-2 items-center border-t border-slate-100 dark:border-slate-800 pt-3">
+                            <div className="flex items-center gap-1">
+                                <button onClick={triggerFileInput} className="p-2 rounded-xl text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                    <span className="material-symbols-outlined text-[20px]">document_scanner</span>
+                                </button>
+                                <span className="text-[10px] text-slate-300 dark:text-slate-600">Escanear</span>
+                            </div>
                             <input type="file" accept="image/*,video/*" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
                             
                             <button 
                                 onClick={handleAnalyze}
                                 disabled={loading || !inputValue}
-                                className="h-10 px-5 rounded-full bg-primary hover:bg-blue-600 text-white font-bold shadow-md transition-all active:scale-95 flex items-center gap-2 disabled:opacity-70 disabled:grayscale"
+                                className="h-10 px-6 rounded-xl bg-primary hover:bg-blue-600 text-white font-bold shadow-lg shadow-primary/20 transition-all active:scale-95 flex items-center gap-2 disabled:opacity-50"
                             >
                                 {loading && !scanMode ? (
                                 <span className="material-symbols-outlined animate-spin text-sm">refresh</span>
@@ -414,7 +413,7 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                             </button>
                         </div>
                     </div>
-                    <p className="text-center text-xs text-slate-400 mt-1">Escribe un gasto por línea para cargar varios a la vez.</p>
+                    <p className="text-center text-[10px] text-slate-400 mt-2">Un gasto por línea · Ctrl+Enter para procesar</p>
                 </div>
 
                 {/* Quick Actions Grid */}

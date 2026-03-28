@@ -76,7 +76,7 @@ const ActivityHub: React.FC<Props> = ({ transactions, onUpdateTransactions, onBa
   return (
     <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
       {/* Header Sticky - FIXED SAFE AREA */}
-      <div className="sticky top-0 z-20 bg-surface-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 md:px-6 pb-4 space-y-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+      <div className="sticky top-0 z-20 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-b border-white/30 dark:border-slate-700/40 px-4 md:px-6 pb-4 space-y-4 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
         <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
                 <button onClick={onBack} className="p-3 -ml-3 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">

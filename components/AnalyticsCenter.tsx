@@ -12,7 +12,7 @@ interface Props {
 
 const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpdateTransactions }) => {
   const [timeRange, setTimeRange] = useState<'ALL' | 'MONTH' | 'YEAR'>('MONTH');
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'FLOW'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'FLOW' | 'TRENDS'>('OVERVIEW');
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthKey());
   const [showReclassify, setShowReclassify] = useState(false);
   const [reclassifyEdits, setReclassifyEdits] = useState<Record<string, string>>({});
@@ -145,10 +145,42 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
     100
   );
 
+  // --- LOGIC: CATEGORY TRENDS (LINE CHART) ---
+  const trendsData = useMemo(() => {
+    const today = new Date();
+    const months: { key: string, label: string }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
+      months.push({ key, label });
+    }
+
+    // Get top 5 categories by total spend
+    const catTotals: Record<string, number> = {};
+    transactions.filter(t => t.type === 'expense').forEach(t => {
+      catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+    });
+    const topCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
+
+    // Build series
+    const series = topCats.map(cat => {
+      const values = months.map(m => {
+        return transactions.filter(t => t.type === 'expense' && t.category === cat && t.date.startsWith(m.key))
+          .reduce((a, t) => a + t.amount, 0);
+      });
+      return { name: cat, values, color: getColorForCategory(cat) };
+    });
+
+    const maxVal = Math.max(...series.flatMap(s => s.values), 1);
+
+    return { months, series, maxVal };
+  }, [transactions]);
+
   return (
     <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-surface-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex items-center justify-between">
+      <div className="sticky top-0 z-10 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border-b border-white/30 dark:border-slate-700/40 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
             <span className="material-symbols-outlined">arrow_back</span>
@@ -220,7 +252,14 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
                 className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'FLOW' ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400'}`}
             >
                 <span className="material-symbols-outlined">hub</span>
-                Flujo de Dinero
+                Flujo
+            </button>
+            <button 
+                onClick={() => setActiveTab('TRENDS')}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${activeTab === 'TRENDS' ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400'}`}
+            >
+                <span className="material-symbols-outlined">show_chart</span>
+                Tendencias
             </button>
         </div>
       </div>
@@ -581,6 +620,104 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
                         </div>
                     ))}
                 </div>
+                </div>
+            </div>
+        )}
+
+        {/* === TRENDS TAB === */}
+        {activeTab === 'TRENDS' && (
+            <div className="space-y-6 animate-[fadeIn_0.3s_ease-out]">
+                {/* LINE CHART: Category Evolution */}
+                <div className="bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl border border-white/30 dark:border-slate-700/50 rounded-2xl p-5">
+                    <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-blue-500 text-[18px]">show_chart</span>
+                        Evolución por categoría (6 meses)
+                    </h3>
+                    
+                    {trendsData.series.length === 0 ? (
+                        <div className="text-center py-12 opacity-50">
+                            <span className="material-symbols-outlined text-3xl mb-2">data_loss_prevention</span>
+                            <p className="text-sm text-slate-400">No hay datos suficientes</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <div style={{ minWidth: 320 }}>
+                                <svg width="100%" height="200" viewBox="0 0 320 200" className="overflow-visible">
+                                    {/* Grid lines */}
+                                    {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => (
+                                        <line key={i} x1="30" y1={10 + 160 * pct} x2="310" y2={10 + 160 * pct} stroke="currentColor" strokeOpacity="0.06" strokeWidth="1" />
+                                    ))}
+                                    {/* Y-axis labels */}
+                                    <text x="25" y="14" textAnchor="end" fontSize="8" fill="currentColor" opacity="0.3">{(trendsData.maxVal / 1000).toFixed(0)}k</text>
+                                    <text x="25" y="94" textAnchor="end" fontSize="8" fill="currentColor" opacity="0.3">{(trendsData.maxVal / 2000).toFixed(0)}k</text>
+                                    <text x="25" y="174" textAnchor="end" fontSize="8" fill="currentColor" opacity="0.3">0</text>
+                                    {/* X-axis labels */}
+                                    {trendsData.months.map((m, i) => (
+                                        <text key={i} x={30 + i * 56} y="195" textAnchor="middle" fontSize="9" fill="currentColor" opacity="0.4" fontWeight="bold">{m.label}</text>
+                                    ))}
+                                    {/* Lines */}
+                                    {trendsData.series.map(serie => (
+                                        <polyline
+                                            key={serie.name}
+                                            points={serie.values.map((v, i) => `${30 + i * 56},${170 - (v / trendsData.maxVal) * 160}`).join(' ')}
+                                            fill="none" stroke={serie.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                        />
+                                    ))}
+                                    {/* Dots */}
+                                    {trendsData.series.map(serie =>
+                                        serie.values.map((v, i) => (
+                                            <circle key={`${serie.name}-${i}`} cx={30 + i * 56} cy={170 - (v / trendsData.maxVal) * 160} r="3" fill={serie.color} />
+                                        ))
+                                    )}
+                                </svg>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-3 mt-3 justify-center">
+                        {trendsData.series.map(serie => (
+                            <span key={serie.name} className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                <span className="size-2 rounded-full inline-block" style={{ backgroundColor: serie.color }} />
+                                {serie.name}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+
+                {/* TABLE: Monthly breakdown */}
+                <div className="bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl border border-white/30 dark:border-slate-700/50 rounded-2xl p-5">
+                    <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-purple-500 text-[18px]">table_chart</span>
+                        Detalle por categoría
+                    </h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                            <thead>
+                                <tr className="border-b border-slate-200 dark:border-slate-700">
+                                    <th className="text-left py-2 font-bold text-slate-400 uppercase text-[10px]">Categoría</th>
+                                    {trendsData.months.map(m => (
+                                        <th key={m.key} className="text-right py-2 font-bold text-slate-400 uppercase text-[10px] capitalize">{m.label}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {trendsData.series.map(serie => (
+                                    <tr key={serie.name} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
+                                        <td className="py-2 font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                            <span className="size-2 rounded-full inline-block" style={{ backgroundColor: serie.color }} />
+                                            {serie.name}
+                                        </td>
+                                        {serie.values.map((v, i) => (
+                                            <td key={i} className="text-right py-2 font-bold text-slate-600 dark:text-slate-400">
+                                                {v > 0 ? formatMoney(v) : '-'}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         )}
