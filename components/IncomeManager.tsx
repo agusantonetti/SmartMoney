@@ -95,7 +95,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       id: Date.now().toString(), name, amount: incomeMode === 'VARIABLE' ? (parseFloat(amount) || 0) : parseFloat(amount) || 0,
       currency, frequency, startDate, endDate: isEndDateEnabled ? endDate : undefined,
       isActive: true, isCreatorSource: incomeMode === 'VARIABLE', incomeMode, payments: [], type: 'FIXED',
-      targetPosts: incomeMode === 'PER_DELIVERY' ? (parseFloat(targetPosts) || 0) : undefined, posts: [],
+      targetPosts: (incomeMode === 'PER_DELIVERY' || incomeMode === 'FIXED') ? (parseFloat(targetPosts) || 0) : undefined, posts: [],
     };
     const updated = [...sources, newSrc]; setSources(updated);
     onUpdateProfile({ ...profile, incomeSources: updated });
@@ -245,6 +245,16 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 const currentVal = payment ? payment.realAmount : (mode === 'FIXED' ? selectedSource.amount : 0);
                 const isPaid = payment?.isPaid || false;
                 const expected = mode === 'FIXED' ? selectedSource.amount : 0;
+                const postsDone = payment?.postsCompleted || 0;
+                const requiredPosts = selectedSource.targetPosts || 0;
+
+                const updatePosts = (increment: number) => {
+                  const newVal = Math.max(0, postsDone + increment);
+                  handleUpdatePayment(selectedSource.id, {
+                    month: pKey, realAmount: currentVal || expected, isPaid, postsCompleted: newVal
+                  });
+                };
+
                 return (
                   <div key={pKey} className={`p-4 rounded-xl border flex flex-col gap-3 transition-colors ${!isActive?'opacity-40 border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900':isPaid?'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800':'bg-surface-light dark:bg-surface-dark border-slate-200 dark:border-slate-700'}`}>
                     <div className="flex items-center justify-between">
@@ -256,12 +266,24 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                           {!isPaid && isActive && mode === 'VARIABLE' && <span className="text-[10px] text-amber-500 font-bold">Pendiente de registro</span>}
                         </div>
                       </div>
-                      {isActive && <button onClick={() => handleUpdatePayment(selectedSource.id, { month: pKey, realAmount: currentVal || expected, isPaid: !isPaid })} className={`size-8 rounded-full flex items-center justify-center transition-all ${isPaid?'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30':'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}><span className="material-symbols-outlined text-sm">{isPaid?'check':'attach_money'}</span></button>}
+                      {isActive && <button onClick={() => handleUpdatePayment(selectedSource.id, { month: pKey, realAmount: currentVal || expected, isPaid: !isPaid, postsCompleted: postsDone })} className={`size-8 rounded-full flex items-center justify-center transition-all ${isPaid?'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30':'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}><span className="material-symbols-outlined text-sm">{isPaid?'check':'attach_money'}</span></button>}
                     </div>
+                    {/* Delivery counter for FIXED with targetPosts */}
+                    {isActive && mode === 'FIXED' && requiredPosts > 0 && (
+                      <div className="flex items-center gap-3 pl-11">
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Entregados:</span>
+                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-1.5 py-0.5">
+                          <button onClick={() => updatePosts(-1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">remove</span></button>
+                          <span className={`text-sm font-bold w-14 text-center ${postsDone >= requiredPosts ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{postsDone}/{requiredPosts}</span>
+                          <button onClick={() => updatePosts(1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">add</span></button>
+                        </div>
+                        {postsDone >= requiredPosts && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">check_circle</span>Completo</span>}
+                      </div>
+                    )}
                     {isActive && (
                       <div className="flex items-center justify-between gap-3 pl-11">
                         <p className="text-[10px] text-slate-400 uppercase font-bold shrink-0">{mode==='FIXED'?`Monto (${isUSD?'USD':'ARS'}):`:mode==='VARIABLE'?`Cobrado (${isUSD?'USD':'ARS'}):`:''}</p>
-                        {mode !== 'PER_DELIVERY' && <input type="number" className={`w-28 bg-transparent text-right font-bold outline-none border-b border-dashed border-slate-300 focus:border-primary ${privacyMode?'blur-sm':''}`} placeholder={expected>0?expected.toString():'0'} value={currentVal||''} onChange={e => handleUpdatePayment(selectedSource.id, { month: pKey, realAmount: parseFloat(e.target.value), isPaid })} />}
+                        {mode !== 'PER_DELIVERY' && <input type="number" className={`w-28 bg-transparent text-right font-bold outline-none border-b border-dashed border-slate-300 focus:border-primary ${privacyMode?'blur-sm':''}`} placeholder={expected>0?expected.toString():'0'} value={currentVal||''} onChange={e => handleUpdatePayment(selectedSource.id, { month: pKey, realAmount: parseFloat(e.target.value), isPaid, postsCompleted: postsDone })} />}
                       </div>
                     )}
                   </div>
@@ -332,6 +354,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 {incomeMode==='VARIABLE' && <p className="text-[9px] text-slate-400 mt-1 ml-1">Ideal para fundaciones, consultorías, o sueldos que varían. Registrás el monto real cada mes.</p>}
               </div>
               {incomeMode==='PER_DELIVERY' && <div><label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Entregas esperadas por mes (opcional)</label><input type="number" className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm" placeholder="Ej. 10" value={targetPosts} onChange={e => setTargetPosts(e.target.value)} /></div>}
+              {incomeMode==='FIXED' && <div><label className="text-[9px] uppercase font-bold text-slate-400 mb-1 block">Entregas por mes (opcional, ej: posts, artículos)</label><input type="number" className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm" placeholder="Ej. 12 — dejá vacío si no aplica" value={targetPosts} onChange={e => setTargetPosts(e.target.value)} /><p className="text-[9px] text-slate-400 mt-1 ml-1">Si tenés que entregar posts o artículos para cobrar, poné la cantidad acá para trackear tu avance.</p></div>}
               <div><label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Frecuencia</label>
                 <div className="flex gap-2">
                   <button onClick={() => setFrequency('MONTHLY')} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${frequency==='MONTHLY'?'bg-blue-50 border-blue-500 text-blue-600 dark:bg-blue-900/30':'border-slate-200 dark:border-slate-700 text-slate-500'}`}>Mensual</button>
@@ -361,6 +384,9 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             const displayArs = isVariableMode(src) ? currentReal : (isUSD ? src.amount * dollarRate : src.amount);
             const now = new Date(); const pfx = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
             const hasPaid = src.payments.some(p => p.month.startsWith(pfx) && p.isPaid);
+            const currentMonthPayment = src.payments.find(p => p.month.startsWith(pfx));
+            const postsDone = currentMonthPayment?.postsCompleted || 0;
+            const requiredPosts = src.targetPosts || 0;
             return (
               <div key={src.id} onClick={() => setSelectedSourceId(src.id)} className={`bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border transition-all cursor-pointer hover:shadow-md ${!isActive?'opacity-50 border-slate-200 dark:border-slate-800':hasPaid?'border-emerald-200 dark:border-emerald-800':'border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex items-center gap-4">
@@ -375,6 +401,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                       {isUSD&&<span className="text-[9px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">USD</span>}
                       {hasPaid&&<span className="text-[9px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">check_circle</span>Cobrado</span>}
                       {!hasPaid&&isActive&&mode!=='PER_DELIVERY'&&<span className="text-[9px] text-slate-400 font-bold">Pendiente</span>}
+                      {mode==='FIXED'&&requiredPosts>0&&isActive&&<span className={`text-[9px] font-bold ${postsDone>=requiredPosts?'text-emerald-500':'text-indigo-500'}`}>{postsDone}/{requiredPosts} entregas</span>}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
