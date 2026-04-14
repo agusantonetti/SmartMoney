@@ -12,10 +12,15 @@ interface Props {
 }
 
 const CATEGORY_MAP: Record<string, { label: string; icon: string; color: string }> = {
-  housing: { label: 'Vivienda', icon: 'home', color: '#F97316' },
+  streaming: { label: 'Streaming', icon: 'smart_display', color: '#6366F1' },
+  tools: { label: 'Herramientas', icon: 'build', color: '#06B6D4' },
   services: { label: 'Servicios', icon: 'bolt', color: '#EAB308' },
-  digital: { label: 'Digital', icon: 'smart_display', color: '#6366F1' },
   education: { label: 'Educación', icon: 'school', color: '#3B82F6' },
+  gaming: { label: 'Gaming', icon: 'sports_esports', color: '#8B5CF6' },
+  storage: { label: 'Almacenamiento', icon: 'cloud', color: '#10B981' },
+  // Legacy compat
+  housing: { label: 'Vivienda', icon: 'home', color: '#F97316' },
+  digital: { label: 'Digital', icon: 'smart_display', color: '#6366F1' },
 };
 
 const PALETTE = ['#6366F1', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#EF4444', '#06B6D4', '#F97316', '#14B8A6'];

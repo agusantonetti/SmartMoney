@@ -82,7 +82,8 @@ export interface IncomeSource {
   startDate?: string; 
   endDate?: string; 
   isActive?: boolean; 
-  isCreatorSource?: boolean;
+  isCreatorSource?: boolean; // Legacy - backward compat
+  incomeMode?: 'FIXED' | 'VARIABLE' | 'PER_DELIVERY';
   medium?: MediaType;
   hoursPerDay?: number;
   daysPerWeek?: number;

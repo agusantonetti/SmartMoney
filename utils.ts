@@ -207,10 +207,14 @@ export const getNextMonthKey = (monthKey: string): string => {
 export const getSalaryForMonth = (profile: FinancialProfile, monthKey: string, dollarRate: number): number => {
   return (profile.incomeSources || []).reduce((sum, src) => {
     if (src.isActive === false) return sum;
+    const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
     let val = 0;
-    if (src.isCreatorSource) {
+    if (mode === 'VARIABLE') {
       const payments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
       val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+    } else if (mode === 'PER_DELIVERY') {
+      const posts = (src.posts || []).filter(p => p.date.startsWith(monthKey));
+      val = posts.reduce((acc, p) => acc + p.amount, 0);
     } else {
       val = src.amount;
       if (src.frequency === 'BIWEEKLY') val *= 2;

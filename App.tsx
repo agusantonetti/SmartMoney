@@ -492,6 +492,7 @@ const App: React.FC = () => {
             profile={financialProfile}
             currentBalance={metrics.balance - metrics.totalReserved}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
           />
         );
       case ViewState.ACTIVITY:

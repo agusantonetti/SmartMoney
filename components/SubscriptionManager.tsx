@@ -11,10 +11,12 @@ interface Props {
 }
 
 const CATEGORIES = [
-  { id: 'housing', label: 'Vivienda', icon: 'home', color: 'orange' },
+  { id: 'streaming', label: 'Streaming', icon: 'smart_display', color: 'indigo' },
+  { id: 'tools', label: 'Herramientas', icon: 'build', color: 'cyan' },
   { id: 'services', label: 'Servicios', icon: 'bolt', color: 'yellow' },
-  { id: 'digital', label: 'Digital', icon: 'smart_display', color: 'indigo' },
   { id: 'education', label: 'Educación', icon: 'school', color: 'blue' },
+  { id: 'gaming', label: 'Gaming', icon: 'sports_esports', color: 'purple' },
+  { id: 'storage', label: 'Almacenamiento', icon: 'cloud', color: 'emerald' },
 ];
 
 const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, privacyMode }) => {
@@ -31,7 +33,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<'ARS'|'USD'>('ARS');
   const [day, setDay] = useState('');
-  const [selectedCat, setSelectedCat] = useState(CATEGORIES[2]);
+  const [selectedCat, setSelectedCat] = useState(CATEGORIES[0]);
   
   // NEW STATES
   const [frequency, setFrequency] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
@@ -384,7 +386,7 @@ const SubscriptionManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack
                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors material-symbols-outlined">description</span>
                      <input 
                       type="text" 
-                      placeholder={selectedCat.id === 'housing' ? "Ej. Alquiler Depto" : "Ej. Amazon Prime, Seguro Auto"}
+                      placeholder="Ej. Netflix, ChatGPT, Spotify"
                       className="w-full bg-slate-50 dark:bg-slate-900/50 h-14 pl-12 pr-4 rounded-2xl outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium border border-transparent focus:border-primary/30"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
