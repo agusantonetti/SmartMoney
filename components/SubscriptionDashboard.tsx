@@ -27,7 +27,8 @@ const PALETTE = ['#6366F1', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981
 
 const SubscriptionDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpenSubscriptions, privacyMode }) => {
   const dollarRate = getDollarRate(profile);
-  const subs = profile.subscriptions || [];
+  const allSubs = profile.subscriptions || [];
+  const subs = allSubs.filter(s => s.category !== 'housing'); // Excluir vivienda/alquiler
   const [hoveredSub, setHoveredSub] = useState<string | null>(null);
 
   // --- CALCULATIONS ---
@@ -183,7 +184,7 @@ const SubscriptionDashboard: React.FC<Props> = ({ profile, transactions, onBack,
               {analysis.pctOfExpenses.toFixed(1)}% de tus gastos mensuales
             </div>
             <div className="bg-white/20 px-3 py-1.5 rounded-full text-xs font-bold backdrop-blur-sm flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">per_day</span>
+              <span className="material-symbols-outlined text-sm">today</span>
               {formatMoney(analysis.totalMonthly / 30)}/día
             </div>
           </div>

@@ -54,7 +54,8 @@ export interface IncomePayment {
     impressions?: number; 
     rpm?: number; 
   };
-  postsCompleted?: number; // Nuevo: Cantidad de posts realizados
+  postsCompleted?: number; // Cantidad de posts realizados
+  postsPaid?: number; // Cantidad de posts pagados
 }
 
 export type MediaType = 'TV' | 'RADIO' | 'STREAM' | 'REDACCION' | 'EVENTO' | 'OTRO';

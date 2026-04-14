@@ -152,12 +152,16 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     const isUSD = selectedSource.currency === 'USD';
     const mode = getEffectiveMode(selectedSource);
     const paidPayments = selectedSource.payments.filter(p => p.isPaid);
-    const totalEarnings = paidPayments.reduce((a,p) => a + (isUSD ? p.realAmount * dollarRate : p.realAmount), 0);
     const posts = selectedSource.posts || [];
     const paidPosts = posts.filter(p => p.isPaid);
     const unpaidPosts = posts.filter(p => !p.isPaid);
-    const totalOwed = unpaidPosts.reduce((s,p) => s + p.amount, 0);
     const totalPaidPosts = paidPosts.reduce((s,p) => s + p.amount, 0);
+    const totalOwed = unpaidPosts.reduce((s,p) => s + p.amount, 0);
+    // For PER_DELIVERY, earnings come from paid posts; for others, from monthly payments
+    const totalEarnings = mode === 'PER_DELIVERY'
+      ? (isUSD ? totalPaidPosts * dollarRate : totalPaidPosts)
+      : paidPayments.reduce((a,p) => a + (isUSD ? p.realAmount * dollarRate : p.realAmount), 0);
+    const paidCount = mode === 'PER_DELIVERY' ? paidPosts.length : paidPayments.length;
 
     return (
       <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
@@ -180,7 +184,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             <div className="relative z-10 grid grid-cols-2 gap-4">
               <div><p className="text-xs text-slate-400 font-bold uppercase mb-1">Cobrado ({viewYear})</p><p className={`text-2xl font-black ${privacyMode?'blur-sm':''}`}>{formatMoney(totalEarnings)}</p></div>
-              <div><p className="text-xs text-slate-400 font-bold uppercase mb-1">Meses Cobrados</p><p className="text-2xl font-black text-emerald-400">{paidPayments.length}</p></div>
+              <div><p className="text-xs text-slate-400 font-bold uppercase mb-1">{mode === 'PER_DELIVERY' ? 'Entregas Cobradas' : 'Meses Cobrados'}</p><p className="text-2xl font-black text-emerald-400">{paidCount}</p></div>
               {mode === 'FIXED' && selectedSource.amount > 0 && <div className="col-span-2 pt-3 border-t border-white/10"><p className="text-xs text-slate-400 font-bold uppercase mb-1">Base Mensual</p><p className={`text-lg font-bold ${privacyMode?'blur-sm':''}`}>{isUSD ? formatUSD(selectedSource.amount) : formatMoney(selectedSource.amount)}{selectedSource.frequency === 'BIWEEKLY' && ' x quincena'}</p></div>}
             </div>
           </div>
@@ -246,12 +250,19 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 const isPaid = payment?.isPaid || false;
                 const expected = mode === 'FIXED' ? selectedSource.amount : 0;
                 const postsDone = payment?.postsCompleted || 0;
+                const paidDone = payment?.postsPaid || 0;
                 const requiredPosts = selectedSource.targetPosts || 0;
 
                 const updatePosts = (increment: number) => {
                   const newVal = Math.max(0, postsDone + increment);
                   handleUpdatePayment(selectedSource.id, {
-                    month: pKey, realAmount: currentVal || expected, isPaid, postsCompleted: newVal
+                    month: pKey, realAmount: currentVal || expected, isPaid, postsCompleted: newVal, postsPaid: paidDone
+                  });
+                };
+                const updatePostsPaid = (increment: number) => {
+                  const newVal = Math.max(0, Math.min(postsDone, paidDone + increment));
+                  handleUpdatePayment(selectedSource.id, {
+                    month: pKey, realAmount: currentVal || expected, isPaid, postsCompleted: postsDone, postsPaid: newVal
                   });
                 };
 
@@ -270,14 +281,28 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                     </div>
                     {/* Delivery counter for FIXED with targetPosts */}
                     {isActive && mode === 'FIXED' && requiredPosts > 0 && (
-                      <div className="flex items-center gap-3 pl-11">
-                        <span className="text-[10px] font-bold uppercase text-slate-400">Entregados:</span>
-                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-1.5 py-0.5">
-                          <button onClick={() => updatePosts(-1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">remove</span></button>
-                          <span className={`text-sm font-bold w-14 text-center ${postsDone >= requiredPosts ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{postsDone}/{requiredPosts}</span>
-                          <button onClick={() => updatePosts(1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">add</span></button>
+                      <div className="pl-11 space-y-2">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 w-20">Entregados:</span>
+                          <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-1.5 py-0.5">
+                            <button onClick={() => updatePosts(-1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">remove</span></button>
+                            <span className={`text-sm font-bold w-14 text-center ${postsDone >= requiredPosts ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{postsDone}/{requiredPosts}</span>
+                            <button onClick={() => updatePosts(1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">add</span></button>
+                          </div>
+                          {postsDone >= requiredPosts && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">check_circle</span>Completo</span>}
                         </div>
-                        {postsDone >= requiredPosts && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">check_circle</span>Completo</span>}
+                        {postsDone > 0 && (
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 w-20">Pagados:</span>
+                            <div className="flex items-center bg-emerald-50 dark:bg-emerald-900/20 rounded-full px-1.5 py-0.5 border border-emerald-200 dark:border-emerald-800">
+                              <button onClick={() => updatePostsPaid(-1)} className="size-6 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-full text-emerald-500"><span className="material-symbols-outlined text-[16px]">remove</span></button>
+                              <span className={`text-sm font-bold w-14 text-center ${paidDone >= postsDone ? 'text-emerald-500' : 'text-amber-500'}`}>{paidDone}/{postsDone}</span>
+                              <button onClick={() => updatePostsPaid(1)} className="size-6 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-full text-emerald-500"><span className="material-symbols-outlined text-[16px]">add</span></button>
+                            </div>
+                            {paidDone >= postsDone && paidDone > 0 && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">paid</span>Todo pago</span>}
+                            {paidDone < postsDone && <span className="text-[10px] text-amber-500 font-bold">{postsDone - paidDone} sin cobrar</span>}
+                          </div>
+                        )}
                       </div>
                     )}
                     {isActive && (
