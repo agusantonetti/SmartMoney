@@ -29,6 +29,8 @@ import GoalsTracker from './components/GoalsTracker';
 import ReportGenerator from './components/ReportGenerator';
 import IncomeDashboard from './components/IncomeDashboard';
 import SubscriptionDashboard from './components/SubscriptionDashboard';
+import MonthlyClose from './components/MonthlyClose';
+import YearReview from './components/YearReview';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
@@ -396,6 +398,8 @@ const App: React.FC = () => {
             onOpenReport={() => setCurrentView(ViewState.REPORT)}
             onOpenIncomeDashboard={() => setCurrentView(ViewState.INCOME_DASHBOARD)}
             onOpenSubscriptionDashboard={() => setCurrentView(ViewState.SUBSCRIPTION_DASHBOARD)}
+            onOpenMonthlyClose={() => setCurrentView(ViewState.MONTHLY_CLOSE)}
+            onOpenYearReview={() => setCurrentView(ViewState.YEAR_REVIEW)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -607,7 +611,9 @@ const App: React.FC = () => {
             profile={financialProfile}
             metrics={metrics}
             transactions={transactions}
+            onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
           />
         );
       case ViewState.AUTOPILOT:
@@ -654,6 +660,27 @@ const App: React.FC = () => {
             transactions={transactions}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
             onOpenSubscriptions={() => setCurrentView(ViewState.SUBSCRIPTIONS)}
+            privacyMode={privacyMode}
+          />
+        );
+      case ViewState.MONTHLY_CLOSE:
+        return (
+          <MonthlyClose
+            profile={financialProfile}
+            transactions={transactions}
+            onUpdateProfile={handleUpdateProfile}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            onAddTransaction={() => { setTempEventContext(null); setCurrentView(ViewState.TRANSACTION); }}
+            privacyMode={privacyMode}
+          />
+        );
+      case ViewState.YEAR_REVIEW:
+        return (
+          <YearReview
+            profile={financialProfile}
+            transactions={transactions}
+            balance={metrics.balance}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
             privacyMode={privacyMode}
           />
         );

@@ -114,11 +114,39 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
     const categories: Record<string, number> = {};
     currentExpenses.forEach(t => { categories[t.category] = (categories[t.category] || 0) + t.amount; });
 
+    // Personal inflation (3m and 6m comparison)
+    const now2 = new Date();
+    const m3 = new Date(now2.getFullYear(), now2.getMonth() - 3, 1);
+    const m3Key = `${m3.getFullYear()}-${String(m3.getMonth() + 1).padStart(2, '0')}`;
+    const m6 = new Date(now2.getFullYear(), now2.getMonth() - 6, 1);
+    const m6Key = `${m6.getFullYear()}-${String(m6.getMonth() + 1).padStart(2, '0')}`;
+    const m3Expenses: Record<string, number> = {};
+    const m6Expenses: Record<string, number> = {};
+    transactions.filter(t => t.type === 'expense' && t.date.startsWith(m3Key)).forEach(t => { m3Expenses[t.category] = (m3Expenses[t.category] || 0) + t.amount; });
+    transactions.filter(t => t.type === 'expense' && t.date.startsWith(m6Key)).forEach(t => { m6Expenses[t.category] = (m6Expenses[t.category] || 0) + t.amount; });
+
+    const inflation: { cat: string; current: number; m3: number; m6: number; pct3: number; pct6: number }[] = [];
+    Object.keys(categories).forEach(cat => {
+      if (cat === 'Otros' || cat === 'Ingreso') return;
+      const curr = categories[cat];
+      const prev3 = m3Expenses[cat] || 0;
+      const prev6 = m6Expenses[cat] || 0;
+      if (prev3 > 0 || prev6 > 0) {
+        inflation.push({
+          cat, current: curr,
+          m3: prev3, m6: prev6,
+          pct3: prev3 > 0 ? ((curr - prev3) / prev3) * 100 : 0,
+          pct6: prev6 > 0 ? ((curr - prev6) / prev6) * 100 : 0,
+        });
+      }
+    });
+    inflation.sort((a, b) => Math.abs(b.pct3) - Math.abs(a.pct3));
+
     return {
       totalIncome, prevIncome, totalExpense, prevExpenseTotal, savingsRate, prevSavingsRate,
       fixedIncome, variableIncome, deliveryIncome, fixedPct,
       collectionRate, topSourcePct, topSourceName: sourceIncomes[0]?.name || '-',
-      usdPct, usdIncome, debtToIncome, totalDebt, score, sources, categories,
+      usdPct, usdIncome, debtToIncome, totalDebt, score, sources, categories, inflation,
     };
   }, [profile, transactions, metrics, dollarRate, currentMonthKey]);
 
@@ -231,6 +259,42 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
             })}
           </div>
         </div>
+        {/* PERSONAL INFLATION */}
+        {data.inflation.length > 0 && (
+          <div className="bg-surface-light dark:bg-surface-dark rounded-3xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm">local_fire_department</span>
+              Tu Inflación Personal
+            </h3>
+            <p className="text-[10px] text-slate-400 mb-4">Cómo cambió tu gasto por categoría vs hace 3 y 6 meses</p>
+            <div className="space-y-3">
+              {data.inflation.slice(0, 8).map(item => (
+                <div key={item.cat} className="flex items-center gap-3">
+                  <span className="text-xs font-bold w-24 truncate text-slate-500">{item.cat}</span>
+                  <div className="flex-1 flex items-center gap-2">
+                    <span className={`text-[10px] font-black w-14 text-center px-1.5 py-0.5 rounded-full ${
+                      item.pct3 > 20 ? 'bg-red-100 dark:bg-red-900/20 text-red-600' :
+                      item.pct3 < -10 ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600' :
+                      'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                    }`}>
+                      {item.m3 > 0 ? (item.pct3 > 0 ? '+' : '') + item.pct3.toFixed(0) + '%' : '-'}
+                    </span>
+                    <span className="text-[9px] text-slate-400">3m</span>
+                    <span className={`text-[10px] font-black w-14 text-center px-1.5 py-0.5 rounded-full ${
+                      item.pct6 > 30 ? 'bg-red-100 dark:bg-red-900/20 text-red-600' :
+                      item.pct6 < -10 ? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600' :
+                      'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                    }`}>
+                      {item.m6 > 0 ? (item.pct6 > 0 ? '+' : '') + item.pct6.toFixed(0) + '%' : '-'}
+                    </span>
+                    <span className="text-[9px] text-slate-400">6m</span>
+                  </div>
+                  <span className={`text-xs font-bold w-20 text-right ${blur}`}>{formatMoney(item.current)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

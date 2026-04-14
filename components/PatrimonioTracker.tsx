@@ -1,22 +1,43 @@
 
-import React, { useMemo, useState } from 'react';
-import { FinancialProfile, FinancialMetrics, Transaction } from '../types';
+import React, { useMemo, useState, useEffect } from 'react';
+import { FinancialProfile, FinancialMetrics, Transaction, PatrimonioSnapshot } from '../types';
 import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, getCurrentMonthKey } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
   metrics: FinancialMetrics;
   transactions: Transaction[];
+  onUpdateProfile: (profile: FinancialProfile) => void;
   onBack: () => void;
+  privacyMode?: boolean;
 }
 
-const PatrimonioTracker: React.FC<Props> = ({ profile, metrics, transactions, onBack }) => {
+const PatrimonioTracker: React.FC<Props> = ({ profile, metrics, transactions, onUpdateProfile, onBack, privacyMode }) => {
   const dollarRate = getDollarRate(profile);
   const patrimonio = metrics.balance;
   const patrimonioUSD = patrimonio / dollarRate;
   const currentMonthKey = getCurrentMonthKey();
   const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
   const [showProjection, setShowProjection] = useState(false);
+  const blur = privacyMode ? 'blur-sm' : '';
+
+  // Auto-snapshot: save current balance for this month if not already saved
+  useEffect(() => {
+    const history = profile.patrimonioHistory || [];
+    const existing = history.find(h => h.month === currentMonthKey);
+    // Only auto-save if patrimonio is non-zero and differs from existing
+    if (patrimonio !== 0 && (!existing || Math.abs(existing.balance - patrimonio) > 1000)) {
+      const newSnapshot: PatrimonioSnapshot = {
+        month: currentMonthKey,
+        balance: patrimonio,
+        dollarRate,
+        date: new Date().toISOString(),
+      };
+      const updatedHistory = [...history.filter(h => h.month !== currentMonthKey), newSnapshot]
+        .sort((a, b) => a.month.localeCompare(b.month));
+      onUpdateProfile({ ...profile, patrimonioHistory: updatedHistory });
+    }
+  }, [currentMonthKey, patrimonio]);
 
   // Evolución pasada (12 meses) + proyección futura (6 meses)
   const evolution = useMemo(() => {
@@ -247,6 +268,68 @@ const PatrimonioTracker: React.FC<Props> = ({ profile, metrics, transactions, on
             ))}
           </div>
         </div>
+
+        {/* HISTORIAL DE SNAPSHOTS */}
+        {(() => {
+          const history = profile.patrimonioHistory || [];
+          if (history.length < 2) return null;
+          const sorted = [...history].sort((a, b) => a.month.localeCompare(b.month));
+          const maxH = Math.max(...sorted.map(h => Math.abs(h.balance)), 1);
+          const first = sorted[0];
+          const last = sorted[sorted.length - 1];
+          const totalGrowth = last.balance - first.balance;
+          const months = sorted.length;
+          const avgGrowthPerMonth = months > 1 ? totalGrowth / (months - 1) : 0;
+
+          return (
+            <div className="bg-white/70 dark:bg-slate-800/60 backdrop-blur-xl border border-white/30 dark:border-slate-700/50 rounded-2xl p-4">
+              <h3 className="text-xs font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[14px]">history</span>
+                Historial Registrado
+              </h3>
+              <p className="text-[10px] text-slate-400 mb-3">{sorted.length} snapshots guardados automáticamente</p>
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                  <p className="text-[8px] text-slate-400 font-bold uppercase">Primer Registro</p>
+                  <p className={`text-sm font-black ${blur}`}>{formatMoney(first.balance)}</p>
+                  <p className="text-[9px] text-slate-400">{first.month}</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                  <p className="text-[8px] text-slate-400 font-bold uppercase">Actual</p>
+                  <p className={`text-sm font-black ${blur}`}>{formatMoney(last.balance)}</p>
+                  <p className="text-[9px] text-slate-400">{last.month}</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 text-center">
+                  <p className="text-[8px] text-slate-400 font-bold uppercase">Crecimiento</p>
+                  <p className={`text-sm font-black ${totalGrowth >= 0 ? 'text-emerald-500' : 'text-red-500'} ${blur}`}>
+                    {totalGrowth >= 0 ? '+' : ''}{formatMoney(totalGrowth)}
+                  </p>
+                  <p className="text-[9px] text-slate-400">~{formatMoney(avgGrowthPerMonth)}/mes</p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                {sorted.map((snap, i) => {
+                  const prev = i > 0 ? sorted[i - 1].balance : snap.balance;
+                  const diff = snap.balance - prev;
+                  const pct = maxH > 0 ? (Math.abs(snap.balance) / maxH) * 100 : 0;
+                  return (
+                    <div key={snap.month} className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 w-14">{snap.month.split('-').reverse().join('/')}</span>
+                      <div className="flex-1 h-4 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${snap.balance >= 0 ? 'bg-blue-500' : 'bg-red-500'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className={`text-[10px] font-bold w-20 text-right ${blur}`}>{formatMoney(snap.balance)}</span>
+                      {i > 0 && <span className={`text-[9px] font-bold w-16 text-right ${diff >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>{diff >= 0 ? '+' : ''}{formatMoney(diff)}</span>}
+                      {i === 0 && <span className="w-16" />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
       </div>
     </div>

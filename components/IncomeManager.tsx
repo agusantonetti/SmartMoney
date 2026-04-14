@@ -23,6 +23,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const dollarRate = getDollarRate(profile);
   const [sortOrder, setSortOrder] = useState<'AMOUNT' | 'DATE'>('AMOUNT');
   const [isAdding, setIsAdding] = useState(false);
+  const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState<'ARS' | 'USD'>('ARS');
@@ -91,17 +92,54 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     if (!name) return;
     if (incomeMode === 'FIXED' && !amount) return;
     if (incomeMode === 'PER_DELIVERY' && !amount) return;
-    const newSrc: IncomeSource = {
-      id: Date.now().toString(), name, amount: incomeMode === 'VARIABLE' ? (parseFloat(amount) || 0) : parseFloat(amount) || 0,
-      currency, frequency, startDate, endDate: isEndDateEnabled ? endDate : undefined,
-      isActive: true, isCreatorSource: incomeMode === 'VARIABLE', incomeMode, payments: [], type: 'FIXED',
-      targetPosts: (incomeMode === 'PER_DELIVERY' || incomeMode === 'FIXED') ? (parseFloat(targetPosts) || 0) : undefined, posts: [],
-    };
-    const updated = [...sources, newSrc]; setSources(updated);
-    onUpdateProfile({ ...profile, incomeSources: updated });
+    
+    if (editingSourceId) {
+      // UPDATE existing
+      const srcIdx = sources.findIndex(s => s.id === editingSourceId);
+      if (srcIdx === -1) return;
+      const existing = sources[srcIdx];
+      const updatedSrc: IncomeSource = {
+        ...existing, name, amount: incomeMode === 'VARIABLE' ? (parseFloat(amount) || 0) : parseFloat(amount) || 0,
+        currency, frequency, startDate, endDate: isEndDateEnabled ? endDate : undefined,
+        isCreatorSource: incomeMode === 'VARIABLE', incomeMode,
+        targetPosts: (incomeMode === 'PER_DELIVERY' || incomeMode === 'FIXED') ? (parseFloat(targetPosts) || 0) : undefined,
+      };
+      const updated = [...sources]; updated[srcIdx] = updatedSrc;
+      setSources(updated); onUpdateProfile({ ...profile, incomeSources: updated });
+    } else {
+      // CREATE new
+      const newSrc: IncomeSource = {
+        id: Date.now().toString(), name, amount: incomeMode === 'VARIABLE' ? (parseFloat(amount) || 0) : parseFloat(amount) || 0,
+        currency, frequency, startDate, endDate: isEndDateEnabled ? endDate : undefined,
+        isActive: true, isCreatorSource: incomeMode === 'VARIABLE', incomeMode, payments: [], type: 'FIXED',
+        targetPosts: (incomeMode === 'PER_DELIVERY' || incomeMode === 'FIXED') ? (parseFloat(targetPosts) || 0) : undefined, posts: [],
+      };
+      const updated = [...sources, newSrc]; setSources(updated);
+      onUpdateProfile({ ...profile, incomeSources: updated });
+    }
+    resetForm();
+  };
+
+  const resetForm = () => {
     setName(''); setAmount(''); setCurrency('ARS'); setFrequency('MONTHLY');
     setStartDate(new Date().toISOString().split('T')[0]); setEndDate('');
-    setIsEndDateEnabled(false); setIncomeMode('FIXED'); setTargetPosts(''); setIsAdding(false);
+    setIsEndDateEnabled(false); setIncomeMode('FIXED'); setTargetPosts('');
+    setIsAdding(false); setEditingSourceId(null);
+  };
+
+  const handleEditSource = (src: IncomeSource) => {
+    setName(src.name);
+    setAmount(src.amount > 0 ? src.amount.toString() : '');
+    setCurrency(src.currency || 'ARS');
+    setFrequency(src.frequency || 'MONTHLY');
+    setStartDate(src.startDate || new Date().toISOString().split('T')[0]);
+    setEndDate(src.endDate || '');
+    setIsEndDateEnabled(!!src.endDate);
+    setIncomeMode(getEffectiveMode(src));
+    setTargetPosts(src.targetPosts ? src.targetPosts.toString() : '');
+    setEditingSourceId(src.id);
+    setIsAdding(true);
+    setSelectedSourceId(null);
   };
 
   const handleDelete = (id: string) => {
@@ -177,7 +215,10 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
               </div>
             </div>
           </div>
-          <button onClick={() => handleDelete(selectedSource.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-full"><span className="material-symbols-outlined">delete</span></button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleEditSource(selectedSource)} className="text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 p-2 rounded-full"><span className="material-symbols-outlined">edit</span></button>
+            <button onClick={() => handleDelete(selectedSource.id)} className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-full"><span className="material-symbols-outlined">delete</span></button>
+          </div>
         </div>
         <div className="flex-1 w-full max-w-3xl mx-auto p-4 md:p-6 space-y-6 pb-24">
           <div className="bg-slate-900 text-white rounded-3xl p-6 relative overflow-hidden shadow-lg">
@@ -363,7 +404,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
 
         {isAdding && (
           <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-xl animate-[fadeIn_0.2s_ease-out]">
-            <h3 className="font-bold text-lg mb-4">Nuevo Contrato / Ingreso</h3>
+            <h3 className="font-bold text-lg mb-4">{editingSourceId ? 'Editar Contrato' : 'Nuevo Contrato / Ingreso'}</h3>
             <div className="grid gap-4">
               <div><label className="text-[10px] uppercase font-bold text-slate-400 mb-2 block">¿Cómo te pagan?</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -392,8 +433,8 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 <div><div className="flex justify-between mb-1"><label className="text-[10px] uppercase font-bold text-slate-400 block">Fin</label><div className="flex items-center gap-1"><input type="checkbox" checked={isEndDateEnabled} onChange={e => setIsEndDateEnabled(e.target.checked)} className="size-3 accent-primary" /><span className="text-[10px] text-slate-500">Definir</span></div></div><input type="date" disabled={!isEndDateEnabled} className={`w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm ${!isEndDateEnabled?'opacity-30 cursor-not-allowed':''}`} value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
               </div>
               <div className="flex gap-3 pt-2">
-                <button onClick={handleSaveSource} disabled={!name||(incomeMode==='FIXED'&&!amount)||(incomeMode==='PER_DELIVERY'&&!amount)} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">Guardar Contrato</button>
-                <button onClick={() => setIsAdding(false)} className="px-6 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancelar</button>
+                <button onClick={handleSaveSource} disabled={!name||(incomeMode==='FIXED'&&!amount)||(incomeMode==='PER_DELIVERY'&&!amount)} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">{editingSourceId ? 'Guardar Cambios' : 'Guardar Contrato'}</button>
+                <button onClick={resetForm} className="px-6 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancelar</button>
               </div>
             </div>
           </div>

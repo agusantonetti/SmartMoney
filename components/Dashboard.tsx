@@ -27,6 +27,8 @@ interface Props {
   onOpenAutoPilot?: () => void;
   onOpenGoals?: () => void;
   onOpenReport?: () => void;
+  onOpenMonthlyClose?: () => void;
+  onOpenYearReview?: () => void;
   onOpenIncomeDashboard?: () => void;
   onOpenSubscriptionDashboard?: () => void;
   onAddTransaction: () => void;
@@ -61,6 +63,8 @@ const Dashboard: React.FC<Props> = ({
   onOpenAutoPilot,
   onOpenGoals,
   onOpenReport,
+  onOpenMonthlyClose,
+  onOpenYearReview,
   onOpenIncomeDashboard,
   onOpenSubscriptionDashboard,
   onAddTransaction, 
@@ -349,6 +353,27 @@ const Dashboard: React.FC<Props> = ({
               cards.push({ id: 'concentration', icon: 'warning', text: `El ${Math.round(topPct)}% de tu ingreso depende de ${sourceIncomes[0].name} — diversificar reduciría tu riesgo`, color: 'amber', action: onOpenIncomeDashboard });
           }
       }
+
+      // 10. Personal inflation indicator
+      const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      const threeMonthsKey = `${threeMonthsAgo.getFullYear()}-${String(threeMonthsAgo.getMonth() + 1).padStart(2, '0')}`;
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+      const sixMonthsKey = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, '0')}`;
+
+      // Compare top categories vs 3 months ago
+      Object.keys(currentByCategory).forEach(cat => {
+          if (cat === 'Otros' || cat === 'Ingreso') return;
+          const curr = currentByCategory[cat];
+          // Get 3 months ago spending
+          const m3Txs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(threeMonthsKey) && t.category === cat);
+          const m3Total = m3Txs.reduce((a, t) => a + t.amount, 0);
+          if (m3Total > 0 && curr > 0) {
+              const inflPct = Math.round(((curr - m3Total) / m3Total) * 100);
+              if (inflPct > 30 && curr > 10000) {
+                  cards.push({ id: `inflation-${cat}`, icon: 'local_fire_department', text: `Tu ${cat} subió ${inflPct}% en 3 meses (${formatMoney(m3Total)} → ${formatMoney(curr)})`, color: 'red', action: onOpenAnalytics });
+              }
+          }
+      });
 
       return cards;
   }, [transactions, stats, subscriptionAlerts, metrics]);
@@ -762,7 +787,9 @@ const Dashboard: React.FC<Props> = ({
                   { id: 'piloto', title: 'Piloto Auto', subtitle: 'Proyección', icon: 'rocket_launch', color: 'emerald', onClick: onOpenAutoPilot },
                   { id: 'metas', title: 'Mis Metas', subtitle: 'Objetivos', icon: 'flag', color: 'pink', onClick: onOpenGoals },
                   { id: 'reporte', title: 'Reporte PDF', subtitle: 'Descargar', icon: 'picture_as_pdf', color: 'red', onClick: onOpenReport },
-                  { id: 'simulador', title: 'Simulador', subtitle: 'Futuro a 30 días', icon: 'timeline', color: 'violet', onClick: onOpenFuture },
+                  { id: 'cierre', title: 'Cierre Mensual', subtitle: 'Paso a paso', icon: 'fact_check', color: 'teal', onClick: onOpenMonthlyClose },
+                  { id: 'year-review', title: 'Año en Review', subtitle: new Date().getFullYear().toString(), icon: 'auto_awesome', color: 'amber', onClick: onOpenYearReview },
+                  { id: 'simulador', title: 'Simulador', subtitle: 'Escenarios', icon: 'timeline', color: 'violet', onClick: onOpenFuture },
                   { id: 'costo-vida', title: 'Costo Vida', subtitle: 'Calculadora', icon: 'price_check', color: 'emerald', onClick: onOpenSalaryCalculator },
               ];
 

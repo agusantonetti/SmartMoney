@@ -28,6 +28,8 @@ export enum ViewState {
   AUTOPILOT = 'AUTOPILOT',
   GOALS = 'GOALS',
   REPORT = 'REPORT',
+  MONTHLY_CLOSE = 'MONTHLY_CLOSE',
+  YEAR_REVIEW = 'YEAR_REVIEW',
 }
 
 export interface Transaction {
@@ -161,6 +163,14 @@ export interface FinancialProfile {
   customCategories?: string[];
   appOrder?: string[];
   goals?: FinancialGoal[];
+  patrimonioHistory?: PatrimonioSnapshot[];
+}
+
+export interface PatrimonioSnapshot {
+  month: string; // "YYYY-MM"
+  balance: number;
+  dollarRate: number;
+  date: string; // ISO date when snapshot was taken
 }
 
 export interface FinancialGoal {
