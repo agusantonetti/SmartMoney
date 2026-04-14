@@ -27,6 +27,8 @@ import PatrimonioTracker from './components/PatrimonioTracker';
 import AutoPilot from './components/AutoPilot';
 import GoalsTracker from './components/GoalsTracker';
 import ReportGenerator from './components/ReportGenerator';
+import IncomeDashboard from './components/IncomeDashboard';
+import SubscriptionDashboard from './components/SubscriptionDashboard';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
@@ -392,6 +394,8 @@ const App: React.FC = () => {
             onOpenAutoPilot={() => setCurrentView(ViewState.AUTOPILOT)}
             onOpenGoals={() => setCurrentView(ViewState.GOALS)}
             onOpenReport={() => setCurrentView(ViewState.REPORT)}
+            onOpenIncomeDashboard={() => setCurrentView(ViewState.INCOME_DASHBOARD)}
+            onOpenSubscriptionDashboard={() => setCurrentView(ViewState.SUBSCRIPTION_DASHBOARD)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -629,6 +633,26 @@ const App: React.FC = () => {
             transactions={transactions}
             balance={metrics.balance}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+          />
+        );
+      case ViewState.INCOME_DASHBOARD:
+        return (
+          <IncomeDashboard
+            profile={financialProfile}
+            transactions={transactions}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            onOpenIncomeManager={() => setCurrentView(ViewState.INCOME_MANAGER)}
+            privacyMode={privacyMode}
+          />
+        );
+      case ViewState.SUBSCRIPTION_DASHBOARD:
+        return (
+          <SubscriptionDashboard
+            profile={financialProfile}
+            transactions={transactions}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            onOpenSubscriptions={() => setCurrentView(ViewState.SUBSCRIPTIONS)}
+            privacyMode={privacyMode}
           />
         );
       default:

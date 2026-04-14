@@ -27,6 +27,8 @@ interface Props {
   onOpenAutoPilot?: () => void;
   onOpenGoals?: () => void;
   onOpenReport?: () => void;
+  onOpenIncomeDashboard?: () => void;
+  onOpenSubscriptionDashboard?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -59,6 +61,8 @@ const Dashboard: React.FC<Props> = ({
   onOpenAutoPilot,
   onOpenGoals,
   onOpenReport,
+  onOpenIncomeDashboard,
+  onOpenSubscriptionDashboard,
   onAddTransaction, 
   isDarkMode, 
   onToggleTheme,
@@ -528,7 +532,7 @@ const Dashboard: React.FC<Props> = ({
 
                   {/* Fila Inferior: Métricas Mensuales */}
                   <div className="grid grid-cols-3 gap-2 md:gap-4 bg-white/5 backdrop-blur-md rounded-2xl p-3 md:p-4 border border-white/10">
-                      <div onClick={onOpenIncomeManager} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors text-center md:text-left group relative">
+                      <div onClick={onOpenIncomeDashboard} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors text-center md:text-left group relative">
                           <p className="text-[10px] uppercase font-bold text-emerald-400 mb-0.5">Ganado</p>
                           <div className={`${privacyMode ? 'blur-sm' : ''}`}>
                               <p className="text-sm md:text-xl font-bold truncate">{formatMoney(stats.totalMonthlyIncome)}</p>
@@ -651,8 +655,10 @@ const Dashboard: React.FC<Props> = ({
           {/* 3. APP LAUNCHER GRID */}
           {(() => {
               const allApps = [
-                  { id: 'ingresos', title: 'Ingresos', subtitle: 'Fuentes fijas', icon: 'payments', color: 'blue', onClick: onOpenIncomeManager },
-                  { id: 'gastos-fijos', title: 'Gastos Fijos', subtitle: `Total: ${formatMoney(metrics.fixedExpenses)}`, icon: 'home_work', color: 'indigo', onClick: onOpenSubscriptions, showPrivacy: true },
+                  { id: 'ingresos', title: 'Ingresos', subtitle: 'Dashboard', icon: 'trending_up', color: 'blue', onClick: onOpenIncomeDashboard },
+                  { id: 'contratos', title: 'Contratos', subtitle: 'Gestión', icon: 'payments', color: 'sky', onClick: onOpenIncomeManager },
+                  { id: 'suscripciones', title: 'Suscripciones', subtitle: 'Dashboard', icon: 'subscriptions', color: 'indigo', onClick: onOpenSubscriptionDashboard },
+                  { id: 'gastos-fijos', title: 'Gastos Fijos', subtitle: `Total: ${formatMoney(metrics.fixedExpenses)}`, icon: 'home_work', color: 'violet', onClick: onOpenSubscriptions, showPrivacy: true },
                   { id: 'presupuesto', title: 'Presupuesto', subtitle: 'Tu plata mensual', icon: 'account_balance', color: 'teal', onClick: onOpenBudget },
                   { id: 'apartados', title: 'Apartados', subtitle: `${formatMoney(metrics.totalReserved)}`, icon: 'savings', color: 'purple', onClick: onOpenSavingsBuckets, showPrivacy: true },
                   { id: 'eventos', title: 'Eventos', subtitle: `${activeEventsCount} Activos`, icon: 'flight_takeoff', color: 'pink', onClick: onOpenEvents },

@@ -13,8 +13,10 @@ export enum ViewState {
   SUCCESS = 'SUCCESS',
   PROFILE = 'PROFILE',
   INCOME_MANAGER = 'INCOME_MANAGER',
+  INCOME_DASHBOARD = 'INCOME_DASHBOARD',
   SAVINGS_BUCKETS = 'SAVINGS_BUCKETS',
   SUBSCRIPTIONS = 'SUBSCRIPTIONS',
+  SUBSCRIPTION_DASHBOARD = 'SUBSCRIPTION_DASHBOARD',
   DEBTS = 'DEBTS',
   ANALYTICS = 'ANALYTICS',
   EVENTS = 'EVENTS',
@@ -60,6 +62,15 @@ export type IncomeType = 'FIXED' | 'MEDIA' | 'SPORADIC';
 
 export type PaymentFrequency = 'MONTHLY' | 'BIWEEKLY' | 'ONE_TIME';
 
+export interface PostEntry {
+  id: string;
+  date: string;
+  description?: string;
+  amount: number;
+  isPaid: boolean;
+  paidDate?: string;
+}
+
 export interface IncomeSource {
   id: string;
   name: string;
@@ -76,6 +87,7 @@ export interface IncomeSource {
   hoursPerDay?: number;
   daysPerWeek?: number;
   targetPosts?: number; // Nuevo: Objetivo de posts mensuales
+  posts?: PostEntry[]; // Tracking individual de posts
 }
 
 export interface SubscriptionPayment {
