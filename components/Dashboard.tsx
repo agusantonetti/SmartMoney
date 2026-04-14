@@ -312,6 +312,44 @@ const Dashboard: React.FC<Props> = ({
           cards.push({ id: 'empty', icon: 'edit_note', text: `No registraste movimientos este mes — cargá tus gastos para ver tu resumen`, color: 'gray' });
       }
 
+      // 8. Expense velocity - compare pace vs last month
+      if (prevExpenses.length > 0 && currentExpenses.length > 0) {
+          const dayOfMonth = now.getDate();
+          const prevByDay = prevExpenses.filter(t => parseInt(t.date.split('-')[2]) <= dayOfMonth);
+          const prevPace = prevByDay.reduce((a, t) => a + t.amount, 0);
+          const currPace = currentExpenses.reduce((a, t) => a + t.amount, 0);
+          if (prevPace > 0) {
+              const velocityPct = Math.round(((currPace - prevPace) / prevPace) * 100);
+              if (velocityPct > 20) {
+                  cards.push({ id: 'velocity-high', icon: 'speed', text: `Estás gastando un ${velocityPct}% más rápido que el mes pasado al día ${dayOfMonth}`, color: 'red' });
+              } else if (velocityPct < -15) {
+                  cards.push({ id: 'velocity-low', icon: 'speed', text: `Estás gastando un ${Math.abs(velocityPct)}% menos que el mes pasado — buen ritmo`, color: 'emerald' });
+              }
+          }
+      }
+
+      // 9. Income concentration risk
+      const activeSources = (profile.incomeSources || []).filter(s => s.isActive !== false);
+      if (activeSources.length >= 2 && stats.totalMonthlyIncome > 0) {
+          const sourceIncomes = activeSources.map(src => {
+              const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+              let val = 0;
+              if (mode === 'VARIABLE') {
+                  val = src.payments?.filter(p => p.month.startsWith(currentMonthKey)).reduce((a, p) => a + p.realAmount, 0) || 0;
+              } else if (mode === 'PER_DELIVERY') {
+                  val = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
+              } else {
+                  val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2;
+              }
+              if (src.currency === 'USD') val *= currentDollarRate;
+              return { name: src.name, amount: val };
+          }).sort((a, b) => b.amount - a.amount);
+          const topPct = sourceIncomes[0] && stats.totalMonthlyIncome > 0 ? (sourceIncomes[0].amount / stats.totalMonthlyIncome) * 100 : 0;
+          if (topPct > 55) {
+              cards.push({ id: 'concentration', icon: 'warning', text: `El ${Math.round(topPct)}% de tu ingreso depende de ${sourceIncomes[0].name} — diversificar reduciría tu riesgo`, color: 'amber', action: onOpenIncomeDashboard });
+          }
+      }
+
       return cards;
   }, [transactions, stats, subscriptionAlerts, metrics]);
 
@@ -598,6 +636,60 @@ const Dashboard: React.FC<Props> = ({
                   <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="size-1.5 rounded-full bg-red-500 inline-block" /> Gastos</span>
               </div>
           </div>
+
+          {/* 1.5 COLLECTION STATUS */}
+          {(() => {
+              const activeSources = (profile.incomeSources || []).filter(s => s.isActive !== false);
+              if (activeSources.length === 0) return null;
+              const now = new Date();
+              const pfx = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+              let totalSources = 0;
+              let paidSources = 0;
+              let totalDeliveries = 0;
+              let doneDeliveries = 0;
+              activeSources.forEach(src => {
+                  const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+                  if (mode === 'PER_DELIVERY') {
+                      const paid = (src.posts || []).filter(p => p.isPaid).length;
+                      if (paid > 0) paidSources++;
+                      totalSources++;
+                  } else {
+                      const hasPaid = src.payments?.some(p => p.month.startsWith(pfx) && p.isPaid);
+                      if (hasPaid) paidSources++;
+                      totalSources++;
+                  }
+                  if (src.targetPosts && src.targetPosts > 0) {
+                      const mp = src.payments?.find(p => p.month.startsWith(pfx));
+                      totalDeliveries += src.targetPosts;
+                      doneDeliveries += mp?.postsCompleted || 0;
+                  }
+              });
+              const pct = totalSources > 0 ? (paidSources / totalSources) * 100 : 0;
+              return (
+                  <div onClick={onOpenIncomeDashboard} className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer hover:shadow-md transition-all">
+                      <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-sm text-emerald-500">payments</span>
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cobranza del Mes</span>
+                          </div>
+                          <span className={`text-xs font-black ${pct === 100 ? 'text-emerald-500' : pct > 0 ? 'text-amber-500' : 'text-slate-400'}`}>{paidSources}/{totalSources}</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mb-2">
+                          <div className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-slate-400">
+                              {paidSources === totalSources ? '¡Todo cobrado!' : `${totalSources - paidSources} pendiente${totalSources - paidSources > 1 ? 's' : ''}`}
+                          </span>
+                          {totalDeliveries > 0 && (
+                              <span className={`text-[10px] font-bold ${doneDeliveries >= totalDeliveries ? 'text-emerald-500' : 'text-indigo-500'}`}>
+                                  Entregas: {doneDeliveries}/{totalDeliveries}
+                              </span>
+                          )}
+                      </div>
+                  </div>
+              );
+          })()}
 
           {/* 2. ACCIÓN PRINCIPAL */}
           <div className="flex gap-3 md:gap-4">

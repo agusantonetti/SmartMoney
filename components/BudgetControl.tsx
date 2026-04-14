@@ -19,30 +19,41 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
   const monthData = useMemo(() => {
     const monthTxs = transactions.filter(t => t.date.startsWith(currentMonthKey));
     
-    // Ingreso mensual basado en sueldos configurados en el perfil
-    const totalIncome = (profile.incomeSources || []).reduce((sum, src) => {
-        if (src.isActive === false) return sum;
-        let val = 0;
-        if (src.isCreatorSource) {
+    // Ingreso PROYECTADO (todos los sueldos activos)
+    let totalIncome = 0;
+    let collectedIncome = 0;
+    
+    (profile.incomeSources || []).forEach(src => {
+        if (src.isActive === false) return;
+        const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+        let projected = 0;
+        let collected = 0;
+        
+        if (mode === 'VARIABLE') {
             const payments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
-            val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+            projected = payments.reduce((acc, p) => acc + p.realAmount, 0);
+            collected = payments.filter(p => p.isPaid).reduce((acc, p) => acc + p.realAmount, 0);
+        } else if (mode === 'PER_DELIVERY') {
+            const paidPosts = (src.posts || []).filter(p => p.isPaid);
+            projected = paidPosts.reduce((a, p) => a + p.amount, 0);
+            collected = projected; // If marked paid, it's collected
         } else {
-            val = src.amount;
-            if (src.frequency === 'BIWEEKLY') val *= 2;
-            if (src.frequency === 'ONE_TIME') val = 0;
+            projected = src.amount;
+            if (src.frequency === 'BIWEEKLY') projected *= 2;
+            if (src.frequency === 'ONE_TIME') projected = 0;
+            const isPaid = src.payments?.some(p => p.month.startsWith(currentMonthKey) && p.isPaid);
+            collected = isPaid ? projected : 0;
         }
-        if (src.currency === 'USD') val *= dollarRate;
-        return sum + val;
-    }, 0);
+        if (src.currency === 'USD') { projected *= dollarRate; collected *= dollarRate; }
+        totalIncome += projected;
+        collectedIncome += collected;
+    });
 
-    // Gastos solo de transacciones registradas
     const expenseTxs = monthTxs.filter(t => t.type === 'expense');
     const totalExpense = expenseTxs.reduce((a, t) => a + t.amount, 0);
-
-    // Balance simple: ingreso - gasto
     const balance = totalIncome - totalExpense;
+    const realBalance = collectedIncome - totalExpense;
 
-    // Desglose por categoría
     const byCategory: Record<string, number> = {};
     expenseTxs.forEach(t => {
         byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
@@ -70,7 +81,7 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
         }
     });
 
-    return { totalIncome, totalExpense, balance, categories };
+    return { totalIncome, collectedIncome, totalExpense, balance, realBalance, categories };
   }, [transactions, profile, currentMonthKey, dollarRate]);
 
   // === HANDLERS ===
@@ -117,6 +128,12 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
                     <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">Sueldo mensual</span>
                 </div>
                 <p className="text-xl font-black text-emerald-700 dark:text-emerald-300">{formatMoney(monthData.totalIncome)}</p>
+                {monthData.collectedIncome < monthData.totalIncome && monthData.totalIncome > 0 && (
+                    <p className="text-[10px] text-amber-500 font-bold mt-1">Cobrado: {formatMoney(monthData.collectedIncome)} ({Math.round((monthData.collectedIncome / monthData.totalIncome) * 100)}%)</p>
+                )}
+                {monthData.collectedIncome >= monthData.totalIncome && monthData.totalIncome > 0 && (
+                    <p className="text-[10px] text-emerald-500 font-bold mt-1 flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">check_circle</span>Todo cobrado</p>
+                )}
             </div>
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-4">
                 <div className="flex items-center gap-1.5 mb-1">
@@ -126,6 +143,14 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
                 <p className="text-xl font-black text-red-700 dark:text-red-300">{formatMoney(monthData.totalExpense)}</p>
             </div>
          </div>
+
+         {/* SMART BUDGET ALERT */}
+         {monthData.collectedIncome < monthData.totalIncome && monthData.totalExpense > monthData.collectedIncome && monthData.totalIncome > 0 && (
+             <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                 <span className="material-symbols-outlined text-amber-500">info</span>
+                 <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">Gastaste más de lo que cobraste hasta ahora. Con lo cobrado, tu balance real es <strong>{formatMoney(monthData.realBalance)}</strong></p>
+             </div>
+         )}
 
          {/* 2. BARRA DE PROGRESO GENERAL */}
          {monthData.totalIncome > 0 && (

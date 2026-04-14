@@ -26,6 +26,9 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
   const [hoveredSlice, setHoveredSlice] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'6m' | '12m'>('6m');
 
+  // --- HELPERS ---
+  const getMode = (src: IncomeSource) => src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+
   // --- CURRENT MONTH INCOME PER SOURCE ---
   const sourceBreakdown = useMemo(() => {
     const now = new Date();
@@ -33,9 +36,14 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
 
     return activeSources.map((src, idx) => {
       let monthlyArs = 0;
-      if (src.isCreatorSource) {
+      const mode = getMode(src);
+      if (mode === 'VARIABLE') {
         const payments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
         monthlyArs = payments.reduce((acc, p) => acc + p.realAmount, 0);
+        if (src.currency === 'USD') monthlyArs *= dollarRate;
+      } else if (mode === 'PER_DELIVERY') {
+        const paidPosts = (src.posts || []).filter(p => p.isPaid);
+        monthlyArs = paidPosts.reduce((acc, p) => acc + p.amount, 0);
         if (src.currency === 'USD') monthlyArs *= dollarRate;
       } else {
         monthlyArs = src.currency === 'USD' ? src.amount * dollarRate : src.amount;
@@ -66,9 +74,13 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
 
       const perSource = activeSources.map((src, idx) => {
         let val = 0;
-        if (src.isCreatorSource) {
+        const mode = getMode(src);
+        if (mode === 'VARIABLE') {
           const payments = src.payments?.filter(p => p.month.startsWith(key)) || [];
           val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+        } else if (mode === 'PER_DELIVERY') {
+          const monthPosts = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(key));
+          val = monthPosts.reduce((acc, p) => acc + p.amount, 0);
         } else {
           if (src.startDate && src.startDate > key + '-31') val = 0;
           else if (src.endDate && src.endDate < key + '-01') val = 0;
@@ -112,10 +124,13 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
 
     const usdSources = activeSources.filter(s => s.currency === 'USD');
     const totalUsd = usdSources.reduce((sum, src) => {
+      const mode = getMode(src);
       let val = src.amount;
-      if (src.isCreatorSource) {
+      if (mode === 'VARIABLE') {
         const payments = src.payments?.filter(p => p.month.startsWith(currentKey)) || [];
         val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+      } else if (mode === 'PER_DELIVERY') {
+        val = (src.posts || []).filter(p => p.isPaid).reduce((acc, p) => acc + p.amount, 0);
       } else {
         if (src.frequency === 'BIWEEKLY') val *= 2;
         if (src.frequency === 'ONE_TIME') val = 0;
@@ -406,7 +421,8 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
             {sourceBreakdown.map((b) => {
               const src = b.source;
               const isUSD = src.currency === 'USD';
-              const rawAmount = src.isCreatorSource ? (b.amount / (isUSD ? dollarRate : 1)) : src.amount;
+              const mode = getMode(src);
+              const rawAmount = (mode === 'VARIABLE' || mode === 'PER_DELIVERY') ? (b.amount / (isUSD ? dollarRate : 1)) : src.amount;
               const paidPayments = src.payments?.filter(p => p.isPaid) || [];
 
               return (
@@ -418,11 +434,12 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
                     <p className="font-bold text-sm truncate">{src.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${
-                        src.frequency === 'BIWEEKLY' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
-                        src.isCreatorSource ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' :
+                        mode === 'VARIABLE' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' :
+                        mode === 'PER_DELIVERY' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600' :
+                        src.frequency === 'BIWEEKLY' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600' :
                         'bg-slate-200 dark:bg-slate-700 text-slate-500'
                       }`}>
-                        {src.isCreatorSource ? 'Variable' : src.frequency === 'BIWEEKLY' ? 'Quincenal' : 'Mensual'}
+                        {mode === 'VARIABLE' ? 'Variable' : mode === 'PER_DELIVERY' ? 'Por Entrega' : src.frequency === 'BIWEEKLY' ? 'Quincenal' : 'Mensual'}
                       </span>
                       {isUSD && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold">USD</span>}
                       {src.targetPosts && src.targetPosts > 0 && (
@@ -441,6 +458,118 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
             })}
           </div>
         </div>
+
+        {/* CURRENCY EXPOSURE */}
+        {(() => {
+          const usdIncome = sourceBreakdown.filter(b => b.source.currency === 'USD').reduce((s, b) => s + b.amount, 0);
+          const arsIncome = sourceBreakdown.filter(b => b.source.currency !== 'USD').reduce((s, b) => s + b.amount, 0);
+          const total = usdIncome + arsIncome;
+          if (total === 0) return null;
+          const usdPct = (usdIncome / total) * 100;
+          const arsPct = (arsIncome / total) * 100;
+          const usdRaw = sourceBreakdown.filter(b => b.source.currency === 'USD').reduce((s, b) => {
+            const mode = getMode(b.source);
+            if (mode === 'PER_DELIVERY') return s + (b.source.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
+            if (mode === 'VARIABLE') return s + (b.source.payments?.filter(p => p.month.startsWith(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`)).reduce((a, p) => a + p.realAmount, 0) || 0);
+            let v = b.source.amount; if (b.source.frequency === 'BIWEEKLY') v *= 2; return s + v;
+          }, 0);
+
+          return (
+            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm">currency_exchange</span>
+                Exposición Cambiaria
+              </h3>
+              <div className="flex gap-3 mb-4">
+                <div className="flex-1 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl p-4 text-center border border-emerald-200 dark:border-emerald-800">
+                  <p className="text-[9px] text-emerald-600 font-bold uppercase">Dólares</p>
+                  <p className={`text-xl font-black text-emerald-600 ${privacyMode ? 'blur-sm' : ''}`}>{usdPct.toFixed(0)}%</p>
+                  {usdRaw > 0 && <p className={`text-[10px] text-emerald-500 ${privacyMode ? 'blur-sm' : ''}`}>~USD {Math.round(usdRaw)}</p>}
+                </div>
+                <div className="flex-1 bg-blue-50 dark:bg-blue-900/10 rounded-xl p-4 text-center border border-blue-200 dark:border-blue-800">
+                  <p className="text-[9px] text-blue-600 font-bold uppercase">Pesos</p>
+                  <p className={`text-xl font-black text-blue-600 ${privacyMode ? 'blur-sm' : ''}`}>{arsPct.toFixed(0)}%</p>
+                  <p className={`text-[10px] text-blue-500 ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(arsIncome)}</p>
+                </div>
+              </div>
+              <div className="w-full h-3 bg-blue-200 dark:bg-blue-900 rounded-full overflow-hidden flex">
+                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${usdPct}%` }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 mt-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+                <div className="text-center">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase">Si USD sube 10%</p>
+                  <p className={`text-sm font-black text-emerald-500 ${privacyMode ? 'blur-sm' : ''}`}>+{formatMoney(usdIncome * 0.1)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase">Si USD baja 10%</p>
+                  <p className={`text-sm font-black text-red-500 ${privacyMode ? 'blur-sm' : ''}`}>-{formatMoney(usdIncome * 0.1)}</p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* PAYMENT CALENDAR */}
+        {(() => {
+          const now = new Date();
+          const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+          const today = now.getDate();
+          const entries: { day: number; name: string; amount: number; currency: string; isPaid: boolean }[] = [];
+          
+          activeSources.forEach(src => {
+            const mode = getMode(src);
+            if (mode === 'PER_DELIVERY') return;
+            // Estimate payment day (use billingDay-like logic, default to 1st or 5th)
+            const payDay = src.startDate ? parseInt(src.startDate.split('-')[2]) || 5 : 5;
+            const pfx = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+            const isPaid = src.payments?.some(p => p.month.startsWith(pfx) && p.isPaid) || false;
+            let val = src.amount;
+            if (mode === 'VARIABLE') {
+              val = src.payments?.filter(p => p.month.startsWith(pfx)).reduce((a, p) => a + p.realAmount, 0) || 0;
+            }
+            entries.push({ day: payDay > daysInMonth ? daysInMonth : payDay, name: src.name, amount: val, currency: src.currency || 'ARS', isPaid });
+          });
+
+          entries.sort((a, b) => a.day - b.day);
+          if (entries.length === 0) return null;
+
+          return (
+            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm">calendar_month</span>
+                Calendario de Cobros
+              </h3>
+              <div className="relative">
+                {/* Timeline line */}
+                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200 dark:bg-slate-700" />
+                <div className="space-y-3">
+                  {entries.map((e, i) => {
+                    const isPast = e.day < today;
+                    const isToday = e.day === today;
+                    return (
+                      <div key={i} className="flex items-center gap-4 pl-1">
+                        <div className={`size-7 rounded-full flex items-center justify-center text-[10px] font-black z-10 shrink-0 ${
+                          e.isPaid ? 'bg-emerald-500 text-white' : isToday ? 'bg-primary text-white ring-2 ring-primary/30' : isPast ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+                        }`}>{e.day}</div>
+                        <div className="flex-1 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-bold">{e.name}</p>
+                            <p className={`text-[10px] ${e.isPaid ? 'text-emerald-500' : isPast ? 'text-amber-500' : 'text-slate-400'} font-bold`}>
+                              {e.isPaid ? 'Cobrado' : isPast ? 'Pendiente' : 'Próximo'}
+                            </p>
+                          </div>
+                          <p className={`text-sm font-black ${privacyMode ? 'blur-sm' : ''}`}>
+                            {e.currency === 'USD' ? `USD ${e.amount}` : formatMoney(e.amount)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

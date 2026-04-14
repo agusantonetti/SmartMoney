@@ -24,17 +24,30 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
     const totalIncome = getSalaryForMonth(profile, selectedMonth, dollarRate);
     const prevIncome = getSalaryForMonth(profile, prevMonth, dollarRate);
 
-    // Fuentes de ingreso
-    const sources = (profile.incomeSources || []).filter(s => s.isActive !== false).map(src => {
-      let val = src.amount;
-      if (src.frequency === 'BIWEEKLY') val *= 2;
-      if (src.frequency === 'ONE_TIME') val = 0;
-      if (src.isCreatorSource) {
+    // Fuentes de ingreso con modos nuevos
+    const activeSources = (profile.incomeSources || []).filter(s => s.isActive !== false);
+    let collectedCount = 0;
+    const sources = activeSources.map(src => {
+      const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+      let val = 0;
+      let isPaid = false;
+      if (mode === 'VARIABLE') {
         val = (src.payments?.filter(p => p.month.startsWith(selectedMonth)) || []).reduce((a, p) => a + p.realAmount, 0);
+        isPaid = (src.payments || []).some(p => p.month.startsWith(selectedMonth) && p.isPaid);
+      } else if (mode === 'PER_DELIVERY') {
+        val = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
+        isPaid = val > 0;
+      } else {
+        val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2;
+        if (src.frequency === 'ONE_TIME') val = 0;
+        isPaid = (src.payments || []).some(p => p.month.startsWith(selectedMonth) && p.isPaid);
       }
+      if (isPaid) collectedCount++;
       const arsVal = src.currency === 'USD' ? val * dollarRate : val;
-      return { name: src.name, amount: val, arsAmount: arsVal, currency: src.currency || 'ARS' };
-    }).filter(s => s.amount > 0).sort((a, b) => b.arsAmount - a.arsAmount);
+      const modeLabel = mode === 'VARIABLE' ? 'Variable' : mode === 'PER_DELIVERY' ? 'Por Entrega' : 'Fijo';
+      return { name: src.name, amount: val, arsAmount: arsVal, currency: src.currency || 'ARS', mode: modeLabel, isPaid };
+    }).filter(s => s.amount > 0 || s.mode !== 'Fijo').sort((a, b) => b.arsAmount - a.arsAmount);
+    const collectionRate = activeSources.length > 0 ? (collectedCount / activeSources.length) * 100 : 0;
 
     // Gastos
     const expenses = monthTxs.filter(t => t.type === 'expense');
@@ -58,7 +71,7 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
     const txCount = expenses.length;
 
     return {
-      totalIncome, prevIncome, sources,
+      totalIncome, prevIncome, sources, collectionRate,
       totalExpense, prevExpense, categories,
       saving, savingRate, topExpenses, txCount,
     };
@@ -145,6 +158,8 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
       if (reportData.totalIncome > 0) {
         addText(`Tasa de ahorro: ${reportData.savingRate.toFixed(1)}% del ingreso`, margin, y, 9, 'normal', [100, 116, 139]);
         y += 5;
+        addText(`Tasa de cobranza: ${reportData.collectionRate.toFixed(0)}% de sueldos cobrados`, margin, y, 9, 'normal', [100, 116, 139]);
+        y += 5;
         addText(`Transacciones registradas: ${reportData.txCount}`, margin, y, 9, 'normal', [100, 116, 139]);
         y += 5;
         addText(`Patrimonio actual: ${fmtMoney(balance)} (${formatMoneyUSD(balance / dollarRate)})`, margin, y, 9, 'normal', [100, 116, 139]);
@@ -156,16 +171,18 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
 
       // === FUENTES DE INGRESO ===
       addText('FUENTES DE INGRESO', margin, y, 10, 'bold', [100, 116, 139]);
-      y += 8;
+      y += 4;
+      addText(`Cobranza: ${reportData.collectionRate.toFixed(0)}%`, margin + 2, y, 8, 'normal', reportData.collectionRate >= 80 ? [22, 101, 52] : [180, 120, 0]);
+      y += 7;
 
       reportData.sources.forEach(src => {
-        addText(src.name, margin + 2, y, 9, 'normal', [51, 65, 85]);
+        const statusIcon = src.isPaid ? '✓' : '○';
+        const statusColor: [number, number, number] = src.isPaid ? [22, 101, 52] : [180, 120, 0];
+        addText(`${statusIcon} ${src.name}`, margin + 2, y, 9, 'normal', statusColor);
+        addText(`[${src.mode}]`, margin + 2 + doc.getTextWidth(`${statusIcon} ${src.name}`) + 3, y, 7, 'normal', [150, 150, 150]);
         const amountText = src.currency === 'USD'
           ? `US$ ${src.amount.toLocaleString()} (${fmtMoney(src.arsAmount)})`
           : fmtMoney(src.arsAmount);
-        addText(amountText, w - margin, y, 9, 'bold', [30, 30, 30]);
-        doc.text(amountText, w - margin, y, { align: 'right' });
-        // Fix: rewrite right-aligned
         const tw = doc.getTextWidth(amountText);
         doc.setFillColor(255, 255, 255);
         doc.rect(margin + 100, y - 4, contentW - 100, 6, 'F');

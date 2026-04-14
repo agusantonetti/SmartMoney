@@ -406,9 +406,25 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
           {sortedSources.map(src => {
             const isActive = isContractActive(src); const isUSD = src.currency === 'USD'; const mode = getEffectiveMode(src);
             const currentReal = getCurrentMonthRealAmount(src);
-            const displayArs = isVariableMode(src) ? currentReal : (isUSD ? src.amount * dollarRate : src.amount);
             const now = new Date(); const pfx = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-            const hasPaid = src.payments.some(p => p.month.startsWith(pfx) && p.isPaid);
+            
+            // For PER_DELIVERY: sum posts in current month; for others: use payments
+            let displayArs = 0;
+            let hasPaid = false;
+            if (mode === 'PER_DELIVERY') {
+              const monthPosts = (src.posts || []).filter(p => p.date.startsWith(pfx));
+              const paidMonthPosts = (src.posts || []).filter(p => p.isPaid);
+              const totalPostsArs = paidMonthPosts.reduce((a, p) => a + p.amount, 0);
+              displayArs = isUSD ? totalPostsArs * dollarRate : totalPostsArs;
+              hasPaid = paidMonthPosts.length > 0;
+            } else if (mode === 'VARIABLE') {
+              displayArs = currentReal;
+              hasPaid = src.payments.some(p => p.month.startsWith(pfx) && p.isPaid);
+            } else {
+              displayArs = isUSD ? src.amount * dollarRate : src.amount;
+              hasPaid = src.payments.some(p => p.month.startsWith(pfx) && p.isPaid);
+            }
+
             const currentMonthPayment = src.payments.find(p => p.month.startsWith(pfx));
             const postsDone = currentMonthPayment?.postsCompleted || 0;
             const requiredPosts = src.targetPosts || 0;
@@ -432,6 +448,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                   <div className="text-right shrink-0">
                     <p className={`font-black text-sm ${privacyMode?'blur-sm':''}`}>{formatMoney(displayArs)}</p>
                     {mode==='VARIABLE'&&currentReal===0&&isActive&&<p className="text-[9px] text-amber-500 font-bold">Sin registrar</p>}
+                    {mode==='PER_DELIVERY'&&displayArs===0&&isActive&&<p className="text-[9px] text-indigo-500 font-bold">Sin entregas</p>}
                   </div>
                 </div>
               </div>

@@ -598,6 +598,7 @@ const App: React.FC = () => {
             metrics={metrics}
             transactions={transactions}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
           />
         );
       case ViewState.PATRIMONIO:
