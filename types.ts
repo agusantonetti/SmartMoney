@@ -30,6 +30,7 @@ export enum ViewState {
   REPORT = 'REPORT',
   MONTHLY_CLOSE = 'MONTHLY_CLOSE',
   YEAR_REVIEW = 'YEAR_REVIEW',
+  PURCHASE_ANALYZER = 'PURCHASE_ANALYZER',
 }
 
 export interface Transaction {

@@ -31,6 +31,7 @@ import IncomeDashboard from './components/IncomeDashboard';
 import SubscriptionDashboard from './components/SubscriptionDashboard';
 import MonthlyClose from './components/MonthlyClose';
 import YearReview from './components/YearReview';
+import PurchaseAnalyzer from './components/PurchaseAnalyzer';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
@@ -400,6 +401,7 @@ const App: React.FC = () => {
             onOpenSubscriptionDashboard={() => setCurrentView(ViewState.SUBSCRIPTION_DASHBOARD)}
             onOpenMonthlyClose={() => setCurrentView(ViewState.MONTHLY_CLOSE)}
             onOpenYearReview={() => setCurrentView(ViewState.YEAR_REVIEW)}
+            onOpenPurchaseAnalyzer={() => setCurrentView(ViewState.PURCHASE_ANALYZER)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -677,6 +679,16 @@ const App: React.FC = () => {
       case ViewState.YEAR_REVIEW:
         return (
           <YearReview
+            profile={financialProfile}
+            transactions={transactions}
+            balance={metrics.balance}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
+          />
+        );
+      case ViewState.PURCHASE_ANALYZER:
+        return (
+          <PurchaseAnalyzer
             profile={financialProfile}
             transactions={transactions}
             balance={metrics.balance}

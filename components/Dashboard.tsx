@@ -29,6 +29,7 @@ interface Props {
   onOpenReport?: () => void;
   onOpenMonthlyClose?: () => void;
   onOpenYearReview?: () => void;
+  onOpenPurchaseAnalyzer?: () => void;
   onOpenIncomeDashboard?: () => void;
   onOpenSubscriptionDashboard?: () => void;
   onAddTransaction: () => void;
@@ -65,6 +66,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenReport,
   onOpenMonthlyClose,
   onOpenYearReview,
+  onOpenPurchaseAnalyzer,
   onOpenIncomeDashboard,
   onOpenSubscriptionDashboard,
   onAddTransaction, 
@@ -789,6 +791,7 @@ const Dashboard: React.FC<Props> = ({
                   { id: 'reporte', title: 'Reporte PDF', subtitle: 'Descargar', icon: 'picture_as_pdf', color: 'red', onClick: onOpenReport },
                   { id: 'cierre', title: 'Cierre Mensual', subtitle: 'Paso a paso', icon: 'fact_check', color: 'teal', onClick: onOpenMonthlyClose },
                   { id: 'year-review', title: 'Año en Review', subtitle: new Date().getFullYear().toString(), icon: 'auto_awesome', color: 'amber', onClick: onOpenYearReview },
+                  { id: 'comprar', title: 'Analizar Compra', subtitle: 'Antes de gastar', icon: 'shopping_cart_checkout', color: 'purple', onClick: onOpenPurchaseAnalyzer },
                   { id: 'simulador', title: 'Simulador', subtitle: 'Escenarios', icon: 'timeline', color: 'violet', onClick: onOpenFuture },
                   { id: 'costo-vida', title: 'Costo Vida', subtitle: 'Calculadora', icon: 'price_check', color: 'emerald', onClick: onOpenSalaryCalculator },
               ];
