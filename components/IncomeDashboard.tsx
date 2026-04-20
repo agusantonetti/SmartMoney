@@ -25,6 +25,7 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
   const activeSources = sources.filter(s => s.isActive !== false);
   const [hoveredSlice, setHoveredSlice] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<'6m' | '12m'>('6m');
+  const [timelineMode, setTimelineMode] = useState<'amounts' | 'composition'>('amounts');
 
   // --- HELPERS ---
   const getMode = (src: IncomeSource) => src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
@@ -105,6 +106,40 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
   }, [activeSources, dollarRate, viewMode]);
 
   const maxMonthlyVal = Math.max(...monthlyEvolution.map(m => m.total), 1);
+
+  // --- 24-MONTH TIMELINE ---
+  const timelineData = useMemo(() => {
+    const result: { key: string; label: string; year: number; total: number; perSource: { name: string; amount: number; color: string }[] }[] = [];
+    const now = new Date();
+    for (let i = 23; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = MONTH_NAMES_SHORT[d.getMonth()];
+      const perSource = activeSources.map((src, idx) => {
+        let val = 0;
+        const mode = getMode(src);
+        if (mode === 'VARIABLE') {
+          val = (src.payments?.filter(p => p.month.startsWith(key)) || []).reduce((acc, p) => acc + p.realAmount, 0);
+        } else if (mode === 'PER_DELIVERY') {
+          val = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(key)).reduce((acc, p) => acc + p.amount, 0);
+        } else {
+          if (src.startDate && src.startDate > key + '-31') val = 0;
+          else if (src.endDate && src.endDate < key + '-01') val = 0;
+          else {
+            val = src.amount;
+            if (src.frequency === 'BIWEEKLY') val *= 2;
+            if (src.frequency === 'ONE_TIME') val = 0;
+          }
+        }
+        if (src.currency === 'USD') val *= dollarRate;
+        return { name: src.name, amount: val, color: PALETTE[idx % PALETTE.length] };
+      });
+      result.push({ key, label, year: d.getFullYear(), total: perSource.reduce((s, p) => s + p.amount, 0), perSource });
+    }
+    return result;
+  }, [activeSources, dollarRate]);
+
+  const maxTimelineVal = Math.max(...timelineData.map(m => m.total), 1);
 
   // --- STATS ---
   const stats = useMemo(() => {
@@ -388,6 +423,82 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
             {activeSources.map((src, i) => (
               <div key={src.id} className="flex items-center gap-1.5">
                 <div className="size-2 rounded-full" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
+                <span className="text-[10px] text-slate-500 font-bold">{src.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 24-MONTH TIMELINE */}
+        <div className="bg-surface-light dark:bg-surface-dark rounded-3xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Línea de Tiempo · 24 Meses</h3>
+            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex">
+              <button
+                onClick={() => setTimelineMode('amounts')}
+                className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-colors ${timelineMode === 'amounts' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400'}`}
+              >
+                Montos
+              </button>
+              <button
+                onClick={() => setTimelineMode('composition')}
+                className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-colors ${timelineMode === 'composition' ? 'bg-white dark:bg-slate-700 shadow text-slate-900 dark:text-white' : 'text-slate-400'}`}
+              >
+                Composición %
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {timelineData.map((m, idx) => {
+              const showYear = idx === 0 || m.year !== timelineData[idx - 1].year;
+              return (
+                <React.Fragment key={m.key}>
+                  {showYear && (
+                    <p className="text-[9px] font-bold text-slate-300 dark:text-slate-600 uppercase tracking-widest pt-2 pb-0.5">{m.year}</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-slate-400 w-7 text-right shrink-0">{m.label}</span>
+                    <div className="flex-1 h-5 bg-slate-100 dark:bg-slate-800 rounded overflow-hidden flex">
+                      {timelineMode === 'amounts' ? (
+                        m.perSource.filter(s => s.amount > 0).map((s, si) => (
+                          <div
+                            key={si}
+                            className="h-full transition-all duration-300"
+                            style={{ width: `${(s.amount / maxTimelineVal) * 100}%`, backgroundColor: s.color }}
+                            title={`${s.name}: ${s.amount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })}`}
+                          />
+                        ))
+                      ) : (
+                        m.total > 0 ? m.perSource.filter(s => s.amount > 0).map((s, si) => (
+                          <div
+                            key={si}
+                            className="h-full transition-all duration-300"
+                            style={{ width: `${(s.amount / m.total) * 100}%`, backgroundColor: s.color }}
+                            title={`${s.name}: ${((s.amount / m.total) * 100).toFixed(1)}%`}
+                          />
+                        )) : <div className="h-full w-full bg-slate-200 dark:bg-slate-700 opacity-30" />
+                      )}
+                    </div>
+                    {timelineMode === 'amounts' ? (
+                      <span className={`text-[9px] font-bold w-20 text-right shrink-0 ${privacyMode ? 'blur-sm' : ''}`}>
+                        {m.total > 0 ? formatMoney(m.total) : '—'}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-slate-400 w-20 text-right shrink-0">
+                        {m.total > 0 ? `${activeSources.length} fuentes` : '—'}
+                      </span>
+                    )}
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+            {activeSources.map((src, i) => (
+              <div key={src.id} className="flex items-center gap-1.5">
+                <div className="size-2 rounded-full shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
                 <span className="text-[10px] text-slate-500 font-bold">{src.name}</span>
               </div>
             ))}

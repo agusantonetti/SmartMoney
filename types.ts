@@ -32,6 +32,7 @@ export enum ViewState {
   YEAR_REVIEW = 'YEAR_REVIEW',
   PURCHASE_ANALYZER = 'PURCHASE_ANALYZER',
   INVOICE_PANEL = 'INVOICE_PANEL',
+  INFLATION_ADJUSTER = 'INFLATION_ADJUSTER',
 }
 
 export interface Transaction {
@@ -171,6 +172,7 @@ export interface FinancialProfile {
   appOrder?: string[];
   goals?: FinancialGoal[];
   patrimonioHistory?: PatrimonioSnapshot[];
+  inflationHistory?: { month: string; rate: number }[];
 }
 
 export interface PatrimonioSnapshot {

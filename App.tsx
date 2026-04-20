@@ -33,6 +33,7 @@ import MonthlyClose from './components/MonthlyClose';
 import YearReview from './components/YearReview';
 import PurchaseAnalyzer from './components/PurchaseAnalyzer';
 import InvoicePanel from './components/InvoicePanel';
+import InflationAdjuster from './components/InflationAdjuster';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase } from './utils';
@@ -411,6 +412,7 @@ const App: React.FC = () => {
             onOpenYearReview={() => setCurrentView(ViewState.YEAR_REVIEW)}
             onOpenPurchaseAnalyzer={() => setCurrentView(ViewState.PURCHASE_ANALYZER)}
             onOpenInvoicePanel={() => setCurrentView(ViewState.INVOICE_PANEL)}
+            onOpenInflationAdjuster={() => setCurrentView(ViewState.INFLATION_ADJUSTER)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -513,6 +515,15 @@ const App: React.FC = () => {
       case ViewState.INVOICE_PANEL:
         return (
           <InvoicePanel
+            profile={financialProfile}
+            onUpdateProfile={handleUpdateProfile}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
+          />
+        );
+      case ViewState.INFLATION_ADJUSTER:
+        return (
+          <InflationAdjuster
             profile={financialProfile}
             onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}
