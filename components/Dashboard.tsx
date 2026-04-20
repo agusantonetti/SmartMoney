@@ -32,6 +32,7 @@ interface Props {
   onOpenPurchaseAnalyzer?: () => void;
   onOpenIncomeDashboard?: () => void;
   onOpenSubscriptionDashboard?: () => void;
+  onOpenInvoicePanel?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -69,7 +70,8 @@ const Dashboard: React.FC<Props> = ({
   onOpenPurchaseAnalyzer,
   onOpenIncomeDashboard,
   onOpenSubscriptionDashboard,
-  onAddTransaction, 
+  onOpenInvoicePanel,
+  onAddTransaction,
   isDarkMode, 
   onToggleTheme,
   privacyMode,
@@ -838,6 +840,7 @@ const Dashboard: React.FC<Props> = ({
                   { id: 'metas', title: 'Mis Metas', subtitle: 'Objetivos', icon: 'flag', color: 'pink', onClick: onOpenGoals },
                   { id: 'reporte', title: 'Reporte PDF', subtitle: 'Descargar', icon: 'picture_as_pdf', color: 'red', onClick: onOpenReport },
                   { id: 'cierre', title: 'Cierre Mensual', subtitle: 'Paso a paso', icon: 'fact_check', color: 'teal', onClick: onOpenMonthlyClose },
+                  { id: 'facturas', title: 'Facturas', subtitle: 'Panel de control', icon: 'description', color: 'violet', onClick: onOpenInvoicePanel },
                   { id: 'year-review', title: 'Año en Review', subtitle: new Date().getFullYear().toString(), icon: 'auto_awesome', color: 'amber', onClick: onOpenYearReview },
                   { id: 'comprar', title: 'Analizar Compra', subtitle: 'Antes de gastar', icon: 'shopping_cart_checkout', color: 'purple', onClick: onOpenPurchaseAnalyzer },
                   { id: 'simulador', title: 'Simulador', subtitle: 'Escenarios', icon: 'timeline', color: 'violet', onClick: onOpenFuture },

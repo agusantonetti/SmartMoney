@@ -32,6 +32,7 @@ import SubscriptionDashboard from './components/SubscriptionDashboard';
 import MonthlyClose from './components/MonthlyClose';
 import YearReview from './components/YearReview';
 import PurchaseAnalyzer from './components/PurchaseAnalyzer';
+import InvoicePanel from './components/InvoicePanel';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase } from './utils';
@@ -409,6 +410,7 @@ const App: React.FC = () => {
             onOpenMonthlyClose={() => setCurrentView(ViewState.MONTHLY_CLOSE)}
             onOpenYearReview={() => setCurrentView(ViewState.YEAR_REVIEW)}
             onOpenPurchaseAnalyzer={() => setCurrentView(ViewState.PURCHASE_ANALYZER)}
+            onOpenInvoicePanel={() => setCurrentView(ViewState.INVOICE_PANEL)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -508,12 +510,21 @@ const App: React.FC = () => {
             privacyMode={privacyMode}
           />
         );
+      case ViewState.INVOICE_PANEL:
+        return (
+          <InvoicePanel
+            profile={financialProfile}
+            onUpdateProfile={handleUpdateProfile}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
+          />
+        );
       case ViewState.ACTIVITY:
         return (
-          <ActivityHub 
+          <ActivityHub
             transactions={transactions}
             onUpdateTransactions={handleUpdateTransactions}
-            onBack={() => setCurrentView(ViewState.DASHBOARD)} 
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
             privacyMode={privacyMode}
             customCategories={financialProfile.customCategories}
           />
