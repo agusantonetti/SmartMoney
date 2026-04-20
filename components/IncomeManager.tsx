@@ -33,6 +33,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const [isEndDateEnabled, setIsEndDateEnabled] = useState(false);
   const [incomeMode, setIncomeMode] = useState<'FIXED' | 'VARIABLE' | 'PER_DELIVERY'>('FIXED');
   const [targetPosts, setTargetPosts] = useState('');
+  const [requiresInvoice, setRequiresInvoice] = useState(false);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [showPostTracker, setShowPostTracker] = useState(false);
@@ -103,6 +104,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
         currency, frequency, startDate, endDate: isEndDateEnabled ? endDate : undefined,
         isCreatorSource: incomeMode === 'VARIABLE', incomeMode,
         targetPosts: (incomeMode === 'PER_DELIVERY' || incomeMode === 'FIXED') ? (parseFloat(targetPosts) || 0) : undefined,
+        requiresInvoice: requiresInvoice || undefined,
       };
       const updated = [...sources]; updated[srcIdx] = updatedSrc;
       setSources(updated); onUpdateProfile({ ...profile, incomeSources: updated });
@@ -113,6 +115,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
         currency, frequency, startDate, endDate: isEndDateEnabled ? endDate : undefined,
         isActive: true, isCreatorSource: incomeMode === 'VARIABLE', incomeMode, payments: [], type: 'FIXED',
         targetPosts: (incomeMode === 'PER_DELIVERY' || incomeMode === 'FIXED') ? (parseFloat(targetPosts) || 0) : undefined, posts: [],
+        requiresInvoice: requiresInvoice || undefined,
       };
       const updated = [...sources, newSrc]; setSources(updated);
       onUpdateProfile({ ...profile, incomeSources: updated });
@@ -124,6 +127,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     setName(''); setAmount(''); setCurrency('ARS'); setFrequency('MONTHLY');
     setStartDate(new Date().toISOString().split('T')[0]); setEndDate('');
     setIsEndDateEnabled(false); setIncomeMode('FIXED'); setTargetPosts('');
+    setRequiresInvoice(false);
     setIsAdding(false); setEditingSourceId(null);
   };
 
@@ -137,6 +141,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     setIsEndDateEnabled(!!src.endDate);
     setIncomeMode(getEffectiveMode(src));
     setTargetPosts(src.targetPosts ? src.targetPosts.toString() : '');
+    setRequiresInvoice(src.requiresInvoice || false);
     setEditingSourceId(src.id);
     setIsAdding(true);
     setSelectedSourceId(null);
@@ -432,6 +437,18 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 <div><label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Inicio</label><input type="date" className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
                 <div><div className="flex justify-between mb-1"><label className="text-[10px] uppercase font-bold text-slate-400 block">Fin</label><div className="flex items-center gap-1"><input type="checkbox" checked={isEndDateEnabled} onChange={e => setIsEndDateEnabled(e.target.checked)} className="size-3 accent-primary" /><span className="text-[10px] text-slate-500">Definir</span></div></div><input type="date" disabled={!isEndDateEnabled} className={`w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm ${!isEndDateEnabled?'opacity-30 cursor-not-allowed':''}`} value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
               </div>
+              <button onClick={() => setRequiresInvoice(r => !r)} className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${requiresInvoice ? 'border-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-slate-200 dark:border-slate-700'}`}>
+                <div className="flex items-center gap-3 text-left">
+                  <span className={`material-symbols-outlined text-xl ${requiresInvoice ? 'text-violet-500' : 'text-slate-400'}`}>description</span>
+                  <div>
+                    <p className="text-xs font-bold">Requiere factura para cobrar</p>
+                    <p className="text-[9px] text-slate-400 mt-0.5">Activá si necesitás enviar factura antes de que te paguen</p>
+                  </div>
+                </div>
+                <div className={`size-6 rounded-full flex items-center justify-center shrink-0 ${requiresInvoice ? 'bg-violet-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}>
+                  <span className="material-symbols-outlined text-[14px]">{requiresInvoice ? 'check' : 'close'}</span>
+                </div>
+              </button>
               <div className="flex gap-3 pt-2">
                 <button onClick={handleSaveSource} disabled={!name||(incomeMode==='FIXED'&&!amount)||(incomeMode==='PER_DELIVERY'&&!amount)} className="flex-1 bg-primary text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-50">{editingSourceId ? 'Guardar Cambios' : 'Guardar Contrato'}</button>
                 <button onClick={resetForm} className="px-6 bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold rounded-xl">Cancelar</button>
@@ -484,6 +501,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                       {hasPaid&&<span className="text-[9px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">check_circle</span>Cobrado</span>}
                       {!hasPaid&&isActive&&mode!=='PER_DELIVERY'&&<span className="text-[9px] text-slate-400 font-bold">Pendiente</span>}
                       {mode==='FIXED'&&requiredPosts>0&&isActive&&<span className={`text-[9px] font-bold ${postsDone>=requiredPosts?'text-emerald-500':'text-indigo-500'}`}>{postsDone}/{requiredPosts} entregas</span>}
+                      {src.requiresInvoice&&<span className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-600 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[10px]">description</span>Factura</span>}
                     </div>
                   </div>
                   <div className="text-right shrink-0">

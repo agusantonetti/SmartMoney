@@ -97,6 +97,7 @@ export interface IncomeSource {
   daysPerWeek?: number;
   targetPosts?: number; // Nuevo: Objetivo de posts mensuales
   posts?: PostEntry[]; // Tracking individual de posts
+  requiresInvoice?: boolean; // Si hay que enviar factura para cobrar
 }
 
 export interface SubscriptionPayment {

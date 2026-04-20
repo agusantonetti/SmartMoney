@@ -49,7 +49,8 @@ const MonthlyClose: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
       } else {
         monthlyArs = isUSD ? realAmount * dollarRate : realAmount;
       }
-      return { src, mode, isUSD, isPaid, realAmount, monthlyArs, postsCompleted, targetPosts };
+      const isInvoiceSent = payment?.isInvoiceSent || false;
+      return { src, mode, isUSD, isPaid, isInvoiceSent, realAmount, monthlyArs, postsCompleted, targetPosts };
     });
   }, [sources, selectedMonth, dollarRate, profile.incomeSources]);
 
@@ -76,6 +77,21 @@ const MonthlyClose: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
     const payment = src.payments?.find(p => p.month.startsWith(selectedMonth));
     const expected = mode === 'FIXED' ? src.amount : 0;
     const newPayment: IncomePayment = { month: selectedMonth, realAmount: payment?.realAmount || expected, isPaid: !(payment?.isPaid || false), postsCompleted: payment?.postsCompleted, postsPaid: payment?.postsPaid };
+    const newPayments = [...(src.payments || [])];
+    const existIdx = newPayments.findIndex(p => p.month === selectedMonth);
+    if (existIdx >= 0) newPayments[existIdx] = { ...newPayments[existIdx], ...newPayment }; else newPayments.push(newPayment);
+    const updatedSources = [...(profile.incomeSources || [])]; updatedSources[srcIdx] = { ...src, payments: newPayments };
+    onUpdateProfile({ ...profile, incomeSources: updatedSources });
+  };
+
+  const handleToggleInvoiceSent = (sourceId: string) => {
+    const srcIdx = (profile.incomeSources || []).findIndex(s => s.id === sourceId);
+    if (srcIdx === -1) return;
+    const src = profile.incomeSources![srcIdx];
+    const mode = getMode(src);
+    const payment = src.payments?.find(p => p.month.startsWith(selectedMonth));
+    const expected = mode === 'FIXED' ? src.amount : 0;
+    const newPayment: IncomePayment = { month: selectedMonth, realAmount: payment?.realAmount || expected, isPaid: payment?.isPaid || false, isInvoiceSent: !(payment?.isInvoiceSent || false), postsCompleted: payment?.postsCompleted, postsPaid: payment?.postsPaid };
     const newPayments = [...(src.payments || [])];
     const existIdx = newPayments.findIndex(p => p.month === selectedMonth);
     if (existIdx >= 0) newPayments[existIdx] = { ...newPayments[existIdx], ...newPayment }; else newPayments.push(newPayment);
@@ -179,6 +195,18 @@ const MonthlyClose: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
                     )}
                   </div>
                 </div>
+                {d.src.requiresInvoice && (
+                  <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">description</span>
+                      Factura
+                    </span>
+                    <button onClick={e => { e.stopPropagation(); handleToggleInvoiceSent(d.src.id); }} className={`text-[10px] font-bold flex items-center gap-1 px-3 py-1.5 rounded-full transition-all ${d.isInvoiceSent ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'}`}>
+                      <span className="material-symbols-outlined text-[13px]">{d.isInvoiceSent ? 'check_circle' : 'radio_button_unchecked'}</span>
+                      {d.isInvoiceSent ? 'Enviada' : 'Pendiente de envío'}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             <button onClick={() => setStep(2)} className="w-full bg-primary text-white py-4 rounded-2xl font-bold text-sm shadow-lg flex items-center justify-center gap-2">Siguiente: Revisar Gastos <span className="material-symbols-outlined text-sm">arrow_forward</span></button>
