@@ -290,7 +290,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             {monthsList.map((mName, idx) => {
               const renderSlot = (pKey: string, pLabel: string) => {
                 const payment = selectedSource.payments.find(p => p.month === pKey);
-                const checkDate = new Date(viewYear, idx, 15);
+                const checkDate = new Date(viewYear, idx + 1, 0); // último día del mes
                 const isActive = isContractActive(selectedSource, checkDate);
                 const currentVal = payment ? payment.realAmount : (mode === 'FIXED' ? selectedSource.amount : 0);
                 const isPaid = payment?.isPaid || false;
