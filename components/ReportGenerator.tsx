@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getSalaryForMonth, getCategoryIcon } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getSalaryForMonth, getCategoryIcon, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -52,7 +52,9 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
     // Gastos
     const expenses = monthTxs.filter(t => t.type === 'expense');
     const totalExpense = expenses.reduce((a, t) => a + t.amount, 0);
-    const prevExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonth)).reduce((a, t) => a + t.amount, 0);
+    const recurringExpense = expenses.filter(t => !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
+    const oneTimeExpense = totalExpense - recurringExpense;
+    const prevExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonth) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
 
     // Por categoría
     const byCat: Record<string, number> = {};
@@ -72,7 +74,7 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
 
     return {
       totalIncome, prevIncome, sources, collectionRate,
-      totalExpense, prevExpense, categories,
+      totalExpense, recurringExpense, oneTimeExpense, prevExpense, categories,
       saving, savingRate, topExpenses, txCount,
     };
   }, [transactions, profile, selectedMonth, dollarRate]);
@@ -252,10 +254,14 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
       y += 8;
 
       const incomePct = calcPct(reportData.totalIncome, reportData.prevIncome);
-      const expensePct = calcPct(reportData.totalExpense, reportData.prevExpense);
+      const expensePct = calcPct(reportData.recurringExpense, reportData.prevExpense);
       addText(`Ingresos: ${fmtPct(incomePct)}`, margin + 2, y, 9, 'normal', incomePct >= 0 ? [22, 101, 52] : [153, 27, 27]);
       y += 6;
-      addText(`Gastos: ${fmtPct(expensePct)}`, margin + 2, y, 9, 'normal', expensePct <= 0 ? [22, 101, 52] : [153, 27, 27]);
+      addText(`Gastos recurrentes: ${fmtPct(expensePct)}`, margin + 2, y, 9, 'normal', expensePct <= 0 ? [22, 101, 52] : [153, 27, 27]);
+      if (reportData.oneTimeExpense > 0) {
+        y += 6;
+        addText(`Compras únicas este mes: ${fmtMoney(reportData.oneTimeExpense)} (excluidas de la comparación)`, margin + 2, y, 9, 'normal', [180, 120, 0]);
+      }
 
       // === FOOTER ===
       y += 15;

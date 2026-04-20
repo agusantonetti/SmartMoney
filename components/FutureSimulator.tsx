@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile, IncomeSource } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -27,8 +27,8 @@ const FutureSimulator: React.FC<Props> = ({ transactions, profile, currentBalanc
     const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     // Use last month if it has data, otherwise current month
-    const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevKey));
-    const currExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentKey));
+    const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevKey) && !isOneTimePurchase(t));
+    const currExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentKey) && !isOneTimePurchase(t));
 
     const useKey = prevExpenses.length > 0 ? prevKey : currentKey;
     const useExpenses = prevExpenses.length > 0 ? prevExpenses : currExpenses;

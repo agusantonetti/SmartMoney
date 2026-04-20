@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, FinancialGoal, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, getCurrentMonthKey } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, getCurrentMonthKey, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -38,7 +38,7 @@ const GoalsTracker: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
     for (let i = 0; i < 3; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const exp = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
+      const exp = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
       if (exp > 0) expenses.push(exp);
     }
     const avgExp = expenses.length > 0 ? expenses.reduce((a, b) => a + b, 0) / expenses.length : 0;

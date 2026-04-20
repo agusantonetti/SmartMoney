@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -21,7 +21,7 @@ const YearReview: React.FC<Props> = ({ profile, transactions, balance, onBack, p
 
   const data = useMemo(() => {
     const monthlyData: { key: string; label: string; income: number; expense: number; net: number }[] = [];
-    let totalIncome = 0, totalExpense = 0, totalTxCount = 0;
+    let totalIncome = 0, totalExpense = 0, totalRecurringExpense = 0, totalOneTimeExpense = 0, totalTxCount = 0;
     let bestMonth = { key: '', net: -Infinity, label: '' };
     let worstMonth = { key: '', net: Infinity, label: '' };
     const catTotals: Record<string, number> = {};
@@ -38,7 +38,14 @@ const YearReview: React.FC<Props> = ({ profile, transactions, balance, onBack, p
       totalExpense += expense;
       totalTxCount += monthTxs.length;
 
-      monthTxs.forEach(t => { catTotals[t.category] = (catTotals[t.category] || 0) + t.amount; });
+      monthTxs.forEach(t => {
+        if (isOneTimePurchase(t)) {
+          totalOneTimeExpense += t.amount;
+        } else {
+          totalRecurringExpense += t.amount;
+          catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+        }
+      });
 
       if (net > bestMonth.net && (income > 0 || expense > 0)) bestMonth = { key, net, label: `${label} ${year}` };
       if (net < worstMonth.net && (income > 0 || expense > 0)) worstMonth = { key, net, label: `${label} ${year}` };
@@ -49,7 +56,7 @@ const YearReview: React.FC<Props> = ({ profile, transactions, balance, onBack, p
     const totalNet = totalIncome - totalExpense;
     const avgSavingsRate = totalIncome > 0 ? (totalNet / totalIncome) * 100 : 0;
     const avgMonthlyIncome = totalIncome / 12;
-    const avgMonthlyExpense = totalExpense / 12;
+    const avgMonthlyExpense = totalRecurringExpense / 12;
 
     // Top categories
     const topCategories = Object.entries(catTotals).sort(([, a], [, b]) => b - a).slice(0, 5);
@@ -94,7 +101,7 @@ const YearReview: React.FC<Props> = ({ profile, transactions, balance, onBack, p
     });
 
     return {
-      monthlyData, totalIncome, totalExpense, totalNet, avgSavingsRate,
+      monthlyData, totalIncome, totalExpense, totalRecurringExpense, totalOneTimeExpense, totalNet, avgSavingsRate,
       avgMonthlyIncome, avgMonthlyExpense, bestMonth, worstMonth,
       topCategories, positiveMonths, activeMonths, sourceStats,
       totalTxCount, totalDeliveries,

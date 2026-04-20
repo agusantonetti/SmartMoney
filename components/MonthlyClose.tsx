@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, IncomeSource, IncomePayment, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getCurrentMonthKey, formatMonthKey, getSalaryForMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getCurrentMonthKey, formatMonthKey, getSalaryForMonth, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -59,11 +59,13 @@ const MonthlyClose: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
   const expenseData = useMemo(() => {
     const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(selectedMonth));
     const total = monthTxs.reduce((a, t) => a + t.amount, 0);
+    const recurring = monthTxs.filter(t => !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
+    const oneTime = total - recurring;
     const byCat: Record<string, number> = {};
     monthTxs.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
     const categories = Object.entries(byCat).sort(([, a], [, b]) => b - a);
     const uncategorized = monthTxs.filter(t => t.category === 'Otros').length;
-    return { total, count: monthTxs.length, categories, uncategorized };
+    return { total, recurring, oneTime, count: monthTxs.length, categories, uncategorized };
   }, [transactions, selectedMonth]);
 
   const handleTogglePaid = (sourceId: string) => {
@@ -194,6 +196,12 @@ const MonthlyClose: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
               <div className="relative z-10">
                 <p className="text-xs text-white/70 font-bold uppercase">Total Gastado</p>
                 <p className={`text-4xl font-black ${blur}`}>{formatMoney(expenseData.total)}</p>
+                {expenseData.oneTime > 0 && (
+                  <p className={`text-xs text-white/70 mt-1 flex items-center gap-1 ${blur}`}>
+                    <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                    {formatMoney(expenseData.oneTime)} en compras únicas (no afectan promedio)
+                  </p>
+                )}
               </div>
             </div>
             {expenseData.count === 0 && (

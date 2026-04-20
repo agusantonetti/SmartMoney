@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getSalaryForMonth } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getSalaryForMonth, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -29,13 +29,13 @@ const AutoPilot: React.FC<Props> = ({ profile, transactions, currentBalance, onB
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleDateString('es-ES', { month: 'long' });
-      const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
+      const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
       if (monthExpense > 0) monthDetails.push({ label, expense: monthExpense });
     }
     const avgExpense = monthDetails.length > 0 ? monthDetails.reduce((a, b) => a + b.expense, 0) / monthDetails.length : 0;
 
     // Top categoría
-    const recentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey));
+    const recentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey) && !isOneTimePurchase(t));
     const byCat: Record<string, number> = {};
     recentExpenses.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
     const topCategory = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];

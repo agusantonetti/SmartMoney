@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, Subscription, Transaction } from '../types';
-import { formatMoney, formatCurrency, getDollarRate } from '../utils';
+import { formatMoney, formatCurrency, getDollarRate, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -79,7 +79,7 @@ const SubscriptionDashboard: React.FC<Props> = ({ profile, transactions, onBack,
     // % of total expenses this month
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     const monthExpenses = transactions
-      .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey))
+      .filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey) && !isOneTimePurchase(t))
       .reduce((s, t) => s + t.amount, 0);
     const pctOfExpenses = monthExpenses > 0 ? (totalMonthly / (monthExpenses + totalMonthly)) * 100 : 0;
 

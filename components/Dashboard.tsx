@@ -659,11 +659,13 @@ const Dashboard: React.FC<Props> = ({
                 <div className="bg-white/60 dark:bg-slate-900/40 rounded-xl p-3">
                   <p className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Recurrente</p>
                   <p className={`text-base font-black text-slate-900 dark:text-white ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.currentRecurringExpense)}</p>
+                  <p className={`text-[10px] text-slate-400 font-medium font-mono ${privacyMode ? 'blur-sm' : ''}`}>(US$ {Math.round(stats.currentRecurringExpense / currentDollarRate)})</p>
                   <p className="text-[9px] text-slate-400 mt-0.5">cuenta para el promedio</p>
                 </div>
                 <div className="bg-white/60 dark:bg-slate-900/40 rounded-xl p-3 border border-amber-200 dark:border-amber-800/40">
                   <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 mb-0.5">Compras únicas</p>
                   <p className={`text-base font-black text-amber-700 dark:text-amber-300 ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.currentOneTimeExpense)}</p>
+                  <p className={`text-[10px] text-slate-400 font-medium font-mono ${privacyMode ? 'blur-sm' : ''}`}>(US$ {Math.round(stats.currentOneTimeExpense / currentDollarRate)})</p>
                   <p className="text-[9px] text-slate-400 mt-0.5">no afecta estadísticas</p>
                 </div>
               </div>

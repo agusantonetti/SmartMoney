@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -30,7 +30,7 @@ const PurchaseAnalyzer: React.FC<Props> = ({ profile, transactions, balance, onB
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const income = getSalaryForMonth(profile, key, dollarRate);
-      const expense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(key)).reduce((a, t) => a + t.amount, 0);
+      const expense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(key) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
       months.push({ key, income, expense, net: income - expense });
     }
     const validMonths = months.filter(m => m.income > 0 || m.expense > 0);
