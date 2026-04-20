@@ -17,7 +17,10 @@ const BASE_INFLATION_RATES: { month: string; rate: number }[] = [
   { month: '2024-07', rate: 4.0 }, { month: '2024-08', rate: 4.2 }, { month: '2024-09', rate: 3.5 },
   { month: '2024-10', rate: 2.4 }, { month: '2024-11', rate: 2.4 }, { month: '2024-12', rate: 2.7 },
   { month: '2025-01', rate: 2.3 }, { month: '2025-02', rate: 2.4 }, { month: '2025-03', rate: 3.7 },
-  { month: '2025-04', rate: 3.0 }, { month: '2025-05', rate: 3.3 }, { month: '2025-06', rate: 2.7 },
+  { month: '2025-04', rate: 2.8 }, { month: '2025-05', rate: 1.5 }, { month: '2025-06', rate: 1.6 },
+  { month: '2025-07', rate: 1.9 }, { month: '2025-08', rate: 1.9 }, { month: '2025-09', rate: 2.1 },
+  { month: '2025-10', rate: 2.3 }, { month: '2025-11', rate: 2.5 }, { month: '2025-12', rate: 2.8 },
+  { month: '2026-01', rate: 2.9 }, { month: '2026-02', rate: 2.9 },
 ];
 
 const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
