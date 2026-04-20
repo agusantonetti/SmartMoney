@@ -45,6 +45,10 @@ export interface Transaction {
   exchangeRate?: number;
   eventId?: string;
   eventName?: string;
+  // Marca una compra como "única/no recurrente" (ej: computadora, mueble, inversión).
+  // Sigue contando en el gasto del mes actual y en el presupuesto,
+  // pero se EXCLUYE del promedio histórico, tendencias y comparaciones mes a mes.
+  isOneTime?: boolean;
 }
 
 export interface IncomePayment {

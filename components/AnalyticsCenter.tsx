@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories, getSalaryForMonth, getDollarRate } from '../utils';
+import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories, getSalaryForMonth, getDollarRate, isOneTimePurchase } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -60,10 +60,10 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
       relevantTxs = transactions.filter(t => t.date.startsWith(yearKey));
     }
 
-    // Previous period income (salary-based)
+    // Previous period income (salary-based) - previous month recurring expense for fair comparison
     const prevMonth = getPrevMonthKey(selectedMonth);
     const prevIncome = getSalaryForMonth(profile, prevMonth, dollarRate);
-    const prevExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonth)).reduce((a, t) => a + t.amount, 0);
+    const prevExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonth) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
 
     // Income from salary sources
     const totalIncome = getSalaryForMonth(profile, selectedMonth, dollarRate);
@@ -78,7 +78,8 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
       return { name: src.name, amount: val, color: '#10b981' };
     }).filter(s => s.amount > 0).sort((a, b) => b.amount - a.amount);
 
-    // Expense categories
+    // Expense categories - total incluye one-time (vista actual del periodo)
+    // pero para la comparación % vs anterior usamos solo recurrente para no generar falsas alertas.
     const expenses = relevantTxs.filter(t => t.type === 'expense');
     const expenseGroups: Record<string, number> = {};
     expenses.forEach(t => {
@@ -88,6 +89,9 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
         name: k, amount: expenseGroups[k], color: getColorForCategory(k)
     })).sort((a,b) => b.amount - a.amount);
     const totalExpense = expenseNodes.reduce((acc, n) => acc + n.amount, 0);
+    // Gasto recurrente del periodo actual (para comparación justa vs mes anterior)
+    const currentRecurringExpense = expenses.filter(t => !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
+    const currentOneTimeExpense = expenses.filter(t => isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
 
     // Balance
     const netBalance = totalIncome - totalExpense;
@@ -101,14 +105,17 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
     return { 
         incomeNodes, expenseNodes,
         totalIncome, totalExpense, netBalance,
+        currentRecurringExpense, currentOneTimeExpense,
+        hasOneTime: currentOneTimeExpense > 0,
         prevIncome, prevExpense,
         incomePct: calcPct(totalIncome, prevIncome),
-        expensePct: calcPct(totalExpense, prevExpense),
+        expensePct: calcPct(currentRecurringExpense, prevExpense), // recurrente vs recurrente
     };
   }, [transactions, timeRange, selectedMonth]);
 
 
   // --- LOGIC: MONTHLY HISTORY (BAR CHART) ---
+  // Usa gasto recurrente (excluye compras únicas) para mostrar la línea base mensual sin distorsión.
   const historyData = useMemo(() => {
     const monthsMap: Record<string, { income: number; expense: number }> = {};
     
@@ -124,7 +131,7 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
       const key = t.date.substring(0, 7); // YYYY-MM
       if (monthsMap[key]) {
         if (t.type === 'income') monthsMap[key].income += t.amount;
-        else monthsMap[key].expense += t.amount;
+        else if (!isOneTimePurchase(t)) monthsMap[key].expense += t.amount;
       }
     });
 
@@ -146,6 +153,7 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
   );
 
   // --- LOGIC: CATEGORY TRENDS (LINE CHART) ---
+  // Excluye compras únicas para que una compra excepcional no rompa la tendencia de una categoría.
   const trendsData = useMemo(() => {
     const today = new Date();
     const months: { key: string, label: string }[] = [];
@@ -156,9 +164,9 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
       months.push({ key, label });
     }
 
-    // Get top 5 categories by total spend
+    // Get top 5 categories by total spend (solo recurrente)
     const catTotals: Record<string, number> = {};
-    transactions.filter(t => t.type === 'expense').forEach(t => {
+    transactions.filter(t => t.type === 'expense' && !isOneTimePurchase(t)).forEach(t => {
       catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
     });
     const topCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5).map(e => e[0]);
@@ -166,7 +174,7 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
     // Build series
     const series = topCats.map(cat => {
       const values = months.map(m => {
-        return transactions.filter(t => t.type === 'expense' && t.category === cat && t.date.startsWith(m.key))
+        return transactions.filter(t => t.type === 'expense' && !isOneTimePurchase(t) && t.category === cat && t.date.startsWith(m.key))
           .reduce((a, t) => a + t.amount, 0);
       });
       return { name: cat, values, color: getColorForCategory(cat) };
@@ -294,7 +302,13 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
                         <p className="text-lg font-black text-slate-900 dark:text-white leading-tight">{formatMoney(flowData.totalExpense)}</p>
                         {timeRange !== 'ALL' && (
                             <p className={`text-[10px] font-bold mt-1 ${flowData.expensePct < 0 ? 'text-emerald-500' : flowData.expensePct > 0 ? 'text-red-500' : 'text-slate-400'}`}>
-                                {flowData.expensePct > 0 ? '+' : ''}{flowData.expensePct.toFixed(0)}% vs anterior
+                                {flowData.expensePct > 0 ? '+' : ''}{flowData.expensePct.toFixed(0)}% vs anterior {flowData.hasOneTime && <span className="text-slate-400 font-medium">(recurr.)</span>}
+                            </p>
+                        )}
+                        {flowData.hasOneTime && (
+                            <p className="text-[9px] text-amber-600 dark:text-amber-400 font-bold mt-0.5 flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px]">auto_awesome</span>
+                                Incluye {formatMoney(flowData.currentOneTimeExpense)} en compras únicas
                             </p>
                         )}
                     </div>

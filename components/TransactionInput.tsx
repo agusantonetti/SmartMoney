@@ -27,6 +27,7 @@ interface ParsedItem {
     category: string;
     type: 'income' | 'expense';
     id: string;
+    isOneTime?: boolean;
 }
 
 const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdateProfile, defaultEventId, defaultEventName }) => {
@@ -302,7 +303,8 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
         originalAmount: item.amount,
         exchangeRate: rate,
         eventId: defaultEventId || undefined,
-        eventName: defaultEventName || undefined
+        eventName: defaultEventName || undefined,
+        isOneTime: item.isOneTime || undefined
     }));
 
     if (finalTransactions.length === 1) onConfirm(finalTransactions[0], shouldNavigate);
@@ -581,6 +583,33 @@ const TransactionInput: React.FC<Props> = ({ onConfirm, onBack, profile, onUpdat
                                 {item.type === 'expense' ? 'Gasto' : 'Ingreso'}
                             </button>
                         </div>
+
+                        {/* ONE-TIME TOGGLE: solo para gastos. Excluye la transacción del promedio histórico. */}
+                        {item.type === 'expense' && (
+                            <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/60">
+                                <button
+                                    onClick={() => updateParsedItem(item.id, 'isOneTime', !item.isOneTime)}
+                                    className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-left transition-all ${item.isOneTime ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800' : 'bg-slate-50 dark:bg-slate-900/40 border border-transparent hover:border-slate-200 dark:hover:border-slate-700'}`}
+                                >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <span className={`material-symbols-outlined text-[18px] shrink-0 ${item.isOneTime ? 'text-amber-500' : 'text-slate-400'}`}>
+                                            auto_awesome
+                                        </span>
+                                        <div className="min-w-0">
+                                            <p className={`text-xs font-bold ${item.isOneTime ? 'text-amber-700 dark:text-amber-300' : 'text-slate-600 dark:text-slate-300'}`}>
+                                                Compra única
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 truncate">
+                                                {item.isOneTime ? 'Se excluye del promedio mensual' : 'No afecta estadísticas'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className={`shrink-0 w-9 h-5 rounded-full relative transition-colors ${item.isOneTime ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
+                                        <div className={`absolute top-0.5 size-4 bg-white rounded-full shadow transition-all ${item.isOneTime ? 'left-[18px]' : 'left-0.5'}`}></div>
+                                    </div>
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>

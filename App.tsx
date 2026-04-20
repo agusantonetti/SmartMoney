@@ -34,7 +34,7 @@ import YearReview from './components/YearReview';
 import PurchaseAnalyzer from './components/PurchaseAnalyzer';
 
 // UTILS
-import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE } from './utils';
+import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase } from './utils';
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -318,8 +318,15 @@ const App: React.FC = () => {
 
     const totalDebt = (financialProfile.debts || []).reduce((sum, d) => sum + (d.totalAmount - d.currentAmount), 0);
 
+    // AVG MENSUAL: excluir compras únicas para que no distorsionen la línea base histórica.
+    // El "expense" total (que sí incluye one-time) se sigue usando en el dashboard del mes actual,
+    // pero el promedio histórico que alimenta runway/health score debe ser el gasto recurrente.
+    const recurringExpense = transactions
+      .filter(t => t.type === 'expense' && !isOneTimePurchase(t))
+      .reduce((acc, t) => acc + safeNum(t.amount), 0);
+
     const uniqueMonths = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : ''))).size || 1;
-    const avgMonthlyExpense = (expense / Math.max(1, uniqueMonths)) + fixedExpenses;
+    const avgMonthlyExpense = (recurringExpense / Math.max(1, uniqueMonths)) + fixedExpenses;
     
     // Liquid assets: Patrimonio Manual - Apartados
     const liquidAssets = manualBalance - totalReserved;
@@ -508,6 +515,7 @@ const App: React.FC = () => {
             onUpdateTransactions={handleUpdateTransactions}
             onBack={() => setCurrentView(ViewState.DASHBOARD)} 
             privacyMode={privacyMode}
+            customCategories={financialProfile.customCategories}
           />
         );
       case ViewState.BUDGET_CONTROL:

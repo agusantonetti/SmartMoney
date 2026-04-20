@@ -1,5 +1,5 @@
 
-import { FinancialProfile } from './types';
+import { FinancialProfile, Transaction } from './types';
 
 // ============================================================
 // CONSTANTES
@@ -125,8 +125,16 @@ export const DEFAULT_CATEGORIES: CategoryDef[] = [
   { name: 'Trabajo', icon: 'work', keywords: ['oficina', 'cowork', 'coworking', 'herramienta', 'software', 'hosting', 'dominio', 'freelance', 'impresora', 'tinta', 'escritorio', 'silla', 'monitor', 'teclado', 'mouse', 'notebook', 'computadora', 'pc', 'webcam', 'auriculares'] },
   { name: 'Transferencia', icon: 'swap_horiz', keywords: ['transferencia', 'transferí', 'transferi', 'envié', 'envie', 'presté', 'preste', 'préstamo', 'prestamo', 'devolución', 'devolucion', 'mandé', 'mande', 'giré', 'gire', 'mercadopago', 'mp'] },
   { name: 'Compras', icon: 'shopping_bag', keywords: ['compra', 'compras', 'shopping', 'online', 'mercadolibre', 'amazon', 'shein', 'temu', 'aliexpress', 'pedido', 'encargo', 'envío', 'envio'] },
+  { name: 'Compras únicas', icon: 'auto_awesome', keywords: [] },
   { name: 'Otros', icon: 'category', keywords: [] },
 ];
+
+/**
+ * Nombre de la categoría reservada para compras únicas/no recurrentes.
+ * Cualquier transacción con esta categoría se trata automáticamente como
+ * one-time (se excluye del promedio histórico), sin necesidad de activar el flag.
+ */
+export const ONE_TIME_CATEGORY = 'Compras únicas';
 
 /** Obtiene todas las categorías disponibles: predefinidas + custom del usuario */
 export const getAllCategories = (customCategories?: string[]): string[] => {
@@ -223,4 +231,50 @@ export const getSalaryForMonth = (profile: FinancialProfile, monthKey: string, d
     if (src.currency === 'USD') val *= dollarRate;
     return sum + val;
   }, 0);
+};
+
+// ============================================================
+// COMPRAS ÚNICAS / ONE-TIME PURCHASES
+// ============================================================
+// Regla de negocio:
+// - Una transacción es "compra única" si tiene isOneTime=true O si su categoría
+//   es 'Compras únicas' (ONE_TIME_CATEGORY).
+// - Las compras únicas SÍ cuentan en: gasto del mes actual, presupuesto mensual,
+//   balance neto del mes, dashboard actual.
+// - Las compras únicas NO cuentan en: promedio histórico mensual, tendencias,
+//   comparaciones mes a mes, gráficos de evolución, alertas de velocity/inflation.
+// - Esto permite ver compras grandes excepcionales (computadora, mueble, viaje)
+//   sin que distorsionen la línea base del gasto típico.
+// ============================================================
+
+/** Retorna true si la transacción debe tratarse como compra única/no recurrente */
+export const isOneTimePurchase = (tx: Transaction): boolean => {
+  return tx.isOneTime === true || tx.category === ONE_TIME_CATEGORY;
+};
+
+/** Filtra solo los gastos RECURRENTES (excluye compras únicas).
+ *  Este es el set de transacciones que debe usarse para promedios históricos,
+ *  tendencias y comparaciones entre meses. */
+export const filterRecurringExpenses = (transactions: Transaction[]): Transaction[] => {
+  return transactions.filter(t => t.type === 'expense' && !isOneTimePurchase(t));
+};
+
+/** Filtra solo las compras únicas (excepciones). Útil para mostrar el desglose
+ *  "Gasto total = Recurrente + Compras únicas" en el dashboard del mes actual. */
+export const filterOneTimeExpenses = (transactions: Transaction[]): Transaction[] => {
+  return transactions.filter(t => t.type === 'expense' && isOneTimePurchase(t));
+};
+
+/** Suma el monto de gastos RECURRENTES en un array de transacciones (opcionalmente filtrado por mes) */
+export const sumRecurringExpenses = (transactions: Transaction[], monthKey?: string): number => {
+  return transactions
+    .filter(t => t.type === 'expense' && !isOneTimePurchase(t) && (!monthKey || t.date.startsWith(monthKey)))
+    .reduce((acc, t) => acc + safeNum(t.amount), 0);
+};
+
+/** Suma el monto de compras ÚNICAS en un array de transacciones (opcionalmente filtrado por mes) */
+export const sumOneTimeExpenses = (transactions: Transaction[], monthKey?: string): number => {
+  return transactions
+    .filter(t => t.type === 'expense' && isOneTimePurchase(t) && (!monthKey || t.date.startsWith(monthKey)))
+    .reduce((acc, t) => acc + safeNum(t.amount), 0);
 };

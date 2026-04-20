@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon } from '../utils';
+import { formatMoney, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -39,14 +39,24 @@ const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => 
     // Ingresos basados en sueldos configurados
     const incomeA = getSalaryForMonth(monthA);
     const incomeB = getSalaryForMonth(monthB);
-    const expenseA = txA.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
-    const expenseB = txB.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0);
 
-    // Categories comparison
+    // GASTOS: excluir compras únicas de la comparación histórica para que no distorsionen
+    // el análisis. Las tracking por separado para transparencia.
+    const recurringA = txA.filter(t => t.type === 'expense' && !isOneTimePurchase(t));
+    const recurringB = txB.filter(t => t.type === 'expense' && !isOneTimePurchase(t));
+    const oneTimeA = txA.filter(t => t.type === 'expense' && isOneTimePurchase(t));
+    const oneTimeB = txB.filter(t => t.type === 'expense' && isOneTimePurchase(t));
+
+    const expenseA = recurringA.reduce((a, t) => a + t.amount, 0);
+    const expenseB = recurringB.reduce((a, t) => a + t.amount, 0);
+    const oneTimeTotalA = oneTimeA.reduce((a, t) => a + t.amount, 0);
+    const oneTimeTotalB = oneTimeB.reduce((a, t) => a + t.amount, 0);
+
+    // Categories comparison - también basado en gastos recurrentes
     const catsA: Record<string, number> = {};
     const catsB: Record<string, number> = {};
-    txA.filter(t => t.type === 'expense').forEach(t => { catsA[t.category] = (catsA[t.category] || 0) + t.amount; });
-    txB.filter(t => t.type === 'expense').forEach(t => { catsB[t.category] = (catsB[t.category] || 0) + t.amount; });
+    recurringA.forEach(t => { catsA[t.category] = (catsA[t.category] || 0) + t.amount; });
+    recurringB.forEach(t => { catsB[t.category] = (catsB[t.category] || 0) + t.amount; });
 
     const allCats = [...new Set([...Object.keys(catsA), ...Object.keys(catsB)])];
     const categoryComparison = allCats.map(cat => ({
@@ -64,6 +74,8 @@ const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => 
 
     return {
       incomeA, incomeB, expenseA, expenseB,
+      oneTimeTotalA, oneTimeTotalB,
+      hasOneTime: oneTimeTotalA > 0 || oneTimeTotalB > 0,
       balanceA: incomeA - expenseA,
       balanceB: incomeB - expenseB,
       incomePct: calcPct(incomeA, incomeB),
@@ -137,7 +149,7 @@ const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => 
           <div className="bg-surface-light dark:bg-surface-dark rounded-2xl p-4 border border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-2 mb-3">
               <span className="material-symbols-outlined text-red-500 text-[18px]">trending_down</span>
-              <span className="text-xs font-bold text-slate-500 uppercase">Gastos</span>
+              <span className="text-xs font-bold text-slate-500 uppercase">Gastos recurrentes</span>
               {comparison.expensePct !== 0 && (
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto ${comparison.expensePct < 0 ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'}`}>
                   {comparison.expensePct > 0 ? '+' : ''}{comparison.expensePct.toFixed(0)}%
@@ -148,6 +160,18 @@ const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => 
               <div className="text-center"><p className="text-[10px] text-slate-400 mb-0.5">{formatMonthKey(monthA)}</p><p className="text-lg font-black text-red-600 dark:text-red-400">{formatMoney(comparison.expenseA)}</p></div>
               <div className="text-center"><p className="text-[10px] text-slate-400 mb-0.5">{formatMonthKey(monthB)}</p><p className="text-lg font-black text-red-600 dark:text-red-400">{formatMoney(comparison.expenseB)}</p></div>
             </div>
+            {comparison.hasOneTime && (
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="material-symbols-outlined text-amber-500 text-[14px]">auto_awesome</span>
+                  <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">Compras únicas (excluidas de la comparación)</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center"><p className="text-xs font-bold text-amber-600 dark:text-amber-400">{comparison.oneTimeTotalA > 0 ? `+${formatMoney(comparison.oneTimeTotalA)}` : '—'}</p></div>
+                  <div className="text-center"><p className="text-xs font-bold text-amber-600 dark:text-amber-400">{comparison.oneTimeTotalB > 0 ? `+${formatMoney(comparison.oneTimeTotalB)}` : '—'}</p></div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

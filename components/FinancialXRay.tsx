@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { FinancialProfile, FinancialMetrics, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -26,10 +26,11 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
     const totalIncome = getSalaryForMonth(profile, pfx, dollarRate);
     const prevIncome = getSalaryForMonth(profile, prevMonthKey, dollarRate);
 
-    // Expenses
-    const currentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(pfx));
+    // Expenses - usar gasto recurrente (excluye compras únicas) para que la radiografía
+    // financiera refleje el comportamiento sostenido, no compras puntuales.
+    const currentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(pfx) && !isOneTimePurchase(t));
     const totalExpense = currentExpenses.reduce((s, t) => s + t.amount, 0);
-    const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey));
+    const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey) && !isOneTimePurchase(t));
     const prevExpenseTotal = prevExpenses.reduce((s, t) => s + t.amount, 0);
 
     // Savings rate
@@ -122,8 +123,8 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
     const m6Key = `${m6.getFullYear()}-${String(m6.getMonth() + 1).padStart(2, '0')}`;
     const m3Expenses: Record<string, number> = {};
     const m6Expenses: Record<string, number> = {};
-    transactions.filter(t => t.type === 'expense' && t.date.startsWith(m3Key)).forEach(t => { m3Expenses[t.category] = (m3Expenses[t.category] || 0) + t.amount; });
-    transactions.filter(t => t.type === 'expense' && t.date.startsWith(m6Key)).forEach(t => { m6Expenses[t.category] = (m6Expenses[t.category] || 0) + t.amount; });
+    transactions.filter(t => t.type === 'expense' && t.date.startsWith(m3Key) && !isOneTimePurchase(t)).forEach(t => { m3Expenses[t.category] = (m3Expenses[t.category] || 0) + t.amount; });
+    transactions.filter(t => t.type === 'expense' && t.date.startsWith(m6Key) && !isOneTimePurchase(t)).forEach(t => { m6Expenses[t.category] = (m6Expenses[t.category] || 0) + t.amount; });
 
     const inflation: { cat: string; current: number; m3: number; m6: number; pct3: number; pct6: number }[] = [];
     Object.keys(categories).forEach(cat => {

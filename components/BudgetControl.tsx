@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, getDollarRate, getCurrentMonthKey, formatMonthKey, getCategoryIcon } from '../utils';
+import { formatMoney, getDollarRate, getCurrentMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -51,18 +51,26 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
 
     const expenseTxs = monthTxs.filter(t => t.type === 'expense');
     const totalExpense = expenseTxs.reduce((a, t) => a + t.amount, 0);
+    // Desglose one-time para transparencia (el total SÍ los incluye)
+    const oneTimeExpense = expenseTxs.filter(t => isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
+    const recurringExpense = totalExpense - oneTimeExpense;
     const balance = totalIncome - totalExpense;
     const realBalance = collectedIncome - totalExpense;
 
     const byCategory: Record<string, number> = {};
+    const byCategoryOneTime: Record<string, number> = {};
     expenseTxs.forEach(t => {
         byCategory[t.category] = (byCategory[t.category] || 0) + t.amount;
+        if (isOneTimePurchase(t)) {
+            byCategoryOneTime[t.category] = (byCategoryOneTime[t.category] || 0) + t.amount;
+        }
     });
 
     const categories = Object.keys(byCategory)
         .map(cat => ({
             name: cat,
             spent: byCategory[cat],
+            oneTimeSpent: byCategoryOneTime[cat] || 0,
             limit: profile.budgetLimits?.[cat] || 0,
             icon: getCategoryIcon(cat),
         }))
@@ -75,13 +83,14 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
             categories.push({
                 name: cat,
                 spent: 0,
+                oneTimeSpent: 0,
                 limit: allLimits[cat],
                 icon: getCategoryIcon(cat),
             });
         }
     });
 
-    return { totalIncome, collectedIncome, totalExpense, balance, realBalance, categories };
+    return { totalIncome, collectedIncome, totalExpense, recurringExpense, oneTimeExpense, balance, realBalance, categories };
   }, [transactions, profile, currentMonthKey, dollarRate]);
 
   // === HANDLERS ===
@@ -141,6 +150,12 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
                     <span className="text-[10px] font-bold uppercase text-red-600 dark:text-red-400">Gasté</span>
                 </div>
                 <p className="text-xl font-black text-red-700 dark:text-red-300">{formatMoney(monthData.totalExpense)}</p>
+                {monthData.oneTimeExpense > 0 && (
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-1 flex items-center gap-0.5" title="Incluye compras únicas. El presupuesto las cuenta normalmente, pero no afectan el promedio histórico.">
+                        <span className="material-symbols-outlined text-[10px]">auto_awesome</span>
+                        {formatMoney(monthData.oneTimeExpense)} compras únicas
+                    </p>
+                )}
             </div>
          </div>
 
@@ -200,7 +215,15 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
                                         <span className="material-symbols-outlined text-[18px] text-slate-500">{cat.icon}</span>
                                     </div>
                                     <div>
-                                        <h4 className="text-sm font-bold text-slate-900 dark:text-white">{cat.name}</h4>
+                                        <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                            {cat.name}
+                                            {cat.oneTimeSpent > 0 && (
+                                                <span className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 px-1.5 py-0.5 rounded-full" title={`${formatMoney(cat.oneTimeSpent)} son compras únicas (no afectan promedio)`}>
+                                                    <span className="material-symbols-outlined text-[10px]">auto_awesome</span>
+                                                    {formatMoney(cat.oneTimeSpent)}
+                                                </span>
+                                            )}
+                                        </h4>
                                         <p className="text-[10px] text-slate-400">{formatMoney(cat.spent)} gastado</p>
                                     </div>
                                 </div>

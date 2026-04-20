@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile, Subscription } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase } from '../utils';
 
 interface Props {
   metrics: FinancialMetrics;
@@ -140,26 +140,34 @@ const Dashboard: React.FC<Props> = ({
 
       // 1. Clasificar transacciones por periodo
       let currentIncomeVar = 0;
-      let currentExpenseVar = 0;
+      let currentExpenseVar = 0;      // TODO gasto del mes actual (incluye one-time)
+      let currentRecurringExp = 0;    // solo recurrente (para comparar con el pasado)
+      let currentOneTimeExp = 0;      // solo compras únicas
       let prevIncomeVar = 0;
-      let prevExpenseVar = 0;
+      let prevExpenseVar = 0;         // solo recurrente del mes anterior (para comparación limpia)
       
       let pastIncomeTotal = 0;
       let pastExpenseTotal = 0;
 
       transactions.forEach(t => {
           const tDate = t.date;
+          const isOneTime = t.type === 'expense' && isOneTimePurchase(t);
+
           if (tDate.startsWith(currentMonthKey)) {
-              if (t.type === 'income') currentIncomeVar += t.amount;
-              else currentExpenseVar += t.amount;
+              if (t.type === 'income') {
+                  currentIncomeVar += t.amount;
+              } else {
+                  currentExpenseVar += t.amount;
+                  if (isOneTime) currentOneTimeExp += t.amount;
+                  else currentRecurringExp += t.amount;
+              }
           } else if (tDate.startsWith(prevMonthKey)) {
               if (t.type === 'income') prevIncomeVar += t.amount;
-              else prevExpenseVar += t.amount;
-              // Acumular para el balance histórico (cierre del mes pasado)
+              else if (!isOneTime) prevExpenseVar += t.amount; // comparación limpia: excluye one-time
+              // Acumular para el balance histórico (cierre del mes pasado) — este sí incluye todo
               pastIncomeTotal += (t.type === 'income' ? t.amount : 0);
               pastExpenseTotal += (t.type === 'expense' ? t.amount : 0);
           } else if (tDate < currentMonthKey) {
-              // Más antiguos
               pastIncomeTotal += (t.type === 'income' ? t.amount : 0);
               pastExpenseTotal += (t.type === 'expense' ? t.amount : 0);
           }
@@ -167,16 +175,17 @@ const Dashboard: React.FC<Props> = ({
 
       // 2. Totales Mensuales
       const totalCurrentIncome = currentContractIncome + currentIncomeVar;
-      const totalCurrentExpense = currentExpenseVar; // Solo transacciones reales
+      const totalCurrentExpense = currentExpenseVar; // INCLUYE one-time: es el gasto real del mes
       const totalNetMonthly = totalCurrentIncome - totalCurrentExpense;
 
       const totalPrevIncome = prevContractIncome + prevIncomeVar;
-      const totalPrevExpense = prevExpenseVar; // Solo transacciones reales anteriores
+      const totalPrevExpense = prevExpenseVar; // NO incluye one-time: comparación limpia
 
       // 3. Balance Historico (Al cierre del mes anterior)
       const prevBalance = (profile.initialBalance || 0) + pastIncomeTotal - pastExpenseTotal;
 
       // 4. Cálculo de Porcentajes
+      // Comparamos gasto RECURRENTE actual vs RECURRENTE anterior para no castigar compras únicas
       const calcPct = (curr: number, prev: number) => {
           if (prev === 0) return curr === 0 ? 0 : 100;
           return ((curr - prev) / prev) * 100;
@@ -187,14 +196,18 @@ const Dashboard: React.FC<Props> = ({
           totalMonthlyOutflow: totalCurrentExpense,
           totalMonthlyIncome: totalCurrentIncome,
           currentIncome: currentIncomeVar,
+          // NUEVO: desglose gasto recurrente vs únicas (para mostrar breakdown en el dashboard)
+          currentRecurringExpense: currentRecurringExp,
+          currentOneTimeExpense: currentOneTimeExp,
+          hasOneTimeThisMonth: currentOneTimeExp > 0,
           netMonthly: totalNetMonthly,
-          // Comparativas
+          // Comparativas (basadas en RECURRENTE para evitar distorsión de compras únicas)
           prevBalance,
           balancePct: calcPct(metrics.balance, prevBalance),
           prevIncome: totalPrevIncome,
           incomePct: calcPct(totalCurrentIncome, totalPrevIncome),
           prevExpense: totalPrevExpense,
-          expensePct: calcPct(totalCurrentExpense, totalPrevExpense)
+          expensePct: calcPct(currentRecurringExp, totalPrevExpense)
       };
   }, [transactions, metrics, profile.initialBalance, profile.incomeSources, currentDollarRate]);
 
@@ -251,8 +264,12 @@ const Dashboard: React.FC<Props> = ({
       const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const prevMonthKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
 
-      const currentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey));
-      const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey));
+      // NOTA: para las comparaciones/tendencias usamos SOLO gastos recurrentes
+      // (excluimos compras únicas para que una compra grande excepcional no dispare
+      // alertas de "gastaste 500% más que el mes pasado en Trabajo"). El gasto total
+      // del mes actual (incluyendo one-time) se sigue mostrando en el bloque "Gastado".
+      const currentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(currentMonthKey) && !isOneTimePurchase(t));
+      const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey) && !isOneTimePurchase(t));
 
       // 1. Balance mensual
       if (stats.netMonthly > 0) {
@@ -299,13 +316,13 @@ const Dashboard: React.FC<Props> = ({
           cards.push({ id: 'otros', icon: 'help_center', text: `Tenés ${otrosCount} gasto${otrosCount > 1 ? 's' : ''} sin categoría este mes — reclasificalos en Analíticas`, color: 'amber', action: onOpenAnalytics });
       }
 
-      // 6. Racha de meses positivos
+      // 6. Racha de meses positivos (usando gasto recurrente para no castigar meses con compras únicas justificadas)
       let streak = 0;
       for (let i = 0; i < 12; i++) {
           const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
           const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
           const monthIncome = getSalaryForMonth(profile, mk, currentDollarRate);
-          const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk)).reduce((a, t) => a + t.amount, 0);
+          const monthExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
           if (monthIncome > monthExpense && monthIncome > 0) streak++;
           else break;
       }
@@ -362,12 +379,12 @@ const Dashboard: React.FC<Props> = ({
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
       const sixMonthsKey = `${sixMonthsAgo.getFullYear()}-${String(sixMonthsAgo.getMonth() + 1).padStart(2, '0')}`;
 
-      // Compare top categories vs 3 months ago
+      // Compare top categories vs 3 months ago (excluyendo one-time para que no generen falsas alertas)
       Object.keys(currentByCategory).forEach(cat => {
           if (cat === 'Otros' || cat === 'Ingreso') return;
           const curr = currentByCategory[cat];
           // Get 3 months ago spending
-          const m3Txs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(threeMonthsKey) && t.category === cat);
+          const m3Txs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(threeMonthsKey) && t.category === cat && !isOneTimePurchase(t));
           const m3Total = m3Txs.reduce((a, t) => a + t.amount, 0);
           if (m3Total > 0 && curr > 0) {
               const inflPct = Math.round(((curr - m3Total) / m3Total) * 100);
@@ -381,6 +398,8 @@ const Dashboard: React.FC<Props> = ({
   }, [transactions, stats, subscriptionAlerts, metrics]);
 
   // --- MINI TREND CHART DATA (últimos 6 meses) ---
+  // Usa gasto RECURRENTE (excluye compras únicas) para que una compra grande
+  // no aplaste visualmente los otros meses.
   const trendData = useMemo(() => {
     const months: { key: string, label: string, expense: number, income: number }[] = [];
     const now = new Date();
@@ -392,7 +411,7 @@ const Dashboard: React.FC<Props> = ({
       months.push({
         key,
         label,
-        expense: monthTxs.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0),
+        expense: monthTxs.filter(t => t.type === 'expense' && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0),
         income: getSalaryForMonth(profile, key, currentDollarRate),
       });
     }
@@ -611,7 +630,7 @@ const Dashboard: React.FC<Props> = ({
                               <p className="text-sm md:text-xl font-bold truncate">{formatMoney(stats.totalMonthlyOutflow)}</p>
                               <p className="text-[10px] text-slate-400 font-medium font-mono">(US$ {Math.round(stats.totalMonthlyOutflow / currentDollarRate)})</p>
                           </div>
-                          {!privacyMode && <TooltipContent label="Mes Anterior" amount={stats.prevExpense} percent={stats.expensePct} inverse={true} />}
+                          {!privacyMode && <TooltipContent label="Mes Ant. (recurr.)" amount={stats.prevExpense} percent={stats.expensePct} inverse={true} />}
                       </div>
                       <div onClick={onOpenAnalytics} className="cursor-pointer hover:bg-white/5 rounded-xl p-1 md:p-2 transition-colors border-l border-white/10 text-center md:text-left">
                           <p className="text-[10px] uppercase font-bold text-blue-400 mb-0.5">Neto</p>
@@ -623,6 +642,33 @@ const Dashboard: React.FC<Props> = ({
                   </div>
                </div>
           </section>
+
+          {/* ONE-TIME PURCHASES BREAKDOWN — solo visible si hay compras únicas este mes */}
+          {stats.hasOneTimeThisMonth && (
+            <div className="bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/20 dark:to-slate-800/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl p-4 shadow-sm">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="size-8 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-amber-500 text-[18px]">auto_awesome</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-amber-700 dark:text-amber-300">Desglose del mes</p>
+                  <p className="text-[10px] text-slate-500">Compras únicas excluidas del promedio histórico</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/60 dark:bg-slate-900/40 rounded-xl p-3">
+                  <p className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Recurrente</p>
+                  <p className={`text-base font-black text-slate-900 dark:text-white ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.currentRecurringExpense)}</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5">cuenta para el promedio</p>
+                </div>
+                <div className="bg-white/60 dark:bg-slate-900/40 rounded-xl p-3 border border-amber-200 dark:border-amber-800/40">
+                  <p className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 mb-0.5">Compras únicas</p>
+                  <p className={`text-base font-black text-amber-700 dark:text-amber-300 ${privacyMode ? 'blur-sm' : ''}`}>{formatMoney(stats.currentOneTimeExpense)}</p>
+                  <p className="text-[9px] text-slate-400 mt-0.5">no afecta estadísticas</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 1.5 MINI TREND CHART */}
           <div className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-xl border border-white/30 dark:border-slate-700/50 rounded-2xl p-4 shadow-sm">
@@ -660,7 +706,7 @@ const Dashboard: React.FC<Props> = ({
               </div>
               <div className="flex items-center justify-center gap-4 mt-2">
                   <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="size-1.5 rounded-full bg-emerald-500 inline-block" /> Ingresos</span>
-                  <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="size-1.5 rounded-full bg-red-500 inline-block" /> Gastos</span>
+                  <span className="flex items-center gap-1 text-[9px] text-slate-400"><span className="size-1.5 rounded-full bg-red-500 inline-block" /> Gasto recurrente</span>
               </div>
           </div>
 
