@@ -101,7 +101,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
       const existing = sources[srcIdx];
       const updatedSrc: IncomeSource = {
         ...existing, name, amount: incomeMode === 'VARIABLE' ? (parseFloat(amount) || 0) : parseFloat(amount) || 0,
-        currency, frequency, startDate, endDate: isEndDateEnabled ? endDate : undefined,
+        currency, frequency, startDate: startDate || existing.startDate, endDate: isEndDateEnabled ? endDate : undefined,
         isCreatorSource: incomeMode === 'VARIABLE', incomeMode,
         targetPosts: (incomeMode === 'PER_DELIVERY' || incomeMode === 'FIXED') ? (parseFloat(targetPosts) || 0) : undefined,
         requiresInvoice: requiresInvoice || undefined,
@@ -136,7 +136,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     setAmount(src.amount > 0 ? src.amount.toString() : '');
     setCurrency(src.currency || 'ARS');
     setFrequency(src.frequency || 'MONTHLY');
-    setStartDate(src.startDate || new Date().toISOString().split('T')[0]);
+    setStartDate(src.startDate || '');
     setEndDate(src.endDate || '');
     setIsEndDateEnabled(!!src.endDate);
     setIncomeMode(getEffectiveMode(src));
@@ -294,6 +294,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 const isActive = isContractActive(selectedSource, checkDate);
                 const currentVal = payment ? payment.realAmount : (mode === 'FIXED' ? selectedSource.amount : 0);
                 const isPaid = payment?.isPaid || false;
+                const isInvoiceSent = payment?.isInvoiceSent || false;
                 const expected = mode === 'FIXED' ? selectedSource.amount : 0;
                 const postsDone = payment?.postsCompleted || 0;
                 const paidDone = payment?.postsPaid || 0;
@@ -355,6 +356,17 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                       <div className="flex items-center justify-between gap-3 pl-11">
                         <p className="text-[10px] text-slate-400 uppercase font-bold shrink-0">{mode==='FIXED'?`Monto (${isUSD?'USD':'ARS'}):`:mode==='VARIABLE'?`Cobrado (${isUSD?'USD':'ARS'}):`:''}</p>
                         {mode !== 'PER_DELIVERY' && <input type="number" className={`w-28 bg-transparent text-right font-bold outline-none border-b border-dashed border-slate-300 focus:border-primary ${privacyMode?'blur-sm':''}`} placeholder={expected>0?expected.toString():'0'} value={currentVal||''} onChange={e => handleUpdatePayment(selectedSource.id, { month: pKey, realAmount: parseFloat(e.target.value), isPaid, postsCompleted: postsDone })} />}
+                      </div>
+                    )}
+                    {isActive && selectedSource.requiresInvoice && (
+                      <div className="flex items-center justify-between pl-11">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[13px]">description</span>Factura:
+                        </span>
+                        <button onClick={() => handleUpdatePayment(selectedSource.id, { month: pKey, realAmount: currentVal || expected, isPaid, isInvoiceSent: !isInvoiceSent, postsCompleted: postsDone })} className={`text-[10px] font-bold flex items-center gap-1 px-3 py-1.5 rounded-full transition-all ${isInvoiceSent ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'}`}>
+                          <span className="material-symbols-outlined text-[13px]">{isInvoiceSent ? 'check_circle' : 'radio_button_unchecked'}</span>
+                          {isInvoiceSent ? 'Enviada' : 'Pendiente'}
+                        </button>
                       </div>
                     )}
                   </div>
