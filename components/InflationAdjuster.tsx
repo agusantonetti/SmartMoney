@@ -1,27 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile } from '../types';
-import { formatMoney } from '../utils';
-
-const BASE_INFLATION_RATES: { month: string; rate: number }[] = [
-  { month: '2022-01', rate: 3.9 }, { month: '2022-02', rate: 4.7 }, { month: '2022-03', rate: 6.7 },
-  { month: '2022-04', rate: 6.0 }, { month: '2022-05', rate: 5.1 }, { month: '2022-06', rate: 5.3 },
-  { month: '2022-07', rate: 7.4 }, { month: '2022-08', rate: 7.0 }, { month: '2022-09', rate: 6.2 },
-  { month: '2022-10', rate: 6.3 }, { month: '2022-11', rate: 4.9 }, { month: '2022-12', rate: 5.1 },
-  { month: '2023-01', rate: 6.0 }, { month: '2023-02', rate: 6.6 }, { month: '2023-03', rate: 7.7 },
-  { month: '2023-04', rate: 8.4 }, { month: '2023-05', rate: 7.8 }, { month: '2023-06', rate: 6.0 },
-  { month: '2023-07', rate: 6.3 }, { month: '2023-08', rate: 12.4 }, { month: '2023-09', rate: 12.7 },
-  { month: '2023-10', rate: 8.3 }, { month: '2023-11', rate: 12.8 }, { month: '2023-12', rate: 25.5 },
-  { month: '2024-01', rate: 20.6 }, { month: '2024-02', rate: 13.2 }, { month: '2024-03', rate: 11.0 },
-  { month: '2024-04', rate: 8.8 }, { month: '2024-05', rate: 4.2 }, { month: '2024-06', rate: 4.6 },
-  { month: '2024-07', rate: 4.0 }, { month: '2024-08', rate: 4.2 }, { month: '2024-09', rate: 3.5 },
-  { month: '2024-10', rate: 2.4 }, { month: '2024-11', rate: 2.4 }, { month: '2024-12', rate: 2.7 },
-  { month: '2025-01', rate: 2.3 }, { month: '2025-02', rate: 2.4 }, { month: '2025-03', rate: 3.7 },
-  { month: '2025-04', rate: 2.8 }, { month: '2025-05', rate: 1.5 }, { month: '2025-06', rate: 1.6 },
-  { month: '2025-07', rate: 1.9 }, { month: '2025-08', rate: 1.9 }, { month: '2025-09', rate: 2.1 },
-  { month: '2025-10', rate: 2.3 }, { month: '2025-11', rate: 2.5 }, { month: '2025-12', rate: 2.8 },
-  { month: '2026-01', rate: 2.9 }, { month: '2026-02', rate: 2.9 },
-];
+import { formatMoney, BASE_INFLATION_RATES } from '../utils';
 
 const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 

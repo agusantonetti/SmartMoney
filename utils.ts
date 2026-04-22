@@ -20,6 +20,72 @@ export const isSourceActiveInMonth = (src: IncomeSource, monthKey: string): bool
 };
 
 // ============================================================
+// INFLACIÓN — IPC INDEC Argentina
+// ============================================================
+
+/** Tasas IPC INDEC mensuales hardcodeadas hasta febrero 2026 */
+export const BASE_INFLATION_RATES: { month: string; rate: number }[] = [
+  { month: '2022-01', rate: 3.9 }, { month: '2022-02', rate: 4.7 }, { month: '2022-03', rate: 6.7 },
+  { month: '2022-04', rate: 6.0 }, { month: '2022-05', rate: 5.1 }, { month: '2022-06', rate: 5.3 },
+  { month: '2022-07', rate: 7.4 }, { month: '2022-08', rate: 7.0 }, { month: '2022-09', rate: 6.2 },
+  { month: '2022-10', rate: 6.3 }, { month: '2022-11', rate: 4.9 }, { month: '2022-12', rate: 5.1 },
+  { month: '2023-01', rate: 6.0 }, { month: '2023-02', rate: 6.6 }, { month: '2023-03', rate: 7.7 },
+  { month: '2023-04', rate: 8.4 }, { month: '2023-05', rate: 7.8 }, { month: '2023-06', rate: 6.0 },
+  { month: '2023-07', rate: 6.3 }, { month: '2023-08', rate: 12.4 }, { month: '2023-09', rate: 12.7 },
+  { month: '2023-10', rate: 8.3 }, { month: '2023-11', rate: 12.8 }, { month: '2023-12', rate: 25.5 },
+  { month: '2024-01', rate: 20.6 }, { month: '2024-02', rate: 13.2 }, { month: '2024-03', rate: 11.0 },
+  { month: '2024-04', rate: 8.8 }, { month: '2024-05', rate: 4.2 }, { month: '2024-06', rate: 4.6 },
+  { month: '2024-07', rate: 4.0 }, { month: '2024-08', rate: 4.2 }, { month: '2024-09', rate: 3.5 },
+  { month: '2024-10', rate: 2.4 }, { month: '2024-11', rate: 2.4 }, { month: '2024-12', rate: 2.7 },
+  { month: '2025-01', rate: 2.3 }, { month: '2025-02', rate: 2.4 }, { month: '2025-03', rate: 3.7 },
+  { month: '2025-04', rate: 2.8 }, { month: '2025-05', rate: 1.5 }, { month: '2025-06', rate: 1.6 },
+  { month: '2025-07', rate: 1.9 }, { month: '2025-08', rate: 1.9 }, { month: '2025-09', rate: 2.1 },
+  { month: '2025-10', rate: 2.3 }, { month: '2025-11', rate: 2.5 }, { month: '2025-12', rate: 2.8 },
+  { month: '2026-01', rate: 2.9 }, { month: '2026-02', rate: 2.9 },
+];
+
+/** Devuelve un Map con base + custom del usuario (custom tiene prioridad) */
+export const getInflationMap = (profile: FinancialProfile): Map<string, number> => {
+  const map = new Map<string, number>();
+  BASE_INFLATION_RATES.forEach(r => map.set(r.month, r.rate));
+  (profile.inflationHistory || []).forEach(r => map.set(r.month, r.rate));
+  return map;
+};
+
+/**
+ * Multiplicador de inflación acumulada desde `fromMonth` (exclusivo) hasta `toMonth` (inclusivo).
+ * Ejemplo: $100 al cierre de "2025-01" equivalen a $100 × multiplier al cierre de "2025-03".
+ * Si no hay datos para un mes, asume 0% (no infla).
+ */
+export const getInflationMultiplier = (profile: FinancialProfile, fromMonth: string, toMonth: string): number => {
+  if (!fromMonth || !toMonth || fromMonth >= toMonth) return 1;
+  const map = getInflationMap(profile);
+  let y = parseInt(fromMonth.substring(0, 4), 10);
+  let m = parseInt(fromMonth.substring(5, 7), 10);
+  const endY = parseInt(toMonth.substring(0, 4), 10);
+  const endM = parseInt(toMonth.substring(5, 7), 10);
+  m++;
+  if (m > 12) { m = 1; y++; }
+  let mult = 1;
+  while (y < endY || (y === endY && m <= endM)) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    mult *= (1 + (map.get(key) || 0) / 100);
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return mult;
+};
+
+/** Promedio mensual de inflación de los últimos N meses conocidos */
+export const getRecentAvgInflation = (profile: FinancialProfile, months: number = 6): number => {
+  const map = getInflationMap(profile);
+  const keys = Array.from(map.keys()).sort().slice(-months);
+  if (keys.length === 0) return 0;
+  const sum = keys.reduce((acc, k) => acc + (map.get(k) || 0), 0);
+  return sum / keys.length;
+};
+
+// ============================================================
 // CONSTANTES
 // ============================================================
 
