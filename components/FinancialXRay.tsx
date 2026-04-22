@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { FinancialProfile, FinancialMetrics, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth, isOneTimePurchase } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -47,8 +47,8 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
       } else if (mode === 'PER_DELIVERY') {
         val = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
       } else {
-        val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2;
-        if (src.frequency === 'ONE_TIME') val = 0;
+        if (!isSourceActiveInMonth(src, pfx)) val = 0;
+        else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; }
       }
       if (src.currency === 'USD') val *= dollarRate;
       if (mode === 'FIXED') fixedIncome += val;
@@ -81,7 +81,8 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
       let val = 0;
       if (mode === 'VARIABLE') val = src.payments?.filter(p => p.month.startsWith(pfx)).reduce((a, p) => a + p.realAmount, 0) || 0;
       else if (mode === 'PER_DELIVERY') val = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
-      else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; if (src.frequency === 'ONE_TIME') val = 0; }
+      else if (!isSourceActiveInMonth(src, pfx)) val = 0;
+      else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; }
       if (src.currency === 'USD') val *= dollarRate;
       return { name: src.name, amount: val };
     }).sort((a, b) => b.amount - a.amount);

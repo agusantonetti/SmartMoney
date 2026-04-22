@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, getDollarRate, getCurrentMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase } from '../utils';
+import { formatMoney, getDollarRate, getCurrentMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -24,11 +24,11 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
     let collectedIncome = 0;
     
     (profile.incomeSources || []).forEach(src => {
-        if (src.isActive === false) return;
+        if (!isSourceActiveInMonth(src, currentMonthKey)) return;
         const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
         let projected = 0;
         let collected = 0;
-        
+
         if (mode === 'VARIABLE') {
             const payments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
             projected = payments.reduce((acc, p) => acc + p.realAmount, 0);
@@ -40,7 +40,7 @@ const BudgetControl: React.FC<Props> = ({ profile, transactions, onUpdateProfile
         } else {
             projected = src.amount;
             if (src.frequency === 'BIWEEKLY') projected *= 2;
-            if (src.frequency === 'ONE_TIME') projected = 0;
+            // ONE_TIME: cuenta entero en su mes (ya filtrado por isSourceActiveInMonth)
             const isPaid = src.payments?.some(p => p.month.startsWith(currentMonthKey) && p.isPaid);
             collected = isPaid ? projected : 0;
         }

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase } from '../utils';
+import { formatMoney, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase, getSalaryForMonth as getSalaryForMonthUtil } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -14,23 +14,8 @@ const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => 
   const [monthB, setMonthB] = useState(getPrevMonthKey(getCurrentMonthKey()));
   const dollarRate = getDollarRate(profile);
 
-  // Helper: calcular ingreso de sueldos para un mes dado
-  const getSalaryForMonth = (monthKey: string) => {
-    return (profile.incomeSources || []).reduce((sum, src) => {
-      if (src.isActive === false) return sum;
-      let val = 0;
-      if (src.isCreatorSource) {
-        const payments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
-        val = payments.reduce((acc, p) => acc + p.realAmount, 0);
-      } else {
-        val = src.amount;
-        if (src.frequency === 'BIWEEKLY') val *= 2;
-        if (src.frequency === 'ONE_TIME') val = 0;
-      }
-      if (src.currency === 'USD') val *= dollarRate;
-      return sum + val;
-    }, 0);
-  };
+  // Usar el helper global (respeta startDate/endDate y ONE_TIME correctamente)
+  const getSalaryForMonth = (monthKey: string) => getSalaryForMonthUtil(profile, monthKey, dollarRate);
 
   const comparison = useMemo(() => {
     const txA = transactions.filter(t => t.date.startsWith(monthA));

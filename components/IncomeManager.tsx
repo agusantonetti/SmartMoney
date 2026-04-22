@@ -82,7 +82,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     let val = src.amount;
     if (src.currency === 'USD') val *= dollarRate;
     if (src.frequency === 'BIWEEKLY') return val * 2;
-    if (src.frequency === 'ONE_TIME') return 0;
+    // ONE_TIME: isContractActive ya filtró por mes, así que se cuenta entero
     return val;
   };
 

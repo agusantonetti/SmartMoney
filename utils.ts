@@ -1,5 +1,23 @@
 
-import { FinancialProfile, Transaction } from './types';
+import { FinancialProfile, IncomeSource, Transaction } from './types';
+
+/**
+ * Indica si una fuente de ingreso debe contar en un mes dado (YYYY-MM).
+ * Usa comparación de strings (sin Date parsing) para evitar bugs de timezone.
+ * - ONE_TIME: sólo activo en el mes exacto de su startDate.
+ * - Otros: activo si el mes cae entre startDate y endDate (si existen).
+ */
+export const isSourceActiveInMonth = (src: IncomeSource, monthKey: string): boolean => {
+  if (src.isActive === false) return false;
+  const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
+  const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
+  if (src.frequency === 'ONE_TIME') {
+    return !startMonth || startMonth === monthKey;
+  }
+  if (startMonth && monthKey < startMonth) return false;
+  if (endMonth && monthKey > endMonth) return false;
+  return true;
+};
 
 // ============================================================
 // CONSTANTES
@@ -215,6 +233,17 @@ export const getNextMonthKey = (monthKey: string): string => {
 export const getSalaryForMonth = (profile: FinancialProfile, monthKey: string, dollarRate: number): number => {
   return (profile.incomeSources || []).reduce((sum, src) => {
     if (src.isActive === false) return sum;
+
+    // Check if contract is active in this month (string comparison, no timezone bugs)
+    const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
+    const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
+    if (src.frequency === 'ONE_TIME') {
+      if (startMonth && startMonth !== monthKey) return sum;
+    } else {
+      if (startMonth && monthKey < startMonth) return sum;
+      if (endMonth && monthKey > endMonth) return sum;
+    }
+
     const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
     let val = 0;
     if (mode === 'VARIABLE') {
@@ -226,7 +255,7 @@ export const getSalaryForMonth = (profile: FinancialProfile, monthKey: string, d
     } else {
       val = src.amount;
       if (src.frequency === 'BIWEEKLY') val *= 2;
-      if (src.frequency === 'ONE_TIME') val = 0;
+      // ONE_TIME: se cuenta entero en su mes (ya filtrado arriba por startMonth)
     }
     if (src.currency === 'USD') val *= dollarRate;
     return sum + val;

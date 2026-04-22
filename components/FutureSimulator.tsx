@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile, IncomeSource } from '../types';
-import { formatMoney, formatUSD, getDollarRate, isOneTimePurchase } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -77,9 +77,13 @@ const FutureSimulator: React.FC<Props> = ({ transactions, profile, currentBalanc
         val = (src.posts || []).filter(p => p.date.startsWith(ppfx)).reduce((a, p) => a + p.amount, 0);
       }
     } else {
-      val = src.amount;
-      if (src.frequency === 'BIWEEKLY') val *= 2;
-      if (src.frequency === 'ONE_TIME') val = 0;
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (!isSourceActiveInMonth(src, currentMonthKey)) {
+        val = 0;
+      } else {
+        val = src.amount;
+        if (src.frequency === 'BIWEEKLY') val *= 2;
+      }
     }
 
     if (src.currency === 'USD') val *= dollarRate;

@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, IncomeSource } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -47,9 +47,12 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
         monthlyArs = paidPosts.reduce((acc, p) => acc + p.amount, 0);
         if (src.currency === 'USD') monthlyArs *= dollarRate;
       } else {
-        monthlyArs = src.currency === 'USD' ? src.amount * dollarRate : src.amount;
-        if (src.frequency === 'BIWEEKLY') monthlyArs *= 2;
-        if (src.frequency === 'ONE_TIME') monthlyArs = 0;
+        if (!isSourceActiveInMonth(src, currentMonthKey)) {
+          monthlyArs = 0;
+        } else {
+          monthlyArs = src.currency === 'USD' ? src.amount * dollarRate : src.amount;
+          if (src.frequency === 'BIWEEKLY') monthlyArs *= 2;
+        }
       }
 
       return {
@@ -83,12 +86,10 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
           const monthPosts = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(key));
           val = monthPosts.reduce((acc, p) => acc + p.amount, 0);
         } else {
-          if (src.startDate && src.startDate > key + '-31') val = 0;
-          else if (src.endDate && src.endDate < key + '-01') val = 0;
+          if (!isSourceActiveInMonth(src, key)) val = 0;
           else {
             val = src.amount;
             if (src.frequency === 'BIWEEKLY') val *= 2;
-            if (src.frequency === 'ONE_TIME') val = 0;
           }
         }
         if (src.currency === 'USD') val *= dollarRate;
@@ -123,12 +124,10 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
         } else if (mode === 'PER_DELIVERY') {
           val = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(key)).reduce((acc, p) => acc + p.amount, 0);
         } else {
-          if (src.startDate && src.startDate > key + '-31') val = 0;
-          else if (src.endDate && src.endDate < key + '-01') val = 0;
+          if (!isSourceActiveInMonth(src, key)) val = 0;
           else {
             val = src.amount;
             if (src.frequency === 'BIWEEKLY') val *= 2;
-            if (src.frequency === 'ONE_TIME') val = 0;
           }
         }
         if (src.currency === 'USD') val *= dollarRate;
@@ -167,8 +166,8 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
       } else if (mode === 'PER_DELIVERY') {
         val = (src.posts || []).filter(p => p.isPaid).reduce((acc, p) => acc + p.amount, 0);
       } else {
-        if (src.frequency === 'BIWEEKLY') val *= 2;
-        if (src.frequency === 'ONE_TIME') val = 0;
+        if (!isSourceActiveInMonth(src, currentKey)) val = 0;
+        else if (src.frequency === 'BIWEEKLY') val *= 2;
       }
       return sum + val;
     }, 0);

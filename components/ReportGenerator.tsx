@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getSalaryForMonth, getCategoryIcon, isOneTimePurchase } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getSalaryForMonth, getCategoryIcon, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -38,8 +38,8 @@ const ReportGenerator: React.FC<Props> = ({ profile, transactions, balance, onBa
         val = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
         isPaid = val > 0;
       } else {
-        val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2;
-        if (src.frequency === 'ONE_TIME') val = 0;
+        if (!isSourceActiveInMonth(src, selectedMonth)) val = 0;
+        else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; }
         isPaid = (src.payments || []).some(p => p.month.startsWith(selectedMonth) && p.isPaid);
       }
       if (isPaid) collectedCount++;

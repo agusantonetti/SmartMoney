@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories, getSalaryForMonth, getDollarRate, isOneTimePurchase } from '../utils';
+import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories, getSalaryForMonth, getDollarRate, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -68,9 +68,9 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
     // Income from salary sources
     const totalIncome = getSalaryForMonth(profile, selectedMonth, dollarRate);
     const incomeNodes = (profile.incomeSources || []).filter(s => s.isActive !== false).map(src => {
+      if (!isSourceActiveInMonth(src, selectedMonth)) return { name: src.name, amount: 0, color: '#10b981' };
       let val = src.amount;
       if (src.frequency === 'BIWEEKLY') val *= 2;
-      if (src.frequency === 'ONE_TIME') val = 0;
       if (src.isCreatorSource) {
         val = (src.payments?.filter(p => p.month.startsWith(selectedMonth)) || []).reduce((a, p) => a + p.realAmount, 0);
       }

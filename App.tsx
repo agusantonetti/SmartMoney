@@ -283,28 +283,35 @@ const App: React.FC = () => {
     const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2,'0')}`;
 
     const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => {
-        // Ignorar inactivos si la fecha de fin ya pasó
         if (src.isActive === false) return sum;
-        if (src.endDate && new Date(src.endDate) < currentDate) return sum;
+
+        // Ventana activa por mes (string compare, sin bugs de timezone)
+        const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
+        const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
+        if (src.frequency === 'ONE_TIME') {
+            if (startMonth && startMonth !== currentMonthKey) return sum;
+        } else {
+            if (startMonth && currentMonthKey < startMonth) return sum;
+            if (endMonth && currentMonthKey > endMonth) return sum;
+        }
 
         let val = 0;
-        
+
         if (src.isCreatorSource) {
             // Para Creadores (Variables): Sumar SOLO pagos registrados para este mes
             const monthPayments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
             val = monthPayments.reduce((acc, p) => acc + p.realAmount, 0);
         } else {
-            // Para Fijos: Usar el monto base
+            // Para Fijos: Usar el monto base (ONE_TIME cuenta entero en su mes)
             val = src.amount;
             if (src.frequency === 'BIWEEKLY') val = val * 2;
-            if (src.frequency === 'ONE_TIME') val = 0; // Proyectos únicos no se suman al mensual fijo
         }
 
         // Convertir a ARS si está en USD
         if (src.currency === 'USD') {
             val = val * dollarRate;
         }
-        
+
         return sum + val;
     }, 0);
 

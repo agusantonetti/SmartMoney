@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -77,7 +77,8 @@ const YearReview: React.FC<Props> = ({ profile, transactions, balance, onBack, p
         } else if (mode === 'PER_DELIVERY') {
           val = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(key)).reduce((a, p) => a + p.amount, 0);
         } else {
-          val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; if (src.frequency === 'ONE_TIME') val = 0;
+          if (!isSourceActiveInMonth(src, key)) val = 0;
+          else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; }
         }
         if (src.currency === 'USD') val *= dollarRate;
         yearTotal += val;

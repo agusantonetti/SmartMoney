@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile, Subscription } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
 
 interface Props {
   metrics: FinancialMetrics;
@@ -115,10 +115,7 @@ const Dashboard: React.FC<Props> = ({
       // Helper para calcular ingreso de contratos por mes (Variable + Fijo)
       const getContractIncomeForMonth = (monthKey: string) => {
           return (profile.incomeSources || []).reduce((sum, src) => {
-              // Validar vigencia
-              if (src.isActive === false) return sum;
-              if (src.startDate && src.startDate > monthKey + '-31') return sum;
-              if (src.endDate && src.endDate < monthKey + '-01') return sum;
+              if (!isSourceActiveInMonth(src, monthKey)) return sum;
 
               let val = 0;
               if (src.isCreatorSource) {
@@ -126,10 +123,9 @@ const Dashboard: React.FC<Props> = ({
                   const monthPayments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
                   val = monthPayments.reduce((acc, p) => acc + p.realAmount, 0);
               } else {
-                  // Fijos: Monto base
+                  // Fijos: Monto base (ONE_TIME cuenta entero en su mes por el filtro de arriba)
                   val = src.amount;
                   if (src.frequency === 'BIWEEKLY') val = val * 2;
-                  if (src.frequency === 'ONE_TIME') val = 0; 
               }
 
               if (src.currency === 'USD') {
