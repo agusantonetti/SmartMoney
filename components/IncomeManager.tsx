@@ -42,15 +42,23 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const [newPostAmount, setNewPostAmount] = useState('');
   const [newPostDate, setNewPostDate] = useState(new Date().toISOString().split('T')[0]);
 
-  const isContractActive = (src: IncomeSource, targetDate: Date = new Date()) => {
+  // Check if a contract is active in a given month (YYYY-MM string).
+  // Using string comparison avoids timezone bugs from new Date(YYYY-MM-DD).
+  const isMonthActive = (src: IncomeSource, monthKey: string) => {
     if (src.isActive === false) return false;
-    const start = src.startDate ? new Date(src.startDate) : new Date(0);
-    const end = src.endDate ? new Date(src.endDate) : null;
-    targetDate.setHours(0,0,0,0); start.setHours(0,0,0,0);
-    if (end) end.setHours(23,59,59,999);
-    if (targetDate < start) return false;
-    if (end && targetDate > end) return false;
+    const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
+    const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
+    if (src.frequency === 'ONE_TIME') {
+      return !startMonth || startMonth === monthKey;
+    }
+    if (startMonth && monthKey < startMonth) return false;
+    if (endMonth && monthKey > endMonth) return false;
     return true;
+  };
+
+  const isContractActive = (src: IncomeSource, targetDate: Date = new Date()) => {
+    const monthKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+    return isMonthActive(src, monthKey);
   };
 
   const getCurrentMonthRealAmount = (src: IncomeSource) => {
@@ -290,8 +298,7 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             {monthsList.map((mName, idx) => {
               const renderSlot = (pKey: string, pLabel: string) => {
                 const payment = selectedSource.payments.find(p => p.month === pKey);
-                const checkDate = new Date(viewYear, idx + 1, 0); // último día del mes
-                const isActive = isContractActive(selectedSource, checkDate);
+                const isActive = isMonthActive(selectedSource, pKey.substring(0, 7));
                 const currentVal = payment ? payment.realAmount : (mode === 'FIXED' ? selectedSource.amount : 0);
                 const isPaid = payment?.isPaid || false;
                 const isInvoiceSent = payment?.isInvoiceSent || false;
@@ -445,10 +452,23 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                   <button onClick={() => setFrequency('ONE_TIME')} className={`flex-1 py-2 rounded-lg text-xs font-bold border ${frequency==='ONE_TIME'?'bg-orange-50 border-orange-500 text-orange-600 dark:bg-orange-900/30':'border-slate-200 dark:border-slate-700 text-slate-500'}`}>Único</button>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div><label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Inicio</label><input type="date" className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
-                <div><div className="flex justify-between mb-1"><label className="text-[10px] uppercase font-bold text-slate-400 block">Fin</label><div className="flex items-center gap-1"><input type="checkbox" checked={isEndDateEnabled} onChange={e => setIsEndDateEnabled(e.target.checked)} className="size-3 accent-primary" /><span className="text-[10px] text-slate-500">Definir</span></div></div><input type="date" disabled={!isEndDateEnabled} className={`w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm ${!isEndDateEnabled?'opacity-30 cursor-not-allowed':''}`} value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
-              </div>
+              {frequency === 'ONE_TIME' ? (
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Mes del pago</label>
+                  <input
+                    type="month"
+                    className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm"
+                    value={startDate.substring(0, 7)}
+                    onChange={e => setStartDate(e.target.value ? `${e.target.value}-01` : '')}
+                  />
+                  <p className="text-[9px] text-slate-400 mt-1 ml-1">Este contrato aparecerá únicamente en el mes seleccionado.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div><label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block">Inicio</label><input type="date" className="w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm" value={startDate} onChange={e => setStartDate(e.target.value)} /></div>
+                  <div><div className="flex justify-between mb-1"><label className="text-[10px] uppercase font-bold text-slate-400 block">Fin</label><div className="flex items-center gap-1"><input type="checkbox" checked={isEndDateEnabled} onChange={e => setIsEndDateEnabled(e.target.checked)} className="size-3 accent-primary" /><span className="text-[10px] text-slate-500">Definir</span></div></div><input type="date" disabled={!isEndDateEnabled} className={`w-full bg-slate-100 dark:bg-slate-900 p-3 rounded-xl outline-none font-bold text-sm ${!isEndDateEnabled?'opacity-30 cursor-not-allowed':''}`} value={endDate} onChange={e => setEndDate(e.target.value)} /></div>
+                </div>
+              )}
               <button onClick={() => setRequiresInvoice(r => !r)} className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${requiresInvoice ? 'border-violet-400 bg-violet-50 dark:bg-violet-900/20' : 'border-slate-200 dark:border-slate-700'}`}>
                 <div className="flex items-center gap-3 text-left">
                   <span className={`material-symbols-outlined text-xl ${requiresInvoice ? 'text-violet-500' : 'text-slate-400'}`}>description</span>
