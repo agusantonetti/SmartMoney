@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ViewState, Transaction, FinancialMetrics, FinancialProfile, QuickAction } from './types';
 import Dashboard from './components/Dashboard';
 import TransactionInput from './components/TransactionInput';
@@ -74,6 +74,14 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  // Guard: solo permitir escrituras a Firestore DESPUÉS de que el snapshot inicial
+  // haya cargado los datos del usuario. Sin esto, cualquier auto-save (ej. useEffect
+  // en componentes que llaman onUpdateProfile al montarse) escribiría con el estado
+  // inicial vacío sobre los datos buenos en la nube. Es lo que causó la pérdida del
+  // 2026-05-15: PatrimonioTracker disparaba onUpdateProfile en montaje y, antes de
+  // que llegara el snapshot, sobrescribía profile + transactions con valores vacíos.
+  const dataLoadedRef = useRef(false);
+
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.LANDING);
 
   // DATA STATE
@@ -142,24 +150,29 @@ const App: React.FC = () => {
       const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists()) {
               const data = docSnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
-              if (data.transactions) setTransactions(data.transactions);
+              if (Array.isArray(data.transactions)) setTransactions(data.transactions);
               if (data.profile) {
                   setFinancialProfile({ ...DEFAULT_PROFILE, ...data.profile });
               }
+              // Solo después de aplicar los datos del snapshot habilitamos escrituras.
+              dataLoadedRef.current = true;
           } else {
               // Crear perfil inicial si no existe
-              const initialProfile = { 
-                  ...DEFAULT_PROFILE, 
-                  name: currentUser.email?.split('@')[0] || 'Viajero' 
+              const initialProfile = {
+                  ...DEFAULT_PROFILE,
+                  name: currentUser.email?.split('@')[0] || 'Viajero'
               };
               setDoc(userDocRef, {
                   profile: initialProfile,
                   transactions: []
+              }).then(() => {
+                  // Habilitamos escrituras solo si la creación inicial fue exitosa.
+                  dataLoadedRef.current = true;
               }).catch(err => {
                   console.error("Error creando perfil inicial:", err);
                   triggerToast(`Fallo al iniciar base de datos: ${getFriendlyErrorMessage(err)}`, 'error');
               });
-              
+
               setFinancialProfile(initialProfile);
           }
       }, (error) => {
@@ -168,47 +181,88 @@ const App: React.FC = () => {
           triggerToast(`Sincronización pausada: ${msg}`, 'error');
       });
 
-      return () => unsubscribeSnapshot();
+      return () => {
+          dataLoadedRef.current = false;
+          unsubscribeSnapshot();
+      };
   }, [currentUser]);
 
   // --- DATA HELPERS ---
-  
-  const saveToFirestore = async (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
+
+  // Guard común: bloquear escrituras antes de que cargue el snapshot inicial.
+  // Sin este chequeo, un componente que dispara onUpdateProfile en su primer
+  // render escribiría con el estado React inicial (vacío) sobre los datos buenos.
+  const ensureCanWrite = (): boolean => {
       if (!currentUser) {
           triggerToast("Debes iniciar sesión para guardar cambios", 'error');
-          return;
+          return false;
       }
-      
-      // Actualización optimista local
+      if (!dataLoadedRef.current) {
+          console.warn("Escritura bloqueada: los datos todavía no cargaron desde Firestore.");
+          return false;
+      }
+      return true;
+  };
+
+  // Escribe SOLO el campo profile, dejando transactions intacto en Firestore.
+  const saveProfileOnly = async (newProfile: FinancialProfile) => {
+      if (!ensureCanWrite()) return;
+      setFinancialProfile(newProfile);
+      try {
+          const userDocRef = doc(db, 'users', currentUser!.uid);
+          await setDoc(userDocRef, {
+              profile: sanitizeForFirestore(newProfile)
+          }, { merge: true });
+      } catch (e: any) {
+          console.error("Error guardando perfil:", e);
+          triggerToast(`No se pudo guardar: ${getFriendlyErrorMessage(e)}`, 'error');
+      }
+  };
+
+  // Escribe SOLO el campo transactions, dejando profile intacto en Firestore.
+  const saveTransactionsOnly = async (newTransactions: Transaction[]) => {
+      if (!ensureCanWrite()) return;
+      setTransactions(newTransactions);
+      try {
+          const userDocRef = doc(db, 'users', currentUser!.uid);
+          await setDoc(userDocRef, {
+              transactions: sanitizeForFirestore(newTransactions)
+          }, { merge: true });
+      } catch (e: any) {
+          console.error("Error guardando transacciones:", e);
+          triggerToast(`No se pudo guardar: ${getFriendlyErrorMessage(e)}`, 'error');
+      }
+  };
+
+  // Escribe ambos campos simultáneamente. Solo usar cuando realmente se modifican
+  // los dos a la vez (importar datos, transacciones que también ajustan el perfil).
+  const saveBoth = async (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
+      if (!ensureCanWrite()) return;
       setFinancialProfile(newProfile);
       setTransactions(newTransactions);
-
       try {
-          const userDocRef = doc(db, 'users', currentUser.uid);
-
+          const userDocRef = doc(db, 'users', currentUser!.uid);
           await setDoc(userDocRef, {
               profile: sanitizeForFirestore(newProfile),
               transactions: sanitizeForFirestore(newTransactions)
           }, { merge: true });
       } catch (e: any) {
           console.error("Error guardando en nube:", e);
-          const friendlyMsg = getFriendlyErrorMessage(e);
-          triggerToast(`No se pudo guardar: ${friendlyMsg}`, 'error');
-          // Nota: En un sistema más complejo, aquí revertiríamos el estado local (rollback).
+          triggerToast(`No se pudo guardar: ${getFriendlyErrorMessage(e)}`, 'error');
       }
   };
 
   const handleAddTransaction = (txOrTxs: Transaction | Transaction[], shouldNavigate = true) => {
     const incoming = Array.isArray(txOrTxs) ? txOrTxs : [txOrTxs];
     const newTransactions = [...incoming, ...transactions];
-    saveToFirestore(financialProfile, newTransactions);
-    
-    const message = incoming.length > 1 
-        ? `${incoming.length} movimientos guardados` 
+    saveTransactionsOnly(newTransactions);
+
+    const message = incoming.length > 1
+        ? `${incoming.length} movimientos guardados`
         : "Transacción guardada";
-    
+
     triggerToast(message, 'success');
-    
+
     // Regresar al Dashboard o Eventos solo si shouldNavigate es true
     if (shouldNavigate) {
         if (tempEventContext) {
@@ -221,21 +275,21 @@ const App: React.FC = () => {
   };
 
   const handleUpdateProfile = (newProfile: FinancialProfile) => {
-    saveToFirestore(newProfile, transactions);
+    saveProfileOnly(newProfile);
   };
-  
+
   const handleUpdateTransactions = (newTransactions: Transaction[]) => {
-    saveToFirestore(financialProfile, newTransactions);
+    saveTransactionsOnly(newTransactions);
   };
 
   // Función combinada para actualizar ambos al mismo tiempo (usada en SubscriptionManager)
   const handleGlobalUpdate = (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
-      saveToFirestore(newProfile, newTransactions);
+      saveBoth(newProfile, newTransactions);
   };
 
   const handleImportData = (data: { profile: FinancialProfile, transactions: Transaction[] }) => {
     if (data.profile && data.transactions) {
-       saveToFirestore(data.profile, data.transactions);
+       saveBoth(data.profile, data.transactions);
        triggerToast("Datos restaurados y sincronizados", 'success');
        setCurrentView(ViewState.DASHBOARD);
     } else {
