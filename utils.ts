@@ -368,9 +368,18 @@ export const getMonthlySourceIncome = (
   } else if (mode === 'PER_DELIVERY') {
     const pricePerDelivery = src.amount || 0;
     const monthPayment = (src.payments || []).find(p => p.month === monthKey);
-    const counter = src.countDeliveredInSalary
-      ? (monthPayment?.postsCompleted || 0)
-      : (monthPayment?.postsPaid || 0);
+    const postsDone = monthPayment?.postsCompleted || 0;
+    const postsPaid = monthPayment?.postsPaid || 0;
+    // countDeliveredInSalary: si está activo, asumimos el TOTAL esperado del mes
+    // (objetivo) para proyectar sueldo completo aun sin haber entregado todavía.
+    // Si no hay targetPosts, fallback al máximo entre entregadas y cobradas.
+    let counter: number;
+    if (src.countDeliveredInSalary) {
+      const target = src.targetPosts || 0;
+      counter = target > 0 ? Math.max(target, postsDone) : Math.max(postsDone, postsPaid);
+    } else {
+      counter = postsPaid;
+    }
     const fromCounter = counter * pricePerDelivery;
     const monthPosts = (src.posts || []).filter(p =>
       p.date.startsWith(monthKey) && (src.countDeliveredInSalary || p.isPaid),

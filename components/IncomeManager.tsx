@@ -286,11 +286,13 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                 </span>
               </div>
               <div className="flex-1">
-                <p className="font-bold text-sm">Contar entregadas en mi sueldo</p>
+                <p className="font-bold text-sm">Contar sueldo total del mes</p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
                   {selectedSource.countDeliveredInSalary
-                    ? 'Entregadas se suman al sueldo del mes (sin esperar el cobro)'
-                    : 'Solo las entregas COBRADAS suman al sueldo del mes'}
+                    ? (selectedSource.targetPosts && selectedSource.targetPosts > 0
+                        ? `Sueldo proyectado: ${selectedSource.targetPosts} entregas × precio (sin esperar entregar/cobrar)`
+                        : 'Cuenta entregadas en el sueldo (sin esperar el cobro)')
+                    : 'Solo lo COBRADO suma al sueldo del mes'}
                 </p>
               </div>
               <div className={`w-11 h-6 rounded-full relative transition-colors ${selectedSource.countDeliveredInSalary ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
