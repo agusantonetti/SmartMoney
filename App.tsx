@@ -340,24 +340,44 @@ const App: React.FC = () => {
     const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => {
         if (src.isActive === false) return sum;
 
-        // Ventana activa por mes (string compare, sin bugs de timezone)
-        const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
-        const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
-        if (src.frequency === 'ONE_TIME') {
-            if (startMonth && startMonth !== currentMonthKey) return sum;
-        } else {
-            if (startMonth && currentMonthKey < startMonth) return sum;
-            if (endMonth && currentMonthKey > endMonth) return sum;
+        const effectiveMode: 'FIXED' | 'VARIABLE' | 'PER_DELIVERY' =
+            src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+
+        // PER_DELIVERY no respeta la ventana del frequency (las entregas pueden
+        // ocurrir cualquier mes). Para FIXED/VARIABLE sí se filtra por ventana.
+        if (effectiveMode !== 'PER_DELIVERY') {
+            const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
+            const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
+            if (src.frequency === 'ONE_TIME') {
+                if (startMonth && startMonth !== currentMonthKey) return sum;
+            } else {
+                if (startMonth && currentMonthKey < startMonth) return sum;
+                if (endMonth && currentMonthKey > endMonth) return sum;
+            }
         }
 
         let val = 0;
 
-        if (src.isCreatorSource) {
-            // Para Creadores (Variables): Sumar SOLO pagos registrados para este mes
+        if (effectiveMode === 'PER_DELIVERY') {
+            const pricePerDelivery = src.amount || 0;
+            const monthPayment = (src.payments || []).find(p => p.month === currentMonthKey);
+            // countDeliveredInSalary: si está activo, contar entregadas (anticipo);
+            // si no, solo cobradas. Default = solo cobradas (conservador).
+            const counter = src.countDeliveredInSalary
+                ? (monthPayment?.postsCompleted || 0)
+                : (monthPayment?.postsPaid || 0);
+            const fromCounter = counter * pricePerDelivery;
+            const monthPosts = (src.posts || []).filter(p =>
+                p.date.startsWith(currentMonthKey) && (src.countDeliveredInSalary || p.isPaid),
+            );
+            const fromPosts = monthPosts.reduce((a, p) => a + p.amount, 0);
+            val = Math.max(fromCounter, fromPosts);
+        } else if (effectiveMode === 'VARIABLE') {
+            // Para Variables: Sumar SOLO pagos registrados para este mes
             const monthPayments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
             val = monthPayments.reduce((acc, p) => acc + p.realAmount, 0);
         } else {
-            // Para Fijos: Usar el monto base (ONE_TIME cuenta entero en su mes)
+            // FIXED: Usar el monto base (ONE_TIME cuenta entero en su mes)
             val = src.amount;
             if (src.frequency === 'BIWEEKLY') val = val * 2;
         }

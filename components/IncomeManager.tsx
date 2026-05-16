@@ -99,14 +99,26 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   };
 
   const getMonthlyProjection = (src: IncomeSource) => {
-    if (!isContractActive(src)) return 0;
     const mode = getEffectiveMode(src);
+    // PER_DELIVERY: las entregas pueden ocurrir cualquier mes, no depende de isContractActive
+    if (mode !== 'PER_DELIVERY' && !isContractActive(src)) return 0;
     if (mode === 'VARIABLE') return getCurrentMonthRealAmount(src);
     if (mode === 'PER_DELIVERY') {
       const now = new Date();
       const pfx = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-      const monthPosts = (src.posts || []).filter(p => p.date.startsWith(pfx));
-      const total = monthPosts.reduce((a,p) => a + p.amount, 0);
+      const pricePerDelivery = src.amount || 0;
+      const monthPayment = (src.payments || []).find(p => p.month === pfx);
+      // Si countDeliveredInSalary: usar entregadas. Si no: solo cobradas.
+      const counter = src.countDeliveredInSalary
+        ? (monthPayment?.postsCompleted || 0)
+        : (monthPayment?.postsPaid || 0);
+      const fromCounter = counter * pricePerDelivery;
+      // Tracker individual legacy: posts con fecha del mes (filtrar isPaid si no contamos entregadas)
+      const monthPosts = (src.posts || []).filter(p =>
+        p.date.startsWith(pfx) && (src.countDeliveredInSalary || p.isPaid),
+      );
+      const fromPosts = monthPosts.reduce((a,p) => a + p.amount, 0);
+      const total = Math.max(fromCounter, fromPosts);
       return src.currency === 'USD' ? total * dollarRate : total;
     }
     let val = src.amount;
@@ -276,6 +288,40 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
               {mode === 'FIXED' && selectedSource.amount > 0 && <div className="col-span-2 pt-3 border-t border-white/10"><p className="text-xs text-slate-400 font-bold uppercase mb-1">Base Mensual</p><p className={`text-lg font-bold ${privacyMode?'blur-sm':''}`}>{isUSD ? formatUSD(selectedSource.amount) : formatMoney(selectedSource.amount)}{selectedSource.frequency === 'BIWEEKLY' && ' x quincena'}</p></div>}
             </div>
           </div>
+
+          {mode === 'PER_DELIVERY' && (
+            <button
+              onClick={() => {
+                const updated = sources.map(s => s.id === selectedSource.id ? { ...s, countDeliveredInSalary: !s.countDeliveredInSalary } : s);
+                setSources(updated);
+                onUpdateProfile({ ...profile, incomeSources: updated });
+              }}
+              className={`w-full flex items-center gap-3 p-4 rounded-2xl border transition-colors text-left ${
+                selectedSource.countDeliveredInSalary
+                  ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-700'
+                  : 'bg-surface-light dark:bg-surface-dark border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${
+                selectedSource.countDeliveredInSalary ? 'bg-indigo-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+              }`}>
+                <span className="material-symbols-outlined text-base">
+                  {selectedSource.countDeliveredInSalary ? 'check' : 'payments'}
+                </span>
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-sm">Contar entregadas en mi sueldo</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">
+                  {selectedSource.countDeliveredInSalary
+                    ? 'Entregadas se suman al sueldo del mes (sin esperar el cobro)'
+                    : 'Solo las entregas COBRADAS suman al sueldo del mes'}
+                </p>
+              </div>
+              <div className={`w-11 h-6 rounded-full relative transition-colors ${selectedSource.countDeliveredInSalary ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                <div className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${selectedSource.countDeliveredInSalary ? 'translate-x-5' : 'translate-x-0.5'}`}></div>
+              </div>
+            </button>
+          )}
 
           <div className="flex items-center justify-center gap-6 bg-surface-light dark:bg-surface-dark p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
             <button onClick={() => setViewYear(viewYear-1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_left</span></button>

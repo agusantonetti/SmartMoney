@@ -101,6 +101,9 @@ export interface IncomeSource {
   targetPosts?: number; // Nuevo: Objetivo de posts mensuales
   posts?: PostEntry[]; // Tracking individual de posts
   requiresInvoice?: boolean; // Si hay que enviar factura para cobrar
+  // Solo PER_DELIVERY: si está activo, las entregadas (no solo las cobradas) cuentan
+  // en la proyección del sueldo mensual. Útil para tener una referencia anticipada.
+  countDeliveredInSalary?: boolean;
 }
 
 export interface SubscriptionPayment {

@@ -331,25 +331,36 @@ export const getNextMonthKey = (monthKey: string): string => {
 export const getSalaryForMonth = (profile: FinancialProfile, monthKey: string, dollarRate: number): number => {
   return (profile.incomeSources || []).reduce((sum, src) => {
     if (src.isActive === false) return sum;
+    const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
 
-    // Check if contract is active in this month (string comparison, no timezone bugs)
-    const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
-    const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
-    if (src.frequency === 'ONE_TIME') {
-      if (startMonth && startMonth !== monthKey) return sum;
-    } else {
-      if (startMonth && monthKey < startMonth) return sum;
-      if (endMonth && monthKey > endMonth) return sum;
+    // PER_DELIVERY: las entregas pueden ocurrir cualquier mes, no se filtra por ventana
+    if (mode !== 'PER_DELIVERY') {
+      const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
+      const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
+      if (src.frequency === 'ONE_TIME') {
+        if (startMonth && startMonth !== monthKey) return sum;
+      } else {
+        if (startMonth && monthKey < startMonth) return sum;
+        if (endMonth && monthKey > endMonth) return sum;
+      }
     }
 
-    const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
     let val = 0;
     if (mode === 'VARIABLE') {
       const payments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
       val = payments.reduce((acc, p) => acc + p.realAmount, 0);
     } else if (mode === 'PER_DELIVERY') {
-      const posts = (src.posts || []).filter(p => p.date.startsWith(monthKey));
-      val = posts.reduce((acc, p) => acc + p.amount, 0);
+      const pricePerDelivery = src.amount || 0;
+      const monthPayment = (src.payments || []).find(p => p.month === monthKey);
+      const counter = src.countDeliveredInSalary
+        ? (monthPayment?.postsCompleted || 0)
+        : (monthPayment?.postsPaid || 0);
+      const fromCounter = counter * pricePerDelivery;
+      const monthPosts = (src.posts || []).filter(p =>
+        p.date.startsWith(monthKey) && (src.countDeliveredInSalary || p.isPaid),
+      );
+      const fromPosts = monthPosts.reduce((a, p) => a + p.amount, 0);
+      val = Math.max(fromCounter, fromPosts);
     } else {
       val = src.amount;
       if (src.frequency === 'BIWEEKLY') val *= 2;
