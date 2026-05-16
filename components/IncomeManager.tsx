@@ -108,8 +108,9 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
 
   const sortedSources = useMemo(() => [...sources].sort((a, b) => {
     if (sortOrder === 'AMOUNT') {
-      const vA = isVariableMode(a) ? getCurrentMonthRealAmount(a) : (a.currency === 'USD' ? a.amount * dollarRate : a.amount);
-      const vB = isVariableMode(b) ? getCurrentMonthRealAmount(b) : (b.currency === 'USD' ? b.amount * dollarRate : b.amount);
+      // Usar la misma proyección mensual que muestra la card para que el orden sea coherente.
+      const vA = getMonthlyProjection(a);
+      const vB = getMonthlyProjection(b);
       return vB - vA;
     }
     return b.id.localeCompare(a.id);
