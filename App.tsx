@@ -34,9 +34,10 @@ import YearReview from './components/YearReview';
 import PurchaseAnalyzer from './components/PurchaseAnalyzer';
 import InvoicePanel from './components/InvoicePanel';
 import InflationAdjuster from './components/InflationAdjuster';
+import HistoricalEstimates from './components/HistoricalEstimates';
 
 // UTILS
-import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase } from './utils';
+import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase, getEstimatedTotalForMonth, getEstimatedMonths } from './utils';
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -388,8 +389,16 @@ const App: React.FC = () => {
       .filter(t => t.type === 'expense' && !isOneTimePurchase(t))
       .reduce((acc, t) => acc + safeNum(t.amount), 0);
 
-    const uniqueMonths = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : ''))).size || 1;
-    const avgMonthlyExpense = (recurringExpense / Math.max(1, uniqueMonths)) + fixedExpenses;
+    // Sumar estimaciones históricas de meses sin transacciones reales para que los promedios
+    // no arranquen desde cero cuando el usuario perdió datos. Se cuentan SOLO los meses
+    // estimados que no tengan transacciones reales (para evitar doble conteo).
+    const monthsWithTxs = new Set(transactions.map(t => (t.date ? t.date.substring(0, 7) : '')).filter(Boolean));
+    const estimatedMonths = getEstimatedMonths(financialProfile).filter(m => !monthsWithTxs.has(m));
+    const estimatedTotal = estimatedMonths.reduce((acc, m) => acc + getEstimatedTotalForMonth(financialProfile, m), 0);
+
+    const uniqueMonths = monthsWithTxs.size || 1;
+    const totalMonthsForAvg = monthsWithTxs.size + estimatedMonths.length;
+    const avgMonthlyExpense = ((recurringExpense + estimatedTotal) / Math.max(1, totalMonthsForAvg)) + fixedExpenses;
     
     // Liquid assets: Patrimonio Manual - Apartados
     const liquidAssets = manualBalance - totalReserved;
@@ -474,6 +483,7 @@ const App: React.FC = () => {
             onOpenPurchaseAnalyzer={() => setCurrentView(ViewState.PURCHASE_ANALYZER)}
             onOpenInvoicePanel={() => setCurrentView(ViewState.INVOICE_PANEL)}
             onOpenInflationAdjuster={() => setCurrentView(ViewState.INFLATION_ADJUSTER)}
+            onOpenHistoricalEstimates={() => setCurrentView(ViewState.HISTORICAL_ESTIMATES)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -585,6 +595,15 @@ const App: React.FC = () => {
       case ViewState.INFLATION_ADJUSTER:
         return (
           <InflationAdjuster
+            profile={financialProfile}
+            onUpdateProfile={handleUpdateProfile}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+            privacyMode={privacyMode}
+          />
+        );
+      case ViewState.HISTORICAL_ESTIMATES:
+        return (
+          <HistoricalEstimates
             profile={financialProfile}
             onUpdateProfile={handleUpdateProfile}
             onBack={() => setCurrentView(ViewState.DASHBOARD)}

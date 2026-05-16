@@ -42,6 +42,36 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   const [newPostAmount, setNewPostAmount] = useState('');
   const [newPostDate, setNewPostDate] = useState(new Date().toISOString().split('T')[0]);
 
+  // Wizard de migración: para contratos restaurados sin incomeMode explícito (legacy),
+  // ofrecemos un panel para que el usuario los reclasifique a FIXED/VARIABLE/PER_DELIVERY
+  // y opcionalmente marque "requiere factura" sin tener que abrir y editar uno por uno.
+  const legacyContracts = useMemo(
+    () => sources.filter(s => !s.incomeMode && s.isActive !== false),
+    [sources],
+  );
+  const [showMigrationWizard, setShowMigrationWizard] = useState(false);
+  const [migrationDraft, setMigrationDraft] = useState<Record<string, { mode: 'FIXED' | 'VARIABLE' | 'PER_DELIVERY'; requiresInvoice: boolean }>>({});
+
+  const openMigrationWizard = () => {
+    const draft: Record<string, { mode: 'FIXED' | 'VARIABLE' | 'PER_DELIVERY'; requiresInvoice: boolean }> = {};
+    legacyContracts.forEach(s => {
+      draft[s.id] = { mode: getEffectiveMode(s), requiresInvoice: !!s.requiresInvoice };
+    });
+    setMigrationDraft(draft);
+    setShowMigrationWizard(true);
+  };
+
+  const applyMigration = () => {
+    const updated = sources.map(s => {
+      const change = migrationDraft[s.id];
+      if (!change) return s;
+      return { ...s, incomeMode: change.mode, requiresInvoice: change.requiresInvoice, posts: s.posts || [] };
+    });
+    setSources(updated);
+    onUpdateProfile({ ...profile, incomeSources: updated });
+    setShowMigrationWizard(false);
+  };
+
   // Check if a contract is active in a given month (YYYY-MM string).
   // Using string comparison avoids timezone bugs from new Date(YYYY-MM-DD).
   const isMonthActive = (src: IncomeSource, monthKey: string) => {
@@ -422,6 +452,91 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                   );
                 })}</div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {legacyContracts.length > 0 && !showMigrationWizard && (
+          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-2xl p-4 flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-amber-600">build</span>
+            </div>
+            <div className="flex-1">
+              <p className="font-bold text-sm text-amber-900 dark:text-amber-100">{legacyContracts.length} contrato{legacyContracts.length > 1 ? 's' : ''} sin modo definido</p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-0.5 leading-relaxed">
+                Estos contratos vienen de una versión anterior. Actualizalos para habilitar tracking de entregas, facturas y posts.
+              </p>
+            </div>
+            <button
+              onClick={openMigrationWizard}
+              className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold shrink-0"
+            >
+              Actualizar
+            </button>
+          </div>
+        )}
+
+        {showMigrationWizard && legacyContracts.length > 0 && (
+          <div className="bg-surface-light dark:bg-surface-dark p-6 rounded-3xl border border-amber-300 dark:border-amber-700 shadow-xl space-y-4 animate-[fadeIn_0.2s_ease-out]">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg">Actualizar contratos antiguos</h3>
+              <button onClick={() => setShowMigrationWizard(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">Elegí el modo correcto para cada contrato y activá factura si corresponde.</p>
+            <div className="space-y-3">
+              {legacyContracts.map(src => {
+                const draft = migrationDraft[src.id] || { mode: 'FIXED' as const, requiresInvoice: false };
+                return (
+                  <div key={src.id} className="bg-slate-50 dark:bg-slate-800/40 rounded-xl p-4 border border-slate-200 dark:border-slate-700 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-sm">{src.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{src.currency || 'ARS'} · {src.frequency || 'MONTHLY'}</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['FIXED', 'VARIABLE', 'PER_DELIVERY'] as const).map(m => (
+                        <button
+                          key={m}
+                          onClick={() => setMigrationDraft({ ...migrationDraft, [src.id]: { ...draft, mode: m } })}
+                          className={`p-2 rounded-lg border-2 text-[11px] font-bold transition-all ${
+                            draft.mode === m
+                              ? m === 'FIXED' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600'
+                              : m === 'VARIABLE' ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-600'
+                              : 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600'
+                              : 'border-slate-200 dark:border-slate-700 text-slate-500'
+                          }`}
+                        >
+                          {m === 'FIXED' ? 'Monto Fijo' : m === 'VARIABLE' ? 'Variable' : 'Por Entrega'}
+                        </button>
+                      ))}
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={draft.requiresInvoice}
+                        onChange={e => setMigrationDraft({ ...migrationDraft, [src.id]: { ...draft, requiresInvoice: e.target.checked } })}
+                        className="size-4 rounded accent-primary"
+                      />
+                      <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Requiere factura para cobrar</span>
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+              <button
+                onClick={() => setShowMigrationWizard(false)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={applyMigration}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                Aplicar a {legacyContracts.length} contrato{legacyContracts.length > 1 ? 's' : ''}
+              </button>
             </div>
           </div>
         )}

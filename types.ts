@@ -33,6 +33,7 @@ export enum ViewState {
   PURCHASE_ANALYZER = 'PURCHASE_ANALYZER',
   INVOICE_PANEL = 'INVOICE_PANEL',
   INFLATION_ADJUSTER = 'INFLATION_ADJUSTER',
+  HISTORICAL_ESTIMATES = 'HISTORICAL_ESTIMATES',
 }
 
 export interface Transaction {
@@ -173,6 +174,16 @@ export interface FinancialProfile {
   goals?: FinancialGoal[];
   patrimonioHistory?: PatrimonioSnapshot[];
   inflationHistory?: { month: string; rate: number }[];
+  historicalEstimates?: HistoricalMonthEstimate[];
+}
+
+// Estimaciones manuales para meses anteriores cuyas transacciones se perdieron.
+// Alimentan promedios/runway/healthScore para que las stats no arranquen de cero.
+export interface HistoricalMonthEstimate {
+  month: string; // "YYYY-MM"
+  // Mapa categoria -> monto estimado en ARS (ya convertido si era USD)
+  byCategory: Record<string, number>;
+  note?: string;
 }
 
 export interface PatrimonioSnapshot {

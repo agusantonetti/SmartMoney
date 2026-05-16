@@ -180,6 +180,38 @@ export const sanitizeForFirestore = (data: any): any => {
 };
 
 // ============================================================
+// ESTIMACIONES HISTÓRICAS
+// ============================================================
+// Cuando un usuario perdió transacciones reales, puede cargar promedios
+// estimados por mes/categoría. Estos alimentan promedios y proyecciones
+// para que el análisis no parta de cero, sin mezclarse con datos reales.
+
+/** Total estimado de un mes específico (suma de categorías). 0 si no hay estimación. */
+export const getEstimatedTotalForMonth = (
+  profile: { historicalEstimates?: { month: string; byCategory: Record<string, number> }[] } | null | undefined,
+  monthKey: string,
+): number => {
+  const est = profile?.historicalEstimates?.find(e => e.month === monthKey);
+  if (!est) return 0;
+  return Object.values(est.byCategory).reduce((a, n) => a + safeNum(n), 0);
+};
+
+/** Lista de monthKeys que tienen estimación cargada. */
+export const getEstimatedMonths = (
+  profile: { historicalEstimates?: { month: string }[] } | null | undefined,
+): string[] => {
+  return (profile?.historicalEstimates || []).map(e => e.month);
+};
+
+/** Devuelve true si el mes tiene estimación cargada. */
+export const hasEstimateForMonth = (
+  profile: { historicalEstimates?: { month: string }[] } | null | undefined,
+  monthKey: string,
+): boolean => {
+  return !!(profile?.historicalEstimates || []).find(e => e.month === monthKey);
+};
+
+// ============================================================
 // CATEGORÍAS
 // ============================================================
 
