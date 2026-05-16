@@ -277,51 +277,6 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             </div>
           </div>
 
-          {mode === 'PER_DELIVERY' && (
-            <div className="bg-surface-light dark:bg-surface-dark rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
-              <button onClick={() => setShowPostTracker(!showPostTracker)} className="w-full flex items-center justify-between p-5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white"><span className="material-symbols-outlined text-lg">task_alt</span></div>
-                  <div className="text-left"><p className="font-bold text-sm">Tracker de Entregas</p><p className="text-[10px] text-slate-400 font-bold">{paidPosts.length} cobradas • {unpaidPosts.length} pendientes</p></div>
-                </div>
-                <div className="flex items-center gap-3">
-                  {totalOwed > 0 && <span className={`text-xs font-black text-amber-500 ${privacyMode?'blur-sm':''}`}>Te deben: {isUSD ? formatUSD(totalOwed) : formatMoney(totalOwed)}</span>}
-                  <span className={`material-symbols-outlined text-slate-400 transition-transform ${showPostTracker?'rotate-180':''}`}>expand_more</span>
-                </div>
-              </button>
-              {showPostTracker && (
-                <div className="border-t border-slate-200 dark:border-slate-700 p-5 space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-emerald-50 dark:bg-emerald-900/10 rounded-xl p-3 text-center"><p className="text-[9px] text-emerald-600 font-bold uppercase">Cobrado</p><p className={`text-lg font-black text-emerald-600 ${privacyMode?'blur-sm':''}`}>{isUSD?formatUSD(totalPaidPosts):formatMoney(totalPaidPosts)}</p></div>
-                    <div className="bg-amber-50 dark:bg-amber-900/10 rounded-xl p-3 text-center"><p className="text-[9px] text-amber-600 font-bold uppercase">Pendiente</p><p className={`text-lg font-black text-amber-600 ${privacyMode?'blur-sm':''}`}>{isUSD?formatUSD(totalOwed):formatMoney(totalOwed)}</p></div>
-                    <div className="bg-blue-50 dark:bg-blue-900/10 rounded-xl p-3 text-center"><p className="text-[9px] text-blue-600 font-bold uppercase">Total</p><p className="text-lg font-black text-blue-600">{posts.length}</p></div>
-                  </div>
-                  {!isAddingPost ? (
-                    <button onClick={() => setIsAddingPost(true)} className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-primary text-slate-400 hover:text-primary transition-colors"><span className="material-symbols-outlined text-sm">add</span><span className="text-xs font-bold">Agregar Entrega</span></button>
-                  ) : (
-                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3 border border-slate-200 dark:border-slate-700">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="col-span-2"><label className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Descripción</label><input type="text" className="w-full bg-white dark:bg-slate-900 p-2.5 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700 focus:border-primary" placeholder="Ej: Artículo sobre IA" value={newPostDesc} onChange={e => setNewPostDesc(e.target.value)} /></div>
-                        <div><label className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Monto ({isUSD?'USD':'ARS'})</label><input type="number" className="w-full bg-white dark:bg-slate-900 p-2.5 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700" placeholder="0" value={newPostAmount} onChange={e => setNewPostAmount(e.target.value)} /></div>
-                        <div><label className="text-[9px] text-slate-400 font-bold uppercase block mb-1">Fecha</label><input type="date" className="w-full bg-white dark:bg-slate-900 p-2.5 rounded-lg outline-none text-sm font-bold border border-slate-200 dark:border-slate-700" value={newPostDate} onChange={e => setNewPostDate(e.target.value)} /></div>
-                      </div>
-                      <div className="flex gap-2"><button onClick={() => handleAddPost(selectedSource.id)} className="flex-1 bg-primary text-white py-2.5 rounded-xl text-xs font-bold">Guardar</button><button onClick={() => { setIsAddingPost(false); setNewPostDesc(''); setNewPostAmount(''); }} className="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-200 dark:bg-slate-700">Cancelar</button></div>
-                    </div>
-                  )}
-                  {posts.length > 0 && <div className="space-y-2"><p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Historial</p>
-                    {[...posts].sort((a,b) => b.date.localeCompare(a.date)).map(post => (
-                      <div key={post.id} className={`flex items-center gap-3 p-3 rounded-xl ${post.isPaid ? 'bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}`}>
-                        <button onClick={() => handleTogglePostPaid(selectedSource.id, post.id)} className={`size-8 rounded-full flex items-center justify-center shrink-0 ${post.isPaid ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'bg-slate-200 dark:bg-slate-700 text-slate-400'}`}><span className="material-symbols-outlined text-sm">{post.isPaid?'check':'schedule'}</span></button>
-                        <div className="flex-1 min-w-0"><p className={`text-sm font-bold truncate ${post.isPaid?'line-through text-slate-400':''}`}>{post.description||'Entrega'}</p><p className="text-[10px] text-slate-400">{new Date(post.date+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'})}{post.isPaid&&post.paidDate&&<span className="text-emerald-500 ml-2">Cobrado {new Date(post.paidDate+'T00:00:00').toLocaleDateString('es-AR',{day:'numeric',month:'short'})}</span>}</p></div>
-                        <div className="flex items-center gap-2 shrink-0"><p className={`text-sm font-black ${privacyMode?'blur-sm':''} ${post.isPaid?'text-emerald-500':''}`}>{isUSD?formatUSD(post.amount):formatMoney(post.amount)}</p><button onClick={() => {if(confirm('¿Eliminar?'))handleDeletePost(selectedSource.id,post.id);}} className="size-6 rounded-full flex items-center justify-center text-slate-300 hover:text-red-500"><span className="material-symbols-outlined text-[14px]">close</span></button></div>
-                      </div>
-                    ))}
-                  </div>}
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="flex items-center justify-center gap-6 bg-surface-light dark:bg-surface-dark p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
             <button onClick={() => setViewYear(viewYear-1)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"><span className="material-symbols-outlined">chevron_left</span></button>
             <span className="text-xl font-black">{viewYear}</span>
