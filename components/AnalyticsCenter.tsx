@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories, getSalaryForMonth, getDollarRate, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
+import { formatMoney, getCurrentMonthKey, formatMonthKey, getPrevMonthKey, getNextMonthKey, tryReclassify, getAllCategories, getSalaryForMonth, getDollarRate, isOneTimePurchase, isSourceActiveInMonth, getMonthlyExpenseTotal } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -63,7 +63,7 @@ const AnalyticsCenter: React.FC<Props> = ({ transactions, profile, onBack, onUpd
     // Previous period income (salary-based) - previous month recurring expense for fair comparison
     const prevMonth = getPrevMonthKey(selectedMonth);
     const prevIncome = getSalaryForMonth(profile, prevMonth, dollarRate);
-    const prevExpense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonth) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
+    const prevExpense = getMonthlyExpenseTotal(transactions, profile, prevMonth, false).total;
 
     // Income from salary sources
     const totalIncome = getSalaryForMonth(profile, selectedMonth, dollarRate);

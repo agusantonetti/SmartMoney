@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { FinancialProfile, FinancialMetrics, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome, getSourceMode } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome, getSourceMode, getMonthlyExpenseTotal } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -27,11 +27,12 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
     const prevIncome = getSalaryForMonth(profile, prevMonthKey, dollarRate);
 
     // Expenses - usar gasto recurrente (excluye compras únicas) para que la radiografía
-    // financiera refleje el comportamiento sostenido, no compras puntuales.
+    // financiera refleje el comportamiento sostenido, no compras puntuales. Si el mes
+    // no tiene transacciones reales pero sí estimación, la usamos.
     const currentExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(pfx) && !isOneTimePurchase(t));
-    const totalExpense = currentExpenses.reduce((s, t) => s + t.amount, 0);
+    const totalExpense = getMonthlyExpenseTotal(transactions, profile, pfx, false).total;
     const prevExpenses = transactions.filter(t => t.type === 'expense' && t.date.startsWith(prevMonthKey) && !isOneTimePurchase(t));
-    const prevExpenseTotal = prevExpenses.reduce((s, t) => s + t.amount, 0);
+    const prevExpenseTotal = getMonthlyExpenseTotal(transactions, profile, prevMonthKey, false).total;
 
     // Savings rate
     const savingsRate = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;

@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome, getSourceMode } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome, getSourceMode, getMonthlyExpenseTotal, hasEstimateForMonth } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -31,21 +31,28 @@ const YearReview: React.FC<Props> = ({ profile, transactions, balance, onBack, p
       const label = MONTH_NAMES[m];
       const income = getSalaryForMonth(profile, key, dollarRate);
       const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(key));
-      const expense = monthTxs.reduce((a, t) => a + t.amount, 0);
+      const expBreak = getMonthlyExpenseTotal(transactions, profile, key, true);
+      const expense = expBreak.total;
       const net = income - expense;
 
       totalIncome += income;
       totalExpense += expense;
       totalTxCount += monthTxs.length;
 
-      monthTxs.forEach(t => {
-        if (isOneTimePurchase(t)) {
-          totalOneTimeExpense += t.amount;
-        } else {
-          totalRecurringExpense += t.amount;
-          catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
-        }
-      });
+      if (expBreak.source === 'real') {
+        monthTxs.forEach(t => {
+          if (isOneTimePurchase(t)) {
+            totalOneTimeExpense += t.amount;
+          } else {
+            totalRecurringExpense += t.amount;
+            catTotals[t.category] = (catTotals[t.category] || 0) + t.amount;
+          }
+        });
+      } else if (expBreak.source === 'estimated') {
+        // Estimaciones cuentan como recurrentes (línea base) y no se desglosan
+        // en categorías porque el helper de Historia Recuperada usa solo "Total".
+        totalRecurringExpense += expense;
+      }
 
       if (net > bestMonth.net && (income > 0 || expense > 0)) bestMonth = { key, net, label: `${label} ${year}` };
       if (net < worstMonth.net && (income > 0 || expense > 0)) worstMonth = { key, net, label: `${label} ${year}` };

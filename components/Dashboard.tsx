@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { FinancialMetrics, Transaction, FinancialProfile, Subscription } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth, getMonthlyExpenseTotal } from '../utils';
 
 interface Props {
   metrics: FinancialMetrics;
@@ -160,7 +160,11 @@ const Dashboard: React.FC<Props> = ({
       const totalNetMonthly = totalCurrentIncome - totalCurrentExpense;
 
       const totalPrevIncome = prevContractIncome + prevIncomeVar;
-      const totalPrevExpense = prevExpenseVar; // NO incluye one-time: comparación limpia
+      // Si el mes anterior no tiene transacciones reales, usar la estimación cargada
+      // en Historia Recuperada como línea base para la comparación.
+      const totalPrevExpense = prevExpenseVar > 0
+        ? prevExpenseVar
+        : getMonthlyExpenseTotal(transactions, profile, prevMonthKey, false).total;
 
       // 3. Balance Historico (Al cierre del mes anterior)
       const prevBalance = (profile.initialBalance || 0) + pastIncomeTotal - pastExpenseTotal;
@@ -388,11 +392,10 @@ const Dashboard: React.FC<Props> = ({
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '');
-      const monthTxs = transactions.filter(t => t.date.startsWith(key));
       months.push({
         key,
         label,
-        expense: monthTxs.filter(t => t.type === 'expense' && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0),
+        expense: getMonthlyExpenseTotal(transactions, profile, key, false).total,
         income: getSalaryForMonth(profile, key, currentDollarRate),
       });
     }

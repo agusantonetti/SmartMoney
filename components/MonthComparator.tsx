@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, FinancialProfile } from '../types';
-import { formatMoney, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase, getSalaryForMonth as getSalaryForMonthUtil } from '../utils';
+import { formatMoney, getDollarRate, getCurrentMonthKey, getPrevMonthKey, formatMonthKey, getCategoryIcon, isOneTimePurchase, getSalaryForMonth as getSalaryForMonthUtil, getMonthlyExpenseTotal, hasEstimateForMonth } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -26,14 +26,19 @@ const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => 
     const incomeB = getSalaryForMonth(monthB);
 
     // GASTOS: excluir compras únicas de la comparación histórica para que no distorsionen
-    // el análisis. Las tracking por separado para transparencia.
+    // el análisis. Las tracking por separado para transparencia. Si un mes no tiene
+    // transacciones reales pero tiene estimación cargada, usar la estimación.
     const recurringA = txA.filter(t => t.type === 'expense' && !isOneTimePurchase(t));
     const recurringB = txB.filter(t => t.type === 'expense' && !isOneTimePurchase(t));
     const oneTimeA = txA.filter(t => t.type === 'expense' && isOneTimePurchase(t));
     const oneTimeB = txB.filter(t => t.type === 'expense' && isOneTimePurchase(t));
 
-    const expenseA = recurringA.reduce((a, t) => a + t.amount, 0);
-    const expenseB = recurringB.reduce((a, t) => a + t.amount, 0);
+    const expA = getMonthlyExpenseTotal(transactions, profile, monthA, false);
+    const expB = getMonthlyExpenseTotal(transactions, profile, monthB, false);
+    const expenseA = expA.total;
+    const expenseB = expB.total;
+    const isEstimatedA = expA.source === 'estimated';
+    const isEstimatedB = expB.source === 'estimated';
     const oneTimeTotalA = oneTimeA.reduce((a, t) => a + t.amount, 0);
     const oneTimeTotalB = oneTimeB.reduce((a, t) => a + t.amount, 0);
 
@@ -59,6 +64,7 @@ const MonthComparator: React.FC<Props> = ({ transactions, profile, onBack }) => 
 
     return {
       incomeA, incomeB, expenseA, expenseB,
+      isEstimatedA, isEstimatedB,
       oneTimeTotalA, oneTimeTotalB,
       hasOneTime: oneTimeTotalA > 0 || oneTimeTotalB > 0,
       balanceA: incomeA - expenseA,

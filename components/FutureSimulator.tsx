@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile, IncomeSource } from '../types';
-import { formatMoney, formatUSD, getDollarRate, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome, getMonthlyExpenseTotal } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -30,10 +30,16 @@ const FutureSimulator: React.FC<Props> = ({ transactions, profile, currentBalanc
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const exps = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk) && !isOneTimePurchase(t));
-      const total = exps.reduce((s, t) => s + t.amount, 0);
+      const breakdown = getMonthlyExpenseTotal(transactions, profile, mk, false);
+      const total = breakdown.total;
       if (total > 0) {
         const cats: Record<string, number> = {};
-        exps.forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
+        if (breakdown.source === 'real') {
+          exps.forEach(t => { cats[t.category] = (cats[t.category] || 0) + t.amount; });
+        } else {
+          // Estimación sin desglose: agrupar bajo "Estimado"
+          cats['Estimado'] = total;
+        }
         monthDetails.push({ label: d.toLocaleDateString('es-AR', { month: 'long' }), expense: total, categories: cats });
       }
     }

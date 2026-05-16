@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, IncomeSource, IncomePayment, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getCurrentMonthKey, formatMonthKey, getSalaryForMonth, isOneTimePurchase, getMonthlySourceIncome } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getCurrentMonthKey, formatMonthKey, getSalaryForMonth, isOneTimePurchase, getMonthlySourceIncome, getMonthlyExpenseTotal } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -54,15 +54,19 @@ const MonthlyClose: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
 
   const expenseData = useMemo(() => {
     const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(selectedMonth));
-    const total = monthTxs.reduce((a, t) => a + t.amount, 0);
+    const realTotal = monthTxs.reduce((a, t) => a + t.amount, 0);
     const recurring = monthTxs.filter(t => !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
-    const oneTime = total - recurring;
+    const oneTime = realTotal - recurring;
     const byCat: Record<string, number> = {};
     monthTxs.forEach(t => { byCat[t.category] = (byCat[t.category] || 0) + t.amount; });
     const categories = Object.entries(byCat).sort(([, a], [, b]) => b - a);
     const uncategorized = monthTxs.filter(t => t.category === 'Otros').length;
-    return { total, recurring, oneTime, count: monthTxs.length, categories, uncategorized };
-  }, [transactions, selectedMonth]);
+    // Si el mes no tiene transacciones reales pero sí estimación cargada, usarla.
+    const breakdown = getMonthlyExpenseTotal(transactions, profile, selectedMonth, true);
+    const isEstimated = breakdown.source === 'estimated';
+    const total = isEstimated ? breakdown.total : realTotal;
+    return { total, recurring: isEstimated ? breakdown.total : recurring, oneTime, count: monthTxs.length, categories, uncategorized, isEstimated };
+  }, [transactions, selectedMonth, profile.historicalEstimates]);
 
   const handleTogglePaid = (sourceId: string) => {
     const srcIdx = (profile.incomeSources || []).findIndex(s => s.id === sourceId);

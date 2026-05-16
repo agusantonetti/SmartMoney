@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { FinancialProfile, FinancialMetrics, Transaction, PatrimonioSnapshot } from '../types';
 import {
   formatMoney, formatMoneyUSD, getDollarRate, getSalaryForMonth, getCurrentMonthKey,
-  isOneTimePurchase, getInflationMultiplier, getRecentAvgInflation,
+  isOneTimePurchase, getInflationMultiplier, getRecentAvgInflation, getMonthlyExpenseTotal,
 } from '../utils';
 
 interface Props {
@@ -68,7 +68,7 @@ const PatrimonioTracker: React.FC<Props> = ({ profile, metrics, transactions, on
       const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = d.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }).replace('.', '');
       const income = getSalaryForMonth(profile, mk, dollarRate);
-      const expense = transactions.filter(t => t.type === 'expense' && t.date.startsWith(mk) && !isOneTimePurchase(t)).reduce((a, t) => a + t.amount, 0);
+      const expense = getMonthlyExpenseTotal(transactions, profile, mk, false).total;
       past.push({ key: mk, label, income, expense, net: income - expense, balance: 0, multiplier: 1, realBalance: 0, usdBalance: 0 });
     }
 

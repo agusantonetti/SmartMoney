@@ -211,6 +211,34 @@ export const hasEstimateForMonth = (
   return !!(profile?.historicalEstimates || []).find(e => e.month === monthKey);
 };
 
+/**
+ * Gasto total de un mes combinando transacciones reales + estimación cargada.
+ * Si el mes tiene transacciones reales, ignoramos la estimación (real gana). Si no
+ * tiene transacciones reales, usamos la estimación. Así evitamos doble conteo.
+ *
+ * `includeOneTime`: si true incluye compras únicas (vista de gasto total del mes).
+ *                   Si false las excluye (línea base / promedio histórico).
+ */
+export const getMonthlyExpenseTotal = (
+  transactions: Transaction[],
+  profile: { historicalEstimates?: { month: string; byCategory: Record<string, number> }[] } | null | undefined,
+  monthKey: string,
+  includeOneTime: boolean = true,
+): { real: number; estimated: number; total: number; source: 'real' | 'estimated' | 'empty' } => {
+  const monthTxs = transactions.filter(t => t.type === 'expense' && t.date.startsWith(monthKey));
+  const real = monthTxs
+    .filter(t => includeOneTime || !isOneTimePurchase(t))
+    .reduce((a, t) => a + safeNum(t.amount), 0);
+  if (monthTxs.length > 0) {
+    return { real, estimated: 0, total: real, source: 'real' };
+  }
+  const estimated = getEstimatedTotalForMonth(profile, monthKey);
+  if (estimated > 0) {
+    return { real: 0, estimated, total: estimated, source: 'estimated' };
+  }
+  return { real: 0, estimated: 0, total: 0, source: 'empty' };
+};
+
 // ============================================================
 // CATEGORÍAS
 // ============================================================
