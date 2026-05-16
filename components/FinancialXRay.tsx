@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
 import { FinancialProfile, FinancialMetrics, Transaction } from '../types';
-import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
+import { formatMoney, formatMoneyUSD, getDollarRate, getCurrentMonthKey, getPrevMonthKey, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome, getSourceMode } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -40,17 +40,8 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
     // Income mix
     let fixedIncome = 0, variableIncome = 0, deliveryIncome = 0;
     sources.forEach(src => {
-      const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
-      let val = 0;
-      if (mode === 'VARIABLE') {
-        val = src.payments?.filter(p => p.month.startsWith(pfx)).reduce((a, p) => a + p.realAmount, 0) || 0;
-      } else if (mode === 'PER_DELIVERY') {
-        val = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
-      } else {
-        if (!isSourceActiveInMonth(src, pfx)) val = 0;
-        else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; }
-      }
-      if (src.currency === 'USD') val *= dollarRate;
+      const mode = getSourceMode(src);
+      const val = getMonthlySourceIncome(src, pfx, dollarRate);
       if (mode === 'FIXED') fixedIncome += val;
       else if (mode === 'VARIABLE') variableIncome += val;
       else deliveryIncome += val;
@@ -60,7 +51,7 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
     // Collection rate
     let totalExpected = 0, totalCollected = 0;
     sources.forEach(src => {
-      const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+      const mode = getSourceMode(src);
       if (mode === 'FIXED') {
         let exp = src.amount; if (src.frequency === 'BIWEEKLY') exp *= 2;
         if (src.currency === 'USD') exp *= dollarRate;
@@ -68,36 +59,29 @@ const FinancialXRay: React.FC<Props> = ({ profile, metrics, transactions, onBack
         const isPaid = src.payments?.some(p => p.month.startsWith(pfx) && p.isPaid);
         if (isPaid) totalCollected += exp;
       } else if (mode === 'PER_DELIVERY') {
-        const paid = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
-        if (src.currency === 'USD') { totalCollected += paid * dollarRate; }
-        else totalCollected += paid;
+        // Para PER_DELIVERY el "cobrado" es lo ya cobrado (no entregadas, aunque
+        // countDeliveredInSalary esté activo — eso es proyección, no cobranza real).
+        const pricePerDelivery = src.amount || 0;
+        const monthPayment = (src.payments || []).find(p => p.month === pfx);
+        const counterPaid = (monthPayment?.postsPaid || 0) * pricePerDelivery;
+        const postsPaid = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(pfx)).reduce((a, p) => a + p.amount, 0);
+        const paid = Math.max(counterPaid, postsPaid);
+        totalCollected += src.currency === 'USD' ? paid * dollarRate : paid;
       }
     });
     const collectionRate = totalExpected > 0 ? (totalCollected / totalExpected) * 100 : (totalCollected > 0 ? 100 : 0);
 
     // Concentration
-    const sourceIncomes = sources.map(src => {
-      const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
-      let val = 0;
-      if (mode === 'VARIABLE') val = src.payments?.filter(p => p.month.startsWith(pfx)).reduce((a, p) => a + p.realAmount, 0) || 0;
-      else if (mode === 'PER_DELIVERY') val = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
-      else if (!isSourceActiveInMonth(src, pfx)) val = 0;
-      else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; }
-      if (src.currency === 'USD') val *= dollarRate;
-      return { name: src.name, amount: val };
-    }).sort((a, b) => b.amount - a.amount);
+    const sourceIncomes = sources.map(src => ({
+      name: src.name,
+      amount: getMonthlySourceIncome(src, pfx, dollarRate),
+    })).sort((a, b) => b.amount - a.amount);
     const topSourcePct = totalIncome > 0 && sourceIncomes[0] ? (sourceIncomes[0].amount / totalIncome) * 100 : 0;
 
-    // Currency exposure
-    const usdIncome = sources.filter(s => s.currency === 'USD').reduce((sum, src) => {
-      const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
-      let v = src.amount;
-      if (mode === 'VARIABLE') v = src.payments?.filter(p => p.month.startsWith(pfx)).reduce((a, p) => a + p.realAmount, 0) || 0;
-      else if (mode === 'PER_DELIVERY') v = (src.posts || []).filter(p => p.isPaid).reduce((a, p) => a + p.amount, 0);
-      else { if (src.frequency === 'BIWEEKLY') v *= 2; }
-      return sum + v;
-    }, 0);
-    const usdPct = totalIncome > 0 ? ((usdIncome * dollarRate) / totalIncome) * 100 : 0;
+    // Currency exposure (val ya viene en ARS desde el helper)
+    const usdIncome = sources.filter(s => s.currency === 'USD')
+      .reduce((sum, src) => sum + getMonthlySourceIncome(src, pfx, dollarRate), 0);
+    const usdPct = totalIncome > 0 ? (usdIncome / totalIncome) * 100 : 0;
 
     // Debt to income
     const totalDebt = metrics.totalDebt || 0;

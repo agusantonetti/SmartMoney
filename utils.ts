@@ -327,48 +327,71 @@ export const getNextMonthKey = (monthKey: string): string => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+/** Modo efectivo de una fuente: respeta incomeMode nuevo, cae a flag legacy isCreatorSource. */
+export const getSourceMode = (src: IncomeSource): 'FIXED' | 'VARIABLE' | 'PER_DELIVERY' => {
+  return src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+};
+
+/**
+ * Ingreso en ARS aportado por UN contrato en un mes específico.
+ * Única fuente de verdad: usar este helper desde Dashboard, IncomeManager,
+ * IncomeDashboard, App.tsx metrics, etc. para evitar bugs de cálculos duplicados.
+ *
+ * PER_DELIVERY: usa contadores mensuales (postsCompleted/postsPaid en payments[])
+ * y respeta countDeliveredInSalary. Si hay tracker individual legacy en posts[],
+ * toma el mayor entre ambos para no perder datos pero tampoco contar doble.
+ */
+export const getMonthlySourceIncome = (
+  src: IncomeSource,
+  monthKey: string,
+  dollarRate: number,
+): number => {
+  if (src.isActive === false) return 0;
+  const mode = getSourceMode(src);
+
+  // PER_DELIVERY no filtra por ventana del frequency: las entregas ocurren cualquier mes.
+  if (mode !== 'PER_DELIVERY') {
+    const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
+    const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
+    if (src.frequency === 'ONE_TIME') {
+      if (startMonth && startMonth !== monthKey) return 0;
+    } else {
+      if (startMonth && monthKey < startMonth) return 0;
+      if (endMonth && monthKey > endMonth) return 0;
+    }
+  }
+
+  let val = 0;
+  if (mode === 'VARIABLE') {
+    const payments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
+    val = payments.reduce((acc, p) => acc + p.realAmount, 0);
+  } else if (mode === 'PER_DELIVERY') {
+    const pricePerDelivery = src.amount || 0;
+    const monthPayment = (src.payments || []).find(p => p.month === monthKey);
+    const counter = src.countDeliveredInSalary
+      ? (monthPayment?.postsCompleted || 0)
+      : (monthPayment?.postsPaid || 0);
+    const fromCounter = counter * pricePerDelivery;
+    const monthPosts = (src.posts || []).filter(p =>
+      p.date.startsWith(monthKey) && (src.countDeliveredInSalary || p.isPaid),
+    );
+    const fromPosts = monthPosts.reduce((a, p) => a + p.amount, 0);
+    val = Math.max(fromCounter, fromPosts);
+  } else {
+    val = src.amount;
+    if (src.frequency === 'BIWEEKLY') val *= 2;
+    // ONE_TIME: se cuenta entero en su mes (ya filtrado arriba por startMonth)
+  }
+  if (src.currency === 'USD') val *= dollarRate;
+  return val;
+};
+
 /** Calcula el ingreso mensual de sueldos configurados para un mes dado */
 export const getSalaryForMonth = (profile: FinancialProfile, monthKey: string, dollarRate: number): number => {
-  return (profile.incomeSources || []).reduce((sum, src) => {
-    if (src.isActive === false) return sum;
-    const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
-
-    // PER_DELIVERY: las entregas pueden ocurrir cualquier mes, no se filtra por ventana
-    if (mode !== 'PER_DELIVERY') {
-      const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
-      const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
-      if (src.frequency === 'ONE_TIME') {
-        if (startMonth && startMonth !== monthKey) return sum;
-      } else {
-        if (startMonth && monthKey < startMonth) return sum;
-        if (endMonth && monthKey > endMonth) return sum;
-      }
-    }
-
-    let val = 0;
-    if (mode === 'VARIABLE') {
-      const payments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
-      val = payments.reduce((acc, p) => acc + p.realAmount, 0);
-    } else if (mode === 'PER_DELIVERY') {
-      const pricePerDelivery = src.amount || 0;
-      const monthPayment = (src.payments || []).find(p => p.month === monthKey);
-      const counter = src.countDeliveredInSalary
-        ? (monthPayment?.postsCompleted || 0)
-        : (monthPayment?.postsPaid || 0);
-      const fromCounter = counter * pricePerDelivery;
-      const monthPosts = (src.posts || []).filter(p =>
-        p.date.startsWith(monthKey) && (src.countDeliveredInSalary || p.isPaid),
-      );
-      const fromPosts = monthPosts.reduce((a, p) => a + p.amount, 0);
-      val = Math.max(fromCounter, fromPosts);
-    } else {
-      val = src.amount;
-      if (src.frequency === 'BIWEEKLY') val *= 2;
-      // ONE_TIME: se cuenta entero en su mes (ya filtrado arriba por startMonth)
-    }
-    if (src.currency === 'USD') val *= dollarRate;
-    return sum + val;
-  }, 0);
+  return (profile.incomeSources || []).reduce(
+    (sum, src) => sum + getMonthlySourceIncome(src, monthKey, dollarRate),
+    0,
+  );
 };
 
 // ============================================================

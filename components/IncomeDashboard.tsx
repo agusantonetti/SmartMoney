@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, IncomeSource } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isSourceActiveInMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isSourceActiveInMonth, getMonthlySourceIncome, getSourceMode } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -28,39 +28,18 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
   const [timelineMode, setTimelineMode] = useState<'amounts' | 'composition'>('amounts');
 
   // --- HELPERS ---
-  const getMode = (src: IncomeSource) => src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+  const getMode = getSourceMode;
 
   // --- CURRENT MONTH INCOME PER SOURCE ---
   const sourceBreakdown = useMemo(() => {
     const now = new Date();
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    return activeSources.map((src, idx) => {
-      let monthlyArs = 0;
-      const mode = getMode(src);
-      if (mode === 'VARIABLE') {
-        const payments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
-        monthlyArs = payments.reduce((acc, p) => acc + p.realAmount, 0);
-        if (src.currency === 'USD') monthlyArs *= dollarRate;
-      } else if (mode === 'PER_DELIVERY') {
-        const paidPosts = (src.posts || []).filter(p => p.isPaid);
-        monthlyArs = paidPosts.reduce((acc, p) => acc + p.amount, 0);
-        if (src.currency === 'USD') monthlyArs *= dollarRate;
-      } else {
-        if (!isSourceActiveInMonth(src, currentMonthKey)) {
-          monthlyArs = 0;
-        } else {
-          monthlyArs = src.currency === 'USD' ? src.amount * dollarRate : src.amount;
-          if (src.frequency === 'BIWEEKLY') monthlyArs *= 2;
-        }
-      }
-
-      return {
-        source: src,
-        amount: monthlyArs,
-        color: PALETTE[idx % PALETTE.length],
-      };
-    }).sort((a, b) => b.amount - a.amount);
+    return activeSources.map((src, idx) => ({
+      source: src,
+      amount: getMonthlySourceIncome(src, currentMonthKey, dollarRate),
+      color: PALETTE[idx % PALETTE.length],
+    })).sort((a, b) => b.amount - a.amount);
   }, [activeSources, dollarRate]);
 
   const totalMonthly = sourceBreakdown.reduce((s, b) => s + b.amount, 0);
@@ -76,25 +55,11 @@ const IncomeDashboard: React.FC<Props> = ({ profile, transactions, onBack, onOpe
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = MONTH_NAMES_SHORT[d.getMonth()];
 
-      const perSource = activeSources.map((src, idx) => {
-        let val = 0;
-        const mode = getMode(src);
-        if (mode === 'VARIABLE') {
-          const payments = src.payments?.filter(p => p.month.startsWith(key)) || [];
-          val = payments.reduce((acc, p) => acc + p.realAmount, 0);
-        } else if (mode === 'PER_DELIVERY') {
-          const monthPosts = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(key));
-          val = monthPosts.reduce((acc, p) => acc + p.amount, 0);
-        } else {
-          if (!isSourceActiveInMonth(src, key)) val = 0;
-          else {
-            val = src.amount;
-            if (src.frequency === 'BIWEEKLY') val *= 2;
-          }
-        }
-        if (src.currency === 'USD') val *= dollarRate;
-        return { name: src.name, amount: val, color: PALETTE[idx % PALETTE.length] };
-      });
+      const perSource = activeSources.map((src, idx) => ({
+        name: src.name,
+        amount: getMonthlySourceIncome(src, key, dollarRate),
+        color: PALETTE[idx % PALETTE.length],
+      }));
 
       result.push({
         key,

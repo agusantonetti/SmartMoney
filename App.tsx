@@ -37,7 +37,7 @@ import InflationAdjuster from './components/InflationAdjuster';
 import HistoricalEstimates from './components/HistoricalEstimates';
 
 // UTILS
-import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase, getEstimatedTotalForMonth, getEstimatedMonths } from './utils';
+import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase, getEstimatedTotalForMonth, getEstimatedMonths, getSalaryForMonth } from './utils';
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -337,58 +337,9 @@ const App: React.FC = () => {
     const currentDate = new Date();
     const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2,'0')}`;
 
-    const salaryPaid = (financialProfile.incomeSources || []).reduce((sum, src) => {
-        if (src.isActive === false) return sum;
-
-        const effectiveMode: 'FIXED' | 'VARIABLE' | 'PER_DELIVERY' =
-            src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
-
-        // PER_DELIVERY no respeta la ventana del frequency (las entregas pueden
-        // ocurrir cualquier mes). Para FIXED/VARIABLE sí se filtra por ventana.
-        if (effectiveMode !== 'PER_DELIVERY') {
-            const startMonth = src.startDate ? src.startDate.substring(0, 7) : '';
-            const endMonth = src.endDate ? src.endDate.substring(0, 7) : '';
-            if (src.frequency === 'ONE_TIME') {
-                if (startMonth && startMonth !== currentMonthKey) return sum;
-            } else {
-                if (startMonth && currentMonthKey < startMonth) return sum;
-                if (endMonth && currentMonthKey > endMonth) return sum;
-            }
-        }
-
-        let val = 0;
-
-        if (effectiveMode === 'PER_DELIVERY') {
-            const pricePerDelivery = src.amount || 0;
-            const monthPayment = (src.payments || []).find(p => p.month === currentMonthKey);
-            // countDeliveredInSalary: si está activo, contar entregadas (anticipo);
-            // si no, solo cobradas. Default = solo cobradas (conservador).
-            const counter = src.countDeliveredInSalary
-                ? (monthPayment?.postsCompleted || 0)
-                : (monthPayment?.postsPaid || 0);
-            const fromCounter = counter * pricePerDelivery;
-            const monthPosts = (src.posts || []).filter(p =>
-                p.date.startsWith(currentMonthKey) && (src.countDeliveredInSalary || p.isPaid),
-            );
-            const fromPosts = monthPosts.reduce((a, p) => a + p.amount, 0);
-            val = Math.max(fromCounter, fromPosts);
-        } else if (effectiveMode === 'VARIABLE') {
-            // Para Variables: Sumar SOLO pagos registrados para este mes
-            const monthPayments = src.payments?.filter(p => p.month.startsWith(currentMonthKey)) || [];
-            val = monthPayments.reduce((acc, p) => acc + p.realAmount, 0);
-        } else {
-            // FIXED: Usar el monto base (ONE_TIME cuenta entero en su mes)
-            val = src.amount;
-            if (src.frequency === 'BIWEEKLY') val = val * 2;
-        }
-
-        // Convertir a ARS si está en USD
-        if (src.currency === 'USD') {
-            val = val * dollarRate;
-        }
-
-        return sum + val;
-    }, 0);
+    // Delegamos en getSalaryForMonth (utils) que maneja FIXED/VARIABLE/PER_DELIVERY
+    // de forma consistente con el resto de la app, respetando countDeliveredInSalary.
+    const salaryPaid = getSalaryForMonth(financialProfile, currentMonthKey, dollarRate);
 
     const totalReserved = (financialProfile.savingsBuckets || []).reduce((sum, bucket) => sum + bucket.currentAmount, 0);
     

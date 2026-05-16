@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getSalaryForMonth, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome, getSourceMode } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -70,28 +70,25 @@ const YearReview: React.FC<Props> = ({ profile, transactions, balance, onBack, p
       let yearTotal = 0;
       for (let m = 0; m < 12; m++) {
         const key = `${year}-${String(m + 1).padStart(2, '0')}`;
-        const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
-        let val = 0;
-        if (mode === 'VARIABLE') {
-          val = (src.payments || []).filter(p => p.month.startsWith(key)).reduce((a, p) => a + p.realAmount, 0);
-        } else if (mode === 'PER_DELIVERY') {
-          val = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(key)).reduce((a, p) => a + p.amount, 0);
-        } else {
-          if (!isSourceActiveInMonth(src, key)) val = 0;
-          else { val = src.amount; if (src.frequency === 'BIWEEKLY') val *= 2; }
-        }
-        if (src.currency === 'USD') val *= dollarRate;
-        yearTotal += val;
+        yearTotal += getMonthlySourceIncome(src, key, dollarRate);
       }
       return { name: src.name, total: yearTotal };
     }).sort((a, b) => b.total - a.total);
 
-    // Delivery stats
+    // Delivery stats: para PER_DELIVERY contamos entregadas (posts individuales del año
+    // + contadores mensuales de payments[]). Para FIXED con targetPosts solo contadores.
     let totalDeliveries = 0;
     sources.forEach(src => {
-      const mode = src.incomeMode || (src.isCreatorSource ? 'VARIABLE' : 'FIXED');
+      const mode = getSourceMode(src);
       if (mode === 'PER_DELIVERY') {
-        totalDeliveries += (src.posts || []).filter(p => p.date.startsWith(String(year))).length;
+        const fromPosts = (src.posts || []).filter(p => p.date.startsWith(String(year))).length;
+        let fromCounters = 0;
+        for (let m = 0; m < 12; m++) {
+          const key = `${year}-${String(m + 1).padStart(2, '0')}`;
+          const payment = (src.payments || []).find(p => p.month.startsWith(key));
+          fromCounters += payment?.postsCompleted || 0;
+        }
+        totalDeliveries += Math.max(fromPosts, fromCounters);
       } else if (src.targetPosts && src.targetPosts > 0) {
         for (let m = 0; m < 12; m++) {
           const key = `${year}-${String(m + 1).padStart(2, '0')}`;

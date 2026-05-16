@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, IncomeSource, IncomePayment, Transaction } from '../types';
-import { formatMoney, formatUSD, getDollarRate, getCurrentMonthKey, formatMonthKey, getSalaryForMonth, isOneTimePurchase } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getCurrentMonthKey, formatMonthKey, getSalaryForMonth, isOneTimePurchase, getMonthlySourceIncome } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -41,14 +41,9 @@ const MonthlyClose: React.FC<Props> = ({ profile, transactions, onUpdateProfile,
       const realAmount = payment?.realAmount || (mode === 'FIXED' ? src.amount : 0);
       const postsCompleted = payment?.postsCompleted || 0;
       const targetPosts = src.targetPosts || 0;
-      let monthlyArs = 0;
-      if (mode === 'PER_DELIVERY') {
-        const paidPosts = (src.posts || []).filter(p => p.isPaid && p.date.startsWith(selectedMonth));
-        monthlyArs = paidPosts.reduce((a, p) => a + p.amount, 0);
-        if (isUSD) monthlyArs *= dollarRate;
-      } else {
-        monthlyArs = isUSD ? realAmount * dollarRate : realAmount;
-      }
+      const monthlyArs = mode === 'PER_DELIVERY'
+        ? getMonthlySourceIncome(src, selectedMonth, dollarRate)
+        : (isUSD ? realAmount * dollarRate : realAmount);
       const isInvoiceSent = payment?.isInvoiceSent || false;
       return { src, mode, isUSD, isPaid, isInvoiceSent, realAmount, monthlyArs, postsCompleted, targetPosts };
     });

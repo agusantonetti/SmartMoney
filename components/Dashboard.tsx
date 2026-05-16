@@ -114,31 +114,10 @@ const Dashboard: React.FC<Props> = ({
       const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const prevMonthKey = prevDate.toISOString().slice(0, 7);
 
-      // Helper para calcular ingreso de contratos por mes (Variable + Fijo)
-      const getContractIncomeForMonth = (monthKey: string) => {
-          return (profile.incomeSources || []).reduce((sum, src) => {
-              if (!isSourceActiveInMonth(src, monthKey)) return sum;
-
-              let val = 0;
-              if (src.isCreatorSource) {
-                  // Variables: Sumar pagos registrados en ese mes específico
-                  const monthPayments = src.payments?.filter(p => p.month.startsWith(monthKey)) || [];
-                  val = monthPayments.reduce((acc, p) => acc + p.realAmount, 0);
-              } else {
-                  // Fijos: Monto base (ONE_TIME cuenta entero en su mes por el filtro de arriba)
-                  val = src.amount;
-                  if (src.frequency === 'BIWEEKLY') val = val * 2;
-              }
-
-              if (src.currency === 'USD') {
-                  val = val * currentDollarRate;
-              }
-              return sum + val;
-          }, 0);
-      };
-
-      const currentContractIncome = getContractIncomeForMonth(currentMonthKey);
-      const prevContractIncome = getContractIncomeForMonth(prevMonthKey);
+      // Delegamos en getSalaryForMonth (utils) que maneja correctamente FIXED, VARIABLE
+      // y PER_DELIVERY (con countDeliveredInSalary) sin duplicar lógica.
+      const currentContractIncome = getSalaryForMonth(profile, currentMonthKey, currentDollarRate);
+      const prevContractIncome = getSalaryForMonth(profile, prevMonthKey, currentDollarRate);
 
       // 1. Clasificar transacciones por periodo
       let currentIncomeVar = 0;

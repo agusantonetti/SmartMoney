@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Transaction, FinancialProfile, IncomeSource } from '../types';
-import { formatMoney, formatUSD, getDollarRate, isOneTimePurchase, isSourceActiveInMonth } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, isOneTimePurchase, isSourceActiveInMonth, getMonthlySourceIncome } from '../utils';
 
 interface Props {
   transactions: Transaction[];
@@ -54,39 +54,17 @@ const FutureSimulator: React.FC<Props> = ({ transactions, profile, currentBalanc
     return { avgExpense, categories: aggCats, latestLabel, monthCount: monthDetails.length, monthDetails };
   }, [transactions]);
 
-  // Monthly ARS income for a source
+  // Monthly ARS income for a source: usa helper unificado + fallback al mes anterior
+  // si el mes actual da 0 (típico para Variables/PER_DELIVERY al inicio del mes).
   const getSourceIncomeARS = (src: IncomeSource): number => {
-    const mode = getEffectiveMode(src);
     const now = new Date();
-    let val = 0;
-
-    if (mode === 'VARIABLE') {
-      const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      val = src.payments?.filter(p => p.month.startsWith(pfx)).reduce((a, p) => a + p.realAmount, 0) || 0;
-      if (val === 0) {
-        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const ppfx = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-        val = src.payments?.filter(p => p.month.startsWith(ppfx)).reduce((a, p) => a + p.realAmount, 0) || 0;
-      }
-    } else if (mode === 'PER_DELIVERY') {
-      const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      val = (src.posts || []).filter(p => p.date.startsWith(pfx)).reduce((a, p) => a + p.amount, 0);
-      if (val === 0) {
-        const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const ppfx = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-        val = (src.posts || []).filter(p => p.date.startsWith(ppfx)).reduce((a, p) => a + p.amount, 0);
-      }
-    } else {
-      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      if (!isSourceActiveInMonth(src, currentMonthKey)) {
-        val = 0;
-      } else {
-        val = src.amount;
-        if (src.frequency === 'BIWEEKLY') val *= 2;
-      }
+    const pfx = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    let val = getMonthlySourceIncome(src, pfx, dollarRate);
+    if (val === 0) {
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const ppfx = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+      val = getMonthlySourceIncome(src, ppfx, dollarRate);
     }
-
-    if (src.currency === 'USD') val *= dollarRate;
     return val;
   };
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { FinancialProfile, IncomeSource, IncomePayment, PaymentFrequency, PostEntry } from '../types';
-import { formatMoney, formatUSD, getDollarRate } from '../utils';
+import { formatMoney, formatUSD, getDollarRate, getMonthlySourceIncome } from '../utils';
 
 interface Props {
   profile: FinancialProfile;
@@ -99,33 +99,9 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
   };
 
   const getMonthlyProjection = (src: IncomeSource) => {
-    const mode = getEffectiveMode(src);
-    // PER_DELIVERY: las entregas pueden ocurrir cualquier mes, no depende de isContractActive
-    if (mode !== 'PER_DELIVERY' && !isContractActive(src)) return 0;
-    if (mode === 'VARIABLE') return getCurrentMonthRealAmount(src);
-    if (mode === 'PER_DELIVERY') {
-      const now = new Date();
-      const pfx = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-      const pricePerDelivery = src.amount || 0;
-      const monthPayment = (src.payments || []).find(p => p.month === pfx);
-      // Si countDeliveredInSalary: usar entregadas. Si no: solo cobradas.
-      const counter = src.countDeliveredInSalary
-        ? (monthPayment?.postsCompleted || 0)
-        : (monthPayment?.postsPaid || 0);
-      const fromCounter = counter * pricePerDelivery;
-      // Tracker individual legacy: posts con fecha del mes (filtrar isPaid si no contamos entregadas)
-      const monthPosts = (src.posts || []).filter(p =>
-        p.date.startsWith(pfx) && (src.countDeliveredInSalary || p.isPaid),
-      );
-      const fromPosts = monthPosts.reduce((a,p) => a + p.amount, 0);
-      const total = Math.max(fromCounter, fromPosts);
-      return src.currency === 'USD' ? total * dollarRate : total;
-    }
-    let val = src.amount;
-    if (src.currency === 'USD') val *= dollarRate;
-    if (src.frequency === 'BIWEEKLY') return val * 2;
-    // ONE_TIME: isContractActive ya filtró por mes, así que se cuenta entero
-    return val;
+    const now = new Date();
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    return getMonthlySourceIncome(src, monthKey, dollarRate);
   };
 
   const totalMonthlyProjected = useMemo(() => sources.reduce((a, s) => a + getMonthlyProjection(s), 0), [sources, dollarRate]);
@@ -643,15 +619,17 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             const currentReal = getCurrentMonthRealAmount(src);
             const now = new Date(); const pfx = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
             
-            // For PER_DELIVERY: sum posts in current month; for others: use payments
+            // Usar getMonthlyProjection como única fuente de verdad para evitar bugs
+            // de cálculos duplicados. PER_DELIVERY usa contadores mensuales + tracker
+            // legacy y respeta countDeliveredInSalary.
             let displayArs = 0;
             let hasPaid = false;
             if (mode === 'PER_DELIVERY') {
-              const monthPosts = (src.posts || []).filter(p => p.date.startsWith(pfx));
-              const paidMonthPosts = (src.posts || []).filter(p => p.isPaid);
-              const totalPostsArs = paidMonthPosts.reduce((a, p) => a + p.amount, 0);
-              displayArs = isUSD ? totalPostsArs * dollarRate : totalPostsArs;
-              hasPaid = paidMonthPosts.length > 0;
+              displayArs = getMonthlyProjection(src);
+              const monthPayment = src.payments.find(p => p.month === pfx);
+              const counterPaid = (monthPayment?.postsPaid || 0) > 0;
+              const paidPostsInMonth = (src.posts || []).some(p => p.isPaid && p.date.startsWith(pfx));
+              hasPaid = counterPaid || paidPostsInMonth;
             } else if (mode === 'VARIABLE') {
               displayArs = currentReal;
               hasPaid = src.payments.some(p => p.month.startsWith(pfx) && p.isPaid);
