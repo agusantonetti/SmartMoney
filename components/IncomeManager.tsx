@@ -238,11 +238,15 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
     const unpaidPosts = posts.filter(p => !p.isPaid);
     const totalPaidPosts = paidPosts.reduce((s,p) => s + p.amount, 0);
     const totalOwed = unpaidPosts.reduce((s,p) => s + p.amount, 0);
-    // For PER_DELIVERY, earnings come from paid posts; for others, from monthly payments
+    // Para PER_DELIVERY hay dos formas de trackear: tracker individual (posts[]) y
+    // contadores por mes en payments[]. Usamos el MAYOR de ambos para no contar doble
+    // si el usuario eventualmente usa los dos métodos.
+    const monthlyCountersRevenue = paidPayments.reduce((a,p) => a + (isUSD ? p.realAmount * dollarRate : p.realAmount), 0);
+    const monthlyCountersPaidCount = paidPayments.reduce((a,p) => a + (p.postsPaid || 0), 0);
     const totalEarnings = mode === 'PER_DELIVERY'
-      ? (isUSD ? totalPaidPosts * dollarRate : totalPaidPosts)
-      : paidPayments.reduce((a,p) => a + (isUSD ? p.realAmount * dollarRate : p.realAmount), 0);
-    const paidCount = mode === 'PER_DELIVERY' ? paidPosts.length : paidPayments.length;
+      ? Math.max(isUSD ? totalPaidPosts * dollarRate : totalPaidPosts, monthlyCountersRevenue)
+      : monthlyCountersRevenue;
+    const paidCount = mode === 'PER_DELIVERY' ? Math.max(paidPosts.length, monthlyCountersPaidCount) : paidPayments.length;
 
     return (
       <div className="bg-background-light dark:bg-background-dark min-h-screen font-display flex flex-col text-slate-900 dark:text-white transition-colors duration-200">
@@ -328,25 +332,41 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
             {monthsList.map((mName, idx) => {
               const renderSlot = (pKey: string, pLabel: string) => {
                 const payment = selectedSource.payments.find(p => p.month === pKey);
-                const isActive = isMonthActive(selectedSource, pKey.substring(0, 7));
-                const currentVal = payment ? payment.realAmount : (mode === 'FIXED' ? selectedSource.amount : 0);
+                // PER_DELIVERY: cada mes siempre activo (las entregas pueden ocurrir cualquier mes,
+                // independientemente del frequency del contrato).
+                const isActive = mode === 'PER_DELIVERY' ? true : isMonthActive(selectedSource, pKey.substring(0, 7));
+                const pricePerDelivery = mode === 'PER_DELIVERY' ? (selectedSource.amount || 0) : 0;
                 const isPaid = payment?.isPaid || false;
                 const isInvoiceSent = payment?.isInvoiceSent || false;
                 const expected = mode === 'FIXED' ? selectedSource.amount : 0;
                 const postsDone = payment?.postsCompleted || 0;
                 const paidDone = payment?.postsPaid || 0;
                 const requiredPosts = selectedSource.targetPosts || 0;
+                const currentVal = payment
+                  ? payment.realAmount
+                  : (mode === 'FIXED' ? selectedSource.amount : mode === 'PER_DELIVERY' ? paidDone * pricePerDelivery : 0);
 
                 const updatePosts = (increment: number) => {
                   const newVal = Math.max(0, postsDone + increment);
+                  // Si bajamos entregadas por debajo de las cobradas, ajustar cobradas también.
+                  const newPaid = Math.min(paidDone, newVal);
+                  const newRealAmount = mode === 'PER_DELIVERY' ? newPaid * pricePerDelivery : (currentVal || expected);
+                  const shouldClose = mode === 'PER_DELIVERY' && newVal > 0 && newPaid >= newVal;
                   handleUpdatePayment(selectedSource.id, {
-                    month: pKey, realAmount: currentVal || expected, isPaid, postsCompleted: newVal, postsPaid: paidDone
+                    month: pKey, realAmount: newRealAmount, isPaid: shouldClose || (isPaid && newVal === postsDone),
+                    postsCompleted: newVal, postsPaid: newPaid,
                   });
                 };
                 const updatePostsPaid = (increment: number) => {
                   const newVal = Math.max(0, Math.min(postsDone, paidDone + increment));
+                  const newRealAmount = mode === 'PER_DELIVERY' ? newVal * pricePerDelivery : (currentVal || expected);
+                  // Para PER_DELIVERY: si todas cobradas, cerrar mes automáticamente.
+                  const shouldClose = mode === 'PER_DELIVERY' && postsDone > 0 && newVal >= postsDone;
+                  const stillOpen = mode === 'PER_DELIVERY' && newVal < postsDone;
                   handleUpdatePayment(selectedSource.id, {
-                    month: pKey, realAmount: currentVal || expected, isPaid, postsCompleted: postsDone, postsPaid: newVal
+                    month: pKey, realAmount: newRealAmount,
+                    isPaid: shouldClose ? true : stillOpen ? false : isPaid,
+                    postsCompleted: postsDone, postsPaid: newVal,
                   });
                 };
 
@@ -363,28 +383,37 @@ const IncomeManager: React.FC<Props> = ({ profile, onUpdateProfile, onBack, priv
                       </div>
                       {isActive && <button onClick={() => handleUpdatePayment(selectedSource.id, { month: pKey, realAmount: currentVal || expected, isPaid: !isPaid, postsCompleted: postsDone })} className={`size-8 rounded-full flex items-center justify-center transition-all ${isPaid?'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30':'bg-slate-200 dark:bg-slate-700 text-slate-400 hover:bg-slate-300'}`}><span className="material-symbols-outlined text-sm">{isPaid?'check':'attach_money'}</span></button>}
                     </div>
-                    {/* Delivery counter for FIXED with targetPosts */}
-                    {isActive && mode === 'FIXED' && requiredPosts > 0 && (
+                    {/* Contadores de entregas: FIXED con targetPosts (objetivo X/N) o PER_DELIVERY (siempre, abierto) */}
+                    {isActive && (mode === 'PER_DELIVERY' || (mode === 'FIXED' && requiredPosts > 0)) && (
                       <div className="pl-11 space-y-2">
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold uppercase text-slate-400 w-20">Entregados:</span>
+                          <span className="text-[10px] font-bold uppercase text-slate-400 w-20">Entregadas:</span>
                           <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-full px-1.5 py-0.5">
                             <button onClick={() => updatePosts(-1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">remove</span></button>
-                            <span className={`text-sm font-bold w-14 text-center ${postsDone >= requiredPosts ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{postsDone}/{requiredPosts}</span>
+                            <span className={`text-sm font-bold w-14 text-center ${requiredPosts > 0 && postsDone >= requiredPosts ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>{requiredPosts > 0 ? `${postsDone}/${requiredPosts}` : postsDone}</span>
                             <button onClick={() => updatePosts(1)} className="size-6 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-500"><span className="material-symbols-outlined text-[16px]">add</span></button>
                           </div>
-                          {postsDone >= requiredPosts && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">check_circle</span>Completo</span>}
+                          {requiredPosts > 0 && postsDone >= requiredPosts && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">check_circle</span>Completo</span>}
                         </div>
                         {postsDone > 0 && (
                           <div className="flex items-center gap-3">
-                            <span className="text-[10px] font-bold uppercase text-slate-400 w-20">Pagados:</span>
+                            <span className="text-[10px] font-bold uppercase text-slate-400 w-20">Cobradas:</span>
                             <div className="flex items-center bg-emerald-50 dark:bg-emerald-900/20 rounded-full px-1.5 py-0.5 border border-emerald-200 dark:border-emerald-800">
                               <button onClick={() => updatePostsPaid(-1)} className="size-6 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-full text-emerald-500"><span className="material-symbols-outlined text-[16px]">remove</span></button>
                               <span className={`text-sm font-bold w-14 text-center ${paidDone >= postsDone ? 'text-emerald-500' : 'text-amber-500'}`}>{paidDone}/{postsDone}</span>
                               <button onClick={() => updatePostsPaid(1)} className="size-6 flex items-center justify-center hover:bg-emerald-100 dark:hover:bg-emerald-900/30 rounded-full text-emerald-500"><span className="material-symbols-outlined text-[16px]">add</span></button>
                             </div>
-                            {paidDone >= postsDone && paidDone > 0 && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">paid</span>Todo pago</span>}
+                            {paidDone >= postsDone && paidDone > 0 && <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">paid</span>Mes cerrado</span>}
                             {paidDone < postsDone && <span className="text-[10px] text-amber-500 font-bold">{postsDone - paidDone} sin cobrar</span>}
+                          </div>
+                        )}
+                        {mode === 'PER_DELIVERY' && pricePerDelivery > 0 && paidDone > 0 && (
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] font-bold uppercase text-slate-400 w-20">Cobrado:</span>
+                            <span className={`text-sm font-bold ${privacyMode?'blur-sm':''}`}>
+                              {isUSD ? formatUSD(paidDone * pricePerDelivery) : formatMoney(paidDone * pricePerDelivery)}
+                              <span className="text-[10px] text-slate-400 font-normal ml-2">({paidDone} × {isUSD ? formatUSD(pricePerDelivery) : formatMoney(pricePerDelivery)})</span>
+                            </span>
                           </div>
                         )}
                       </div>
