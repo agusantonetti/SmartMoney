@@ -35,6 +35,7 @@ interface Props {
   onOpenInvoicePanel?: () => void;
   onOpenInflationAdjuster?: () => void;
   onOpenHistoricalEstimates?: () => void;
+  onOpenBackupManager?: () => void;
   onAddTransaction: () => void;
   isDarkMode: boolean;
   onToggleTheme: () => void;
@@ -75,6 +76,7 @@ const Dashboard: React.FC<Props> = ({
   onOpenInvoicePanel,
   onOpenInflationAdjuster,
   onOpenHistoricalEstimates,
+  onOpenBackupManager,
   onAddTransaction,
   isDarkMode, 
   onToggleTheme,
@@ -825,6 +827,7 @@ const Dashboard: React.FC<Props> = ({
                   { id: 'facturas', title: 'Facturas', subtitle: 'Panel de control', icon: 'description', color: 'violet', onClick: onOpenInvoicePanel },
                   { id: 'inflacion', title: 'Inflación', subtitle: 'Ajuste contratos', icon: 'price_change', color: 'orange', onClick: onOpenInflationAdjuster },
                   { id: 'historia', title: 'Historia Recuperada', subtitle: 'Cargar promedios', icon: 'restore', color: 'amber', onClick: onOpenHistoricalEstimates },
+                  { id: 'backup', title: 'Backup y Restaurar', subtitle: 'Última defensa', icon: 'shield', color: 'emerald', onClick: onOpenBackupManager },
                   { id: 'year-review', title: 'Año en Review', subtitle: new Date().getFullYear().toString(), icon: 'auto_awesome', color: 'amber', onClick: onOpenYearReview },
                   { id: 'comprar', title: 'Analizar Compra', subtitle: 'Antes de gastar', icon: 'shopping_cart_checkout', color: 'purple', onClick: onOpenPurchaseAnalyzer },
                   { id: 'simulador', title: 'Simulador', subtitle: 'Escenarios', icon: 'timeline', color: 'violet', onClick: onOpenFuture },

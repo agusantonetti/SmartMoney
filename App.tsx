@@ -35,9 +35,11 @@ import PurchaseAnalyzer from './components/PurchaseAnalyzer';
 import InvoicePanel from './components/InvoicePanel';
 import InflationAdjuster from './components/InflationAdjuster';
 import HistoricalEstimates from './components/HistoricalEstimates';
+import BackupManager from './components/BackupManager';
 
 // UTILS
 import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase, getEstimatedTotalForMonth, getEstimatedMonths, getSalaryForMonth } from './utils';
+import { saveBackup, getLatestBackup } from './backup';
 
 // FIREBASE IMPORTS
 import { auth, db } from './firebase';
@@ -151,10 +153,34 @@ const App: React.FC = () => {
       const unsubscribeSnapshot = onSnapshot(userDocRef, async (docSnap) => {
           if (docSnap.exists()) {
               const data = docSnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
-              if (Array.isArray(data.transactions)) setTransactions(data.transactions);
-              if (data.profile) {
-                  setFinancialProfile({ ...DEFAULT_PROFILE, ...data.profile });
+              const incomingTxs = Array.isArray(data.transactions) ? data.transactions : [];
+              const incomingProfile = data.profile ? { ...DEFAULT_PROFILE, ...data.profile } : DEFAULT_PROFILE;
+
+              // DETECTOR DE PÉRDIDA: si el snapshot trae datos vacíos pero tenemos un
+              // backup local reciente con datos, alertar al usuario en vez de aplicar.
+              // No forzamos restore automático para no sobrescribir si la pérdida fue intencional.
+              const incomingHasContent =
+                  incomingTxs.length > 0 ||
+                  (incomingProfile.incomeSources || []).length > 0 ||
+                  (incomingProfile.savingsBuckets || []).length > 0 ||
+                  (incomingProfile.subscriptions || []).length > 0 ||
+                  (incomingProfile.debts || []).length > 0 ||
+                  (incomingProfile.initialBalance || 0) > 0;
+              if (!incomingHasContent) {
+                  const lastBackup = getLatestBackup(currentUser.uid);
+                  if (lastBackup) {
+                      console.error('Firestore vacío pero hay backup local. Avisando al usuario.');
+                      triggerToast('⚠️ Detectamos pérdida de datos. Andá a Perfil → Restaurar Backup', 'error');
+                  }
               }
+
+              if (Array.isArray(data.transactions)) setTransactions(data.transactions);
+              if (data.profile) setFinancialProfile(incomingProfile);
+
+              // BACKUP AUTOMÁTICO: cada snapshot con datos significativos se guarda
+              // en localStorage. Si Firestore se rompe, podemos restaurar de acá.
+              saveBackup(currentUser.uid, incomingProfile, incomingTxs);
+
               // Solo después de aplicar los datos del snapshot habilitamos escrituras.
               dataLoadedRef.current = true;
           } else {
@@ -481,6 +507,7 @@ const App: React.FC = () => {
             onOpenInvoicePanel={() => setCurrentView(ViewState.INVOICE_PANEL)}
             onOpenInflationAdjuster={() => setCurrentView(ViewState.INFLATION_ADJUSTER)}
             onOpenHistoricalEstimates={() => setCurrentView(ViewState.HISTORICAL_ESTIMATES)}
+            onOpenBackupManager={() => setCurrentView(ViewState.BACKUP_MANAGER)}
             onAddTransaction={() => {
                 setTempEventContext(null);
                 setCurrentView(ViewState.TRANSACTION);
@@ -607,6 +634,16 @@ const App: React.FC = () => {
             privacyMode={privacyMode}
           />
         );
+      case ViewState.BACKUP_MANAGER:
+        return currentUser ? (
+          <BackupManager
+            uid={currentUser.uid}
+            currentProfile={financialProfile}
+            currentTransactions={transactions}
+            onRestore={handleImportData}
+            onBack={() => setCurrentView(ViewState.DASHBOARD)}
+          />
+        ) : null;
       case ViewState.ACTIVITY:
         return (
           <ActivityHub
