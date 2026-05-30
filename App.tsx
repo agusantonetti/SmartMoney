@@ -44,7 +44,7 @@ import { auth, db } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import * as firestore from 'firebase/firestore';
 
-const { doc, setDoc, onSnapshot } = firestore;
+const { doc, setDoc, onSnapshot, getDoc } = firestore;
 
 // Default Actions definition for init
 const DEFAULT_ACTIONS: QuickAction[] = [
@@ -148,7 +148,7 @@ const App: React.FC = () => {
 
       const userDocRef = doc(db, 'users', currentUser.uid);
 
-      const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+      const unsubscribeSnapshot = onSnapshot(userDocRef, async (docSnap) => {
           if (docSnap.exists()) {
               const data = docSnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
               if (Array.isArray(data.transactions)) setTransactions(data.transactions);
@@ -158,7 +158,34 @@ const App: React.FC = () => {
               // Solo después de aplicar los datos del snapshot habilitamos escrituras.
               dataLoadedRef.current = true;
           } else {
-              // Crear perfil inicial si no existe
+              // CRÍTICO: si el snapshot reporta "no existe" PERO ya habíamos cargado datos
+              // antes en esta sesión, es un error transitorio (sync, permisos, lo que sea).
+              // NO escribir nada — eso destruiría las transacciones reales en Firestore.
+              // Incidente 2026-05-29: pérdida total de transacciones por escritura indebida
+              // desde este branch (causa desconocida — posiblemente PWA con código viejo).
+              if (dataLoadedRef.current) {
+                  console.error("Firestore reporta doc inexistente PESE A haber cargado datos antes. Ignorando para no destruir transacciones.");
+                  triggerToast("Error de sincronización detectado — escritura bloqueada por seguridad", 'error');
+                  return;
+              }
+              // Segunda salvaguarda: leer explícitamente con getDoc antes de crear.
+              // El snapshot puede mentir transitoriamente; getDoc es authoritative.
+              try {
+                  const verifySnap = await getDoc(userDocRef);
+                  if (verifySnap.exists()) {
+                      const verifyData = verifySnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
+                      if (Array.isArray(verifyData.transactions)) setTransactions(verifyData.transactions);
+                      if (verifyData.profile) setFinancialProfile({ ...DEFAULT_PROFILE, ...verifyData.profile });
+                      dataLoadedRef.current = true;
+                      console.warn("Snapshot reportó 'no existe' pero getDoc confirmó que sí. Cargando datos correctos.");
+                      return;
+                  }
+              } catch (e) {
+                  console.error("Fallo verificando doc con getDoc; abortando creación por seguridad:", e);
+                  triggerToast("No se pudo verificar la base de datos — reintentá más tarde", 'error');
+                  return;
+              }
+              // Solo aquí confirmamos que el doc realmente NO existe. Crear el inicial.
               const initialProfile = {
                   ...DEFAULT_PROFILE,
                   name: currentUser.email?.split('@')[0] || 'Viajero'
@@ -167,7 +194,6 @@ const App: React.FC = () => {
                   profile: initialProfile,
                   transactions: []
               }).then(() => {
-                  // Habilitamos escrituras solo si la creación inicial fue exitosa.
                   dataLoadedRef.current = true;
               }).catch(err => {
                   console.error("Error creando perfil inicial:", err);
