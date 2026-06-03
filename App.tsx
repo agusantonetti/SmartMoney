@@ -38,15 +38,16 @@ import HistoricalEstimates from './components/HistoricalEstimates';
 import BackupManager from './components/BackupManager';
 
 // UTILS
-import { getFriendlyErrorMessage, safeNum, getDollarRate, sanitizeForFirestore, DEFAULT_DOLLAR_RATE, isOneTimePurchase, getEstimatedTotalForMonth, getEstimatedMonths, getSalaryForMonth } from './utils';
+import { getFriendlyErrorMessage, safeNum, getDollarRate, DEFAULT_DOLLAR_RATE, isOneTimePurchase, getEstimatedTotalForMonth, getEstimatedMonths, getSalaryForMonth } from './utils';
 import { saveBackup, getLatestBackup } from './backup';
 
-// FIREBASE IMPORTS
-import { auth, db } from './firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import * as firestore from 'firebase/firestore';
-
-const { doc, setDoc, onSnapshot, getDoc } = firestore;
+// SUPABASE
+import {
+  supabase, onAuthChange, signOut as supaSignOut,
+  loadAllData, saveProfile as supaSaveProfile, saveTransactions as supaSaveTransactions,
+  subscribeToUserData, unsubscribe as supaUnsubscribe,
+} from './supabase';
+import type { User } from '@supabase/supabase-js';
 
 // Default Actions definition for init
 const DEFAULT_ACTIONS: QuickAction[] = [
@@ -117,10 +118,9 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setDarkMode(!darkMode);
 
-  // 1. AUTH LISTENER
+  // 1. AUTH LISTENER (Supabase)
   useEffect(() => {
-      const unsubscribe = onAuthStateChanged(auth, 
-        (user) => {
+      const unsubscribe = onAuthChange((user) => {
           setCurrentUser(user);
           if (user) {
               if (currentView === ViewState.LANDING) {
@@ -133,172 +133,113 @@ const App: React.FC = () => {
               setFinancialProfile(DEFAULT_PROFILE);
           }
           setAuthLoading(false);
-        }, 
-        (error) => {
-          console.error("Auth Error:", error);
-          setAuthLoading(false);
-          const msg = getFriendlyErrorMessage(error);
-          triggerToast(`Error de sesión: ${msg}`, 'error');
-        }
-      );
+      });
       return () => unsubscribe();
   }, []);
 
-  // 2. FIRESTORE REALTIME LISTENER
+  // 2. DATA LOADER + REALTIME (Supabase)
+  // Carga inicial con loadAllData + suscripción Realtime que recarga al detectar
+  // cambios en cualquiera de las tablas del usuario (desde otro dispositivo o tab).
   useEffect(() => {
       if (!currentUser) return;
+      let cancelled = false;
 
-      const userDocRef = doc(db, 'users', currentUser.uid);
+      const reload = async () => {
+          try {
+              const { profile, transactions } = await loadAllData(currentUser.id);
+              if (cancelled) return;
 
-      const unsubscribeSnapshot = onSnapshot(userDocRef, async (docSnap) => {
-          if (docSnap.exists()) {
-              const data = docSnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
-              const incomingTxs = Array.isArray(data.transactions) ? data.transactions : [];
-              const incomingProfile = data.profile ? { ...DEFAULT_PROFILE, ...data.profile } : DEFAULT_PROFILE;
-
-              // DETECTOR DE PÉRDIDA: si el snapshot trae datos vacíos pero tenemos un
-              // backup local reciente con datos, alertar al usuario en vez de aplicar.
-              // No forzamos restore automático para no sobrescribir si la pérdida fue intencional.
-              const incomingHasContent =
-                  incomingTxs.length > 0 ||
-                  (incomingProfile.incomeSources || []).length > 0 ||
-                  (incomingProfile.savingsBuckets || []).length > 0 ||
-                  (incomingProfile.subscriptions || []).length > 0 ||
-                  (incomingProfile.debts || []).length > 0 ||
-                  (incomingProfile.initialBalance || 0) > 0;
-              if (!incomingHasContent) {
-                  const lastBackup = getLatestBackup(currentUser.uid);
+              // DETECTOR DE PÉRDIDA: si la DB trae datos vacíos pero hay backup local
+              // con contenido, alertar al usuario para que pueda restaurar.
+              const hasContent =
+                  transactions.length > 0 ||
+                  (profile.incomeSources || []).length > 0 ||
+                  (profile.savingsBuckets || []).length > 0 ||
+                  (profile.subscriptions || []).length > 0 ||
+                  (profile.debts || []).length > 0 ||
+                  (profile.initialBalance || 0) > 0;
+              if (!hasContent) {
+                  const lastBackup = getLatestBackup(currentUser.id);
                   if (lastBackup) {
-                      console.error('Firestore vacío pero hay backup local. Avisando al usuario.');
-                      triggerToast('⚠️ Detectamos pérdida de datos. Andá a Perfil → Restaurar Backup', 'error');
+                      console.error('DB vacía pero hay backup local. Avisando al usuario.');
+                      triggerToast('Detectamos pérdida de datos. Dashboard → Backup y Restaurar', 'error');
                   }
               }
 
-              if (Array.isArray(data.transactions)) setTransactions(data.transactions);
-              if (data.profile) setFinancialProfile(incomingProfile);
+              setFinancialProfile(profile);
+              setTransactions(transactions);
 
-              // BACKUP AUTOMÁTICO: cada snapshot con datos significativos se guarda
-              // en localStorage. Si Firestore se rompe, podemos restaurar de acá.
-              saveBackup(currentUser.uid, incomingProfile, incomingTxs);
+              // BACKUP AUTOMÁTICO con datos significativos
+              saveBackup(currentUser.id, profile, transactions);
 
-              // Solo después de aplicar los datos del snapshot habilitamos escrituras.
               dataLoadedRef.current = true;
-          } else {
-              // CRÍTICO: si el snapshot reporta "no existe" PERO ya habíamos cargado datos
-              // antes en esta sesión, es un error transitorio (sync, permisos, lo que sea).
-              // NO escribir nada — eso destruiría las transacciones reales en Firestore.
-              // Incidente 2026-05-29: pérdida total de transacciones por escritura indebida
-              // desde este branch (causa desconocida — posiblemente PWA con código viejo).
-              if (dataLoadedRef.current) {
-                  console.error("Firestore reporta doc inexistente PESE A haber cargado datos antes. Ignorando para no destruir transacciones.");
-                  triggerToast("Error de sincronización detectado — escritura bloqueada por seguridad", 'error');
-                  return;
-              }
-              // Segunda salvaguarda: leer explícitamente con getDoc antes de crear.
-              // El snapshot puede mentir transitoriamente; getDoc es authoritative.
-              try {
-                  const verifySnap = await getDoc(userDocRef);
-                  if (verifySnap.exists()) {
-                      const verifyData = verifySnap.data() as { transactions?: Transaction[], profile?: FinancialProfile };
-                      if (Array.isArray(verifyData.transactions)) setTransactions(verifyData.transactions);
-                      if (verifyData.profile) setFinancialProfile({ ...DEFAULT_PROFILE, ...verifyData.profile });
-                      dataLoadedRef.current = true;
-                      console.warn("Snapshot reportó 'no existe' pero getDoc confirmó que sí. Cargando datos correctos.");
-                      return;
-                  }
-              } catch (e) {
-                  console.error("Fallo verificando doc con getDoc; abortando creación por seguridad:", e);
-                  triggerToast("No se pudo verificar la base de datos — reintentá más tarde", 'error');
-                  return;
-              }
-              // Solo aquí confirmamos que el doc realmente NO existe. Crear el inicial.
-              const initialProfile = {
-                  ...DEFAULT_PROFILE,
-                  name: currentUser.email?.split('@')[0] || 'Viajero'
-              };
-              setDoc(userDocRef, {
-                  profile: initialProfile,
-                  transactions: []
-              }).then(() => {
-                  dataLoadedRef.current = true;
-              }).catch(err => {
-                  console.error("Error creando perfil inicial:", err);
-                  triggerToast(`Fallo al iniciar base de datos: ${getFriendlyErrorMessage(err)}`, 'error');
-              });
-
-              setFinancialProfile(initialProfile);
+          } catch (e: any) {
+              console.error('Error cargando datos de Supabase:', e);
+              triggerToast(`Error cargando datos: ${getFriendlyErrorMessage(e)}`, 'error');
           }
-      }, (error) => {
-          console.error("Snapshot Error:", error);
-          const msg = getFriendlyErrorMessage(error);
-          triggerToast(`Sincronización pausada: ${msg}`, 'error');
-      });
+      };
+
+      reload();
+      const channel = subscribeToUserData(currentUser.id, reload);
 
       return () => {
+          cancelled = true;
           dataLoadedRef.current = false;
-          unsubscribeSnapshot();
+          supaUnsubscribe(channel);
       };
   }, [currentUser]);
 
   // --- DATA HELPERS ---
 
-  // Guard común: bloquear escrituras antes de que cargue el snapshot inicial.
-  // Sin este chequeo, un componente que dispara onUpdateProfile en su primer
-  // render escribiría con el estado React inicial (vacío) sobre los datos buenos.
+  // Guard común: bloquear escrituras antes de que carguen los datos iniciales.
   const ensureCanWrite = (): boolean => {
       if (!currentUser) {
           triggerToast("Debes iniciar sesión para guardar cambios", 'error');
           return false;
       }
       if (!dataLoadedRef.current) {
-          console.warn("Escritura bloqueada: los datos todavía no cargaron desde Firestore.");
+          console.warn("Escritura bloqueada: los datos todavía no cargaron desde Supabase.");
           return false;
       }
       return true;
   };
 
-  // Escribe SOLO el campo profile, dejando transactions intacto en Firestore.
+  // Escribe SOLO los campos relacionados con el profile (config + sub-tablas
+  // excepto transactions). En Supabase cada tabla es independiente, así que
+  // por construcción esto no toca transactions.
   const saveProfileOnly = async (newProfile: FinancialProfile) => {
       if (!ensureCanWrite()) return;
       setFinancialProfile(newProfile);
       try {
-          const userDocRef = doc(db, 'users', currentUser!.uid);
-          await setDoc(userDocRef, {
-              profile: sanitizeForFirestore(newProfile)
-          }, { merge: true });
+          await supaSaveProfile(currentUser!.id, newProfile);
       } catch (e: any) {
           console.error("Error guardando perfil:", e);
           triggerToast(`No se pudo guardar: ${getFriendlyErrorMessage(e)}`, 'error');
       }
   };
 
-  // Escribe SOLO el campo transactions, dejando profile intacto en Firestore.
+  // Escribe SOLO la tabla transactions; el resto del profile queda intacto.
   const saveTransactionsOnly = async (newTransactions: Transaction[]) => {
       if (!ensureCanWrite()) return;
       setTransactions(newTransactions);
       try {
-          const userDocRef = doc(db, 'users', currentUser!.uid);
-          await setDoc(userDocRef, {
-              transactions: sanitizeForFirestore(newTransactions)
-          }, { merge: true });
+          await supaSaveTransactions(currentUser!.id, newTransactions);
       } catch (e: any) {
           console.error("Error guardando transacciones:", e);
           triggerToast(`No se pudo guardar: ${getFriendlyErrorMessage(e)}`, 'error');
       }
   };
 
-  // Escribe ambos campos simultáneamente. Solo usar cuando realmente se modifican
-  // los dos a la vez (importar datos, transacciones que también ajustan el perfil).
+  // Escribe profile + transactions juntos (import de backup, casos atómicos).
   const saveBoth = async (newProfile: FinancialProfile, newTransactions: Transaction[]) => {
       if (!ensureCanWrite()) return;
       setFinancialProfile(newProfile);
       setTransactions(newTransactions);
       try {
-          const userDocRef = doc(db, 'users', currentUser!.uid);
-          await setDoc(userDocRef, {
-              profile: sanitizeForFirestore(newProfile),
-              transactions: sanitizeForFirestore(newTransactions)
-          }, { merge: true });
+          await Promise.all([
+              supaSaveProfile(currentUser!.id, newProfile),
+              supaSaveTransactions(currentUser!.id, newTransactions),
+          ]);
       } catch (e: any) {
           console.error("Error guardando en nube:", e);
           triggerToast(`No se pudo guardar: ${getFriendlyErrorMessage(e)}`, 'error');
@@ -637,7 +578,7 @@ const App: React.FC = () => {
       case ViewState.BACKUP_MANAGER:
         return currentUser ? (
           <BackupManager
-            uid={currentUser.uid}
+            uid={currentUser.id}
             currentProfile={financialProfile}
             currentTransactions={transactions}
             onRestore={handleImportData}

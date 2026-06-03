@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { FinancialProfile, Transaction } from '../types';
-import { auth } from '../firebase';
-import { signOut } from 'firebase/auth';
+import { signOut } from '../supabase';
 
 interface Props {
   currentProfile: FinancialProfile;
@@ -59,7 +58,7 @@ const ProfileSetup: React.FC<Props> = ({ currentProfile, allTransactions, onSave
   };
 
   const handleLogoutAction = () => {
-      signOut(auth).catch(err => console.error(err));
+      signOut().catch(err => console.error(err));
   };
 
   // --- EXPORT LOGIC ---

@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signIn, signUp } from '../supabase';
 
 interface Props {
   onLogin: () => void; // No need to pass email back, App listens to Auth state
@@ -22,29 +21,30 @@ const LandingPage: React.FC<Props> = ({ onLogin }) => {
 
       try {
           // 1. Intentar iniciar sesión
-          await signInWithEmailAndPassword(auth, email, password);
-          // Si tiene éxito, el listener en App.tsx manejará el cambio de vista
-      } catch (error: any) {
-          // 2. Si el usuario no existe o credenciales inválidas, intentamos registrar
-          // Nota: En una app real, distinguirías mejor los errores, pero para UX fluida aquí:
-          if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-             try {
-                 // Intentamos crear la cuenta
-                 await createUserWithEmailAndPassword(auth, email, password);
-             } catch (createError: any) {
-                 if (createError.code === 'auth/email-already-in-use') {
-                     setErrorMsg("Contraseña incorrecta para este correo.");
-                 } else if (createError.code === 'auth/weak-password') {
-                     setErrorMsg("La contraseña debe tener al menos 6 caracteres.");
-                 } else {
-                     setErrorMsg("Error al crear cuenta: " + createError.message);
-                 }
-             }
-          } else if (error.code === 'auth/wrong-password') {
-               setErrorMsg("Contraseña incorrecta.");
-          } else {
-              setErrorMsg("Error: " + error.message);
+          const { error: signInError } = await signIn(email, password);
+          if (!signInError) {
+              // Listener en App.tsx maneja el cambio de vista
+              return;
           }
+          // 2. Si falla por credenciales inválidas, intentar registrar
+          const isCredentialError = /invalid.*credentials|invalid.*login|user.*not.*found/i.test(signInError.message);
+          if (isCredentialError) {
+              const { error: signUpError } = await signUp(email, password);
+              if (signUpError) {
+                  if (/already.*registered|already.*exists/i.test(signUpError.message)) {
+                      setErrorMsg("Contraseña incorrecta para este correo.");
+                  } else if (/weak.*password|password.*short/i.test(signUpError.message)) {
+                      setErrorMsg("La contraseña debe tener al menos 6 caracteres.");
+                  } else {
+                      setErrorMsg("Error al crear cuenta: " + signUpError.message);
+                  }
+              }
+              // Si signUp tuvo éxito, el listener maneja todo
+          } else {
+              setErrorMsg("Error: " + signInError.message);
+          }
+      } catch (error: any) {
+          setErrorMsg("Error: " + (error?.message || 'inesperado'));
       } finally {
           setIsLoading(false);
       }
