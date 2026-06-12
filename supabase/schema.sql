@@ -353,3 +353,31 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_user();
+
+-- ===================================================================
+-- REALTIME: agregar tablas a la publicación supabase_realtime
+-- ===================================================================
+-- Necesario para que subscribeToUserData reciba cambios en vivo. Realtime
+-- respeta RLS, así que cada usuario solo recibe cambios de sus propias filas.
+do $$
+declare
+  tbl text;
+  tables text[] := array[
+    'profiles', 'income_sources', 'income_payments', 'posts',
+    'transactions', 'savings_buckets', 'subscriptions', 'debts',
+    'events', 'goals', 'patrimonio_history', 'inflation_history',
+    'historical_estimates', 'quick_actions'
+  ];
+begin
+  foreach tbl in array tables loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = tbl
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', tbl);
+    end if;
+  end loop;
+end;
+$$;

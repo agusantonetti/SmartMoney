@@ -119,6 +119,9 @@ const App: React.FC = () => {
   const toggleTheme = () => setDarkMode(!darkMode);
 
   // 1. AUTH LISTENER (Supabase)
+  // La sesión se persiste en localStorage (persistSession: true), así que entrás
+  // una vez por dispositivo y quedás logueado indefinidamente. Todos los dispositivos
+  // comparten la misma cuenta → mismos datos, sincronizados en tiempo real.
   useEffect(() => {
       const unsubscribe = onAuthChange((user) => {
           setCurrentUser(user);
