@@ -1,16 +1,38 @@
 -- ===================================================================
--- SmartMoney Schema v1 - Migración desde Firestore
+-- SmartMoney Schema v2 - Firestore -> Supabase
 -- ===================================================================
 -- Diseño relacional con tipos estrictos. Cada entidad es una tabla.
--- Cada transacción/contrato/etc es 1 FILA, no un array dentro de un blob.
+-- Cada transaccion/contrato/etc es 1 FILA, no un array dentro de un blob.
 -- Esto vuelve estructuralmente imposible "vaciar todo" con un solo write.
+--
+-- IDs: tipo TEXT (no uuid) porque la app genera sus propios ids como strings
+-- (ej "def1" para quick actions, Date.now().toString() para items nuevos).
+-- user_id SI es uuid porque referencia auth.users.
 -- Script IDEMPOTENTE: se puede re-correr.
+
+-- ===================================================================
+-- DROP de tablas de datos (estan vacias) para recrear con ids TEXT.
+-- profiles NO se dropea (su pk user_id uuid esta bien y conserva la fila).
+-- ===================================================================
+drop table if exists public.income_payments cascade;
+drop table if exists public.posts cascade;
+drop table if exists public.transactions cascade;
+drop table if exists public.savings_buckets cascade;
+drop table if exists public.subscriptions cascade;
+drop table if exists public.debts cascade;
+drop table if exists public.events cascade;
+drop table if exists public.goals cascade;
+drop table if exists public.patrimonio_history cascade;
+drop table if exists public.inflation_history cascade;
+drop table if exists public.historical_estimates cascade;
+drop table if exists public.quick_actions cascade;
+drop table if exists public.income_sources cascade;
 
 -- ===================================================================
 -- TABLAS
 -- ===================================================================
 
--- 1. PROFILE: 1 fila por usuario, configuración general
+-- 1. PROFILE: 1 fila por usuario (user_id uuid pk, sin cambios)
 create table if not exists public.profiles (
   user_id uuid references auth.users(id) on delete cascade primary key,
   name text default 'Viajero',
@@ -27,8 +49,8 @@ create table if not exists public.profiles (
 );
 
 -- 2. INCOME SOURCES
-create table if not exists public.income_sources (
-  id uuid default gen_random_uuid() primary key,
+create table public.income_sources (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   amount numeric default 0,
@@ -49,13 +71,13 @@ create table if not exists public.income_sources (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-create index if not exists income_sources_user_idx on public.income_sources(user_id);
+create index income_sources_user_idx on public.income_sources(user_id);
 
 -- 3. INCOME PAYMENTS (1 por mes por source)
-create table if not exists public.income_payments (
-  id uuid default gen_random_uuid() primary key,
+create table public.income_payments (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
-  income_source_id uuid references public.income_sources(id) on delete cascade not null,
+  income_source_id text references public.income_sources(id) on delete cascade not null,
   month text not null,
   real_amount numeric default 0,
   is_paid boolean default false,
@@ -69,13 +91,13 @@ create table if not exists public.income_payments (
   updated_at timestamptz default now(),
   unique(income_source_id, month)
 );
-create index if not exists income_payments_user_idx on public.income_payments(user_id);
+create index income_payments_user_idx on public.income_payments(user_id);
 
--- 4. POSTS (entregas PER_DELIVERY individuales)
-create table if not exists public.posts (
-  id uuid default gen_random_uuid() primary key,
+-- 4. POSTS (entregas PER_DELIVERY)
+create table public.posts (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
-  income_source_id uuid references public.income_sources(id) on delete cascade not null,
+  income_source_id text references public.income_sources(id) on delete cascade not null,
   date date not null,
   description text,
   amount numeric default 0,
@@ -83,11 +105,11 @@ create table if not exists public.posts (
   paid_date date,
   created_at timestamptz default now()
 );
-create index if not exists posts_user_idx on public.posts(user_id);
+create index posts_user_idx on public.posts(user_id);
 
--- 5. TRANSACTIONS (la tabla CRÍTICA - 1 fila por movimiento)
-create table if not exists public.transactions (
-  id uuid default gen_random_uuid() primary key,
+-- 5. TRANSACTIONS (la tabla CRITICA - 1 fila por movimiento)
+create table public.transactions (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   type text not null check (type in ('income','expense')),
   amount numeric not null,
@@ -95,7 +117,7 @@ create table if not exists public.transactions (
   category text,
   date date not null,
   is_one_time boolean default false,
-  event_id uuid,
+  event_id text,
   event_name text,
   original_currency text,
   original_amount numeric,
@@ -103,13 +125,13 @@ create table if not exists public.transactions (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-create index if not exists transactions_user_date_idx on public.transactions(user_id, date desc);
-create index if not exists transactions_user_category_idx on public.transactions(user_id, category);
-create index if not exists transactions_user_type_idx on public.transactions(user_id, type);
+create index transactions_user_date_idx on public.transactions(user_id, date desc);
+create index transactions_user_category_idx on public.transactions(user_id, category);
+create index transactions_user_type_idx on public.transactions(user_id, type);
 
 -- 6. SAVINGS BUCKETS
-create table if not exists public.savings_buckets (
-  id uuid default gen_random_uuid() primary key,
+create table public.savings_buckets (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   target_amount numeric default 0,
@@ -117,11 +139,11 @@ create table if not exists public.savings_buckets (
   icon text,
   created_at timestamptz default now()
 );
-create index if not exists savings_buckets_user_idx on public.savings_buckets(user_id);
+create index savings_buckets_user_idx on public.savings_buckets(user_id);
 
 -- 7. SUBSCRIPTIONS
-create table if not exists public.subscriptions (
-  id uuid default gen_random_uuid() primary key,
+create table public.subscriptions (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   amount numeric not null,
@@ -133,11 +155,11 @@ create table if not exists public.subscriptions (
   history jsonb default '[]'::jsonb,
   created_at timestamptz default now()
 );
-create index if not exists subscriptions_user_idx on public.subscriptions(user_id);
+create index subscriptions_user_idx on public.subscriptions(user_id);
 
 -- 8. DEBTS
-create table if not exists public.debts (
-  id uuid default gen_random_uuid() primary key,
+create table public.debts (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   total_amount numeric not null,
@@ -145,11 +167,11 @@ create table if not exists public.debts (
   due_date date,
   created_at timestamptz default now()
 );
-create index if not exists debts_user_idx on public.debts(user_id);
+create index debts_user_idx on public.debts(user_id);
 
 -- 9. EVENTS (TravelEvent)
-create table if not exists public.events (
-  id uuid default gen_random_uuid() primary key,
+create table public.events (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   budget numeric,
@@ -158,11 +180,11 @@ create table if not exists public.events (
   cover_image text,
   created_at timestamptz default now()
 );
-create index if not exists events_user_idx on public.events(user_id);
+create index events_user_idx on public.events(user_id);
 
 -- 10. GOALS
-create table if not exists public.goals (
-  id uuid default gen_random_uuid() primary key,
+create table public.goals (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   name text not null,
   target_amount numeric not null,
@@ -173,11 +195,11 @@ create table if not exists public.goals (
   color text default '',
   created_at timestamptz default now()
 );
-create index if not exists goals_user_idx on public.goals(user_id);
+create index goals_user_idx on public.goals(user_id);
 
 -- 11. PATRIMONIO HISTORY
-create table if not exists public.patrimonio_history (
-  id uuid default gen_random_uuid() primary key,
+create table public.patrimonio_history (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   month text not null,
   balance numeric not null,
@@ -187,17 +209,17 @@ create table if not exists public.patrimonio_history (
 );
 
 -- 12. INFLATION HISTORY
-create table if not exists public.inflation_history (
-  id uuid default gen_random_uuid() primary key,
+create table public.inflation_history (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   month text not null,
   rate numeric not null,
   unique(user_id, month)
 );
 
--- 13. HISTORICAL ESTIMATES (estimaciones manuales)
-create table if not exists public.historical_estimates (
-  id uuid default gen_random_uuid() primary key,
+-- 13. HISTORICAL ESTIMATES
+create table public.historical_estimates (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   month text not null,
   by_category jsonb not null default '{}'::jsonb,
@@ -206,9 +228,9 @@ create table if not exists public.historical_estimates (
   unique(user_id, month)
 );
 
--- 14. QUICK ACTIONS (botones rápidos)
-create table if not exists public.quick_actions (
-  id uuid default gen_random_uuid() primary key,
+-- 14. QUICK ACTIONS
+create table public.quick_actions (
+  id text primary key default gen_random_uuid()::text,
   user_id uuid references auth.users(id) on delete cascade not null,
   label text not null,
   amount numeric,
@@ -216,34 +238,10 @@ create table if not exists public.quick_actions (
   display_order integer default 0,
   created_at timestamptz default now()
 );
-create index if not exists quick_actions_user_idx on public.quick_actions(user_id);
+create index quick_actions_user_idx on public.quick_actions(user_id);
 
 -- ===================================================================
--- ALTER TABLE: agregar columnas que pueden faltar en runs anteriores
--- (idempotente: si ya existen no hace nada)
--- ===================================================================
-alter table public.income_sources add column if not exists type text;
-alter table public.income_payments add column if not exists notes text;
-alter table public.transactions add column if not exists event_name text;
-alter table public.transactions add column if not exists original_currency text;
-alter table public.transactions add column if not exists original_amount numeric;
-alter table public.transactions add column if not exists exchange_rate numeric;
-alter table public.subscriptions add column if not exists billing_day integer default 1;
-alter table public.subscriptions add column if not exists category text default 'Otros';
-alter table public.subscriptions add column if not exists next_payment_date date;
-alter table public.subscriptions add column if not exists history jsonb default '[]'::jsonb;
-alter table public.events add column if not exists cover_image text;
--- Quitar columnas que NO van (si existen de runs anteriores)
-alter table public.savings_buckets drop column if exists color;
-alter table public.subscriptions drop column if exists icon;
-alter table public.debts drop column if exists interest_rate;
-alter table public.debts drop column if exists monthly_payment;
-alter table public.debts drop column if exists icon;
-alter table public.events drop column if exists end_date;
-alter table public.events drop column if exists icon;
-
--- ===================================================================
--- TRIGGERS: updated_at automático
+-- TRIGGERS: updated_at automatico
 -- ===================================================================
 create or replace function public.touch_updated_at()
 returns trigger as $$
@@ -316,7 +314,7 @@ declare
 begin
   select count(*) into rows_count from old_table;
   if rows_count > 100 then
-    raise exception 'Mass delete bloqueado por seguridad: se intentaron borrar % filas de % en una sola operación. Si es intencional, hacelo en lotes <= 100.', rows_count, tg_table_name;
+    raise exception 'Mass delete bloqueado por seguridad: % filas de % en una operacion. Hacelo en lotes <= 100.', rows_count, tg_table_name;
   end if;
   return null;
 end;
@@ -355,10 +353,8 @@ after insert on auth.users
 for each row execute function public.handle_new_user();
 
 -- ===================================================================
--- REALTIME: agregar tablas a la publicación supabase_realtime
+-- REALTIME: agregar tablas a la publicacion supabase_realtime
 -- ===================================================================
--- Necesario para que subscribeToUserData reciba cambios en vivo. Realtime
--- respeta RLS, así que cada usuario solo recibe cambios de sus propias filas.
 do $$
 declare
   tbl text;
