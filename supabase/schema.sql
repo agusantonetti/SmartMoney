@@ -353,6 +353,23 @@ after insert on auth.users
 for each row execute function public.handle_new_user();
 
 -- ===================================================================
+-- GRANTS para los roles de la API de Supabase
+-- ===================================================================
+-- Necesario porque el proyecto tiene "Automatically expose new tables"
+-- DESACTIVADO (por seguridad). Sin estos grants, el rol authenticated recibe
+-- "permission denied for table" antes incluso de evaluar RLS. RLS sigue
+-- restringiendo a nivel fila (cada usuario solo sus propias filas); estos
+-- grants solo dan acceso a nivel tabla. anon NO recibe nada (la app siempre
+-- requiere sesion autenticada).
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+-- Default privileges: que las tablas/sequences futuras tambien hereden grants.
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public grant usage, select on sequences to authenticated;
+
+-- ===================================================================
 -- REALTIME: agregar tablas a la publicacion supabase_realtime
 -- ===================================================================
 do $$
